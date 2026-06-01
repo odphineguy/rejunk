@@ -1,0 +1,196 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Google Fonts for Eco-Conscious Organic Design */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Lato:wght@400;500;700&display=swap');
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  /* Eco-Conscious Organic Color Palette */
+  --primary: #2d5016; /* Forest Green */
+  --primary-foreground: #f5f5f0; /* Off-white */
+  --sidebar-primary: #2d5016;
+  --sidebar-primary-foreground: #f5f5f0;
+  --secondary: #8b6f47; /* Earth Brown */
+  --secondary-foreground: #f5f5f0;
+  --accent: #87ceeb; /* Sky Blue */
+  --accent-foreground: #1a1a1a;
+  --chart-1: #2d5016;
+  --chart-2: #8b6f47;
+  --chart-3: #87ceeb;
+  --chart-4: #c97c5c; /* Clay Orange */
+  --chart-5: #9caf88; /* Sage Green */
+  --radius: 1rem; /* Organic rounded corners */
+  --background: #fafaf8; /* Warm off-white */
+  --foreground: #2a2a28; /* Deep charcoal */
+  --card: #ffffff;
+  --card-foreground: #2a2a28;
+  --popover: #ffffff;
+  --popover-foreground: #2a2a28;
+  --muted: #e8e6e0; /* Light warm gray */
+  --muted-foreground: #6b6b68;
+  --destructive: #d9534f;
+  --destructive-foreground: #ffffff;
+  --border: #e0ddd8; /* Warm border */
+  --input: #f5f5f0;
+  --ring: #2d5016;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #2a2a28;
+  --sidebar-accent: #f0ede8;
+  --sidebar-accent-foreground: #2d5016;
+  --sidebar-border: #e0ddd8;
+  --sidebar-ring: #2d5016;
+}
+
+.dark {
+  /* Dark mode for eco-conscious design */
+  --primary: #4a7c3c; /* Lighter forest green for dark mode */
+  --primary-foreground: #f5f5f0;
+  --sidebar-primary: #4a7c3c;
+  --sidebar-primary-foreground: #f5f5f0;
+  --background: #1a1a18; /* Very dark warm */
+  --foreground: #e8e6e0; /* Light warm gray */
+  --card: #2a2a28; /* Dark charcoal */
+  --card-foreground: #e8e6e0;
+  --popover: #2a2a28;
+  --popover-foreground: #e8e6e0;
+  --secondary: #a89968; /* Lighter earth brown */
+  --secondary-foreground: #f5f5f0;
+  --muted: #3a3a38;
+  --muted-foreground: #a8a8a5;
+  --accent: #87ceeb;
+  --accent-foreground: #1a1a18;
+  --destructive: #e74c3c;
+  --destructive-foreground: #ffffff;
+  --border: #3a3a38;
+  --input: #2a2a28;
+  --ring: #4a7c3c;
+  --chart-1: #4a7c3c;
+  --chart-2: #a89968;
+  --chart-3: #87ceeb;
+  --chart-4: #d9a574;
+  --chart-5: #b8d4a8;
+  --sidebar: #2a2a28;
+  --sidebar-foreground: #e8e6e0;
+  --sidebar-accent: #3a3a38;
+  --sidebar-accent-foreground: #4a7c3c;
+  --sidebar-border: #3a3a38;
+  --sidebar-ring: #4a7c3c;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-family: 'Lato', sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Playfair Display', serif;
+    font-weight: 700;
+  }
+  h1 {
+    @apply text-4xl md:text-5xl;
+  }
+  h2 {
+    @apply text-3xl md:text-4xl;
+  }
+  h3 {
+    @apply text-2xl md:text-3xl;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [type="button"]:not(:disabled),
+  [type="submit"]:not(:disabled),
+  [type="reset"]:not(:disabled),
+  a[href],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    @apply cursor-pointer;
+  }
+}
+
+@layer components {
+  /**
+   * Custom container utility that centers content and adds responsive padding.
+   *
+   * This overrides Tailwind's default container behavior to:
+   * - Auto-center content (mx-auto)
+   * - Add responsive horizontal padding
+   * - Set max-width for large screens
+   *
+   * Usage: <div className="container">...</div>
+   *
+   * For custom widths, use max-w-* utilities directly:
+   * <div className="max-w-6xl mx-auto px-4">...</div>
+   */
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem; /* 16px - mobile padding */
+    padding-right: 1rem;
+  }
+
+  .flex {
+    min-height: 0;
+    min-width: 0;
+  }
+
+  @media (min-width: 640px) {
+    .container {
+      padding-left: 1.5rem; /* 24px - tablet padding */
+      padding-right: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container {
+      padding-left: 2rem; /* 32px - desktop padding */
+      padding-right: 2rem;
+      max-width: 1280px; /* Standard content width */
+    }
+  }
+}
