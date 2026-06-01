@@ -92,7 +92,7 @@ export default function FacilityList({
                   onFacilityClick?.(facility);
                 }}
                 className={`
-                  w-full text-left p-3 rounded-lg border-2 transition-all duration-300
+                  w-full text-left p-2 rounded-lg border-2 transition-all duration-300
                   hover:shadow-md
                   ${
                     selectedFacilityId === facility.id
@@ -103,18 +103,18 @@ export default function FacilityList({
               >
                 <div className="flex items-start gap-2">
                   <div
-                    className="rounded-full p-1.5 mt-0.5 flex-shrink-0"
+                    className="rounded-full p-1 mt-0.5 flex-shrink-0"
                     style={{ backgroundColor: facilityTypeColors[facility.type] }}
                   >
-                    <MapPin size={14} className="text-white" />
+                    <MapPin size={12} className="text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm line-clamp-2">{facility.name}</p>
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                    <p className="font-semibold text-sm leading-tight line-clamp-1">{facility.name}</p>
+                    <p className="text-xs text-muted-foreground line-clamp-1">
                       {facility.address}
                       {facility.city ? `, ${facility.city}` : ''}
                     </p>
-                    <div className="flex gap-1 mt-2 flex-wrap items-center">
+                    <div className="flex gap-1 mt-1 flex-wrap items-center">
                       <Badge variant="secondary" className="text-xs">
                         {facilityTypeLabels[facility.type]}
                       </Badge>
@@ -124,7 +124,7 @@ export default function FacilityList({
                           src={icon.src}
                           alt={icon.label}
                           title={icon.label}
-                          className="h-5 w-5 object-contain"
+                          className="h-4 w-4 object-contain"
                         />
                       ))}
                     </div>

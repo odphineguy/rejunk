@@ -321,11 +321,11 @@ export default function PricingSettings() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card shadow-sm">
-        <div className="container max-w-full px-4 py-4 md:py-5">
+        <div className="container max-w-full px-4 py-1 md:py-2">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-3xl font-bold md:text-4xl">Pricing Settings</h1>
-              <p className="mt-1 text-muted-foreground">Manage the editable data used by the Estimate Builder.</p>
+            <div className="flex items-center gap-4">
+              <img src="/rejunk-logo.svg" alt="reJunk" className="h-20 md:h-[100px] w-auto" />
+              <p className="text-muted-foreground">Manage the editable data used by the Estimate Builder.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button asChild variant="outline">

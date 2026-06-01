@@ -142,23 +142,13 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Hero Banner */}
-      <div className="relative h-64 md:h-80 overflow-hidden">
-        <img
-          src="https://d2xsxph8kpxj0f.cloudfront.net/310519663173712482/L8PZALwwPgxcPWXVjtMiBn/hero-banner-3AE6sPvnC7wahFEdCvHh8r.webp"
-          alt="Arizona Desert Landscape"
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/40" />
-      </div>
-
       {/* Header */}
       <header className="bg-white border-b border-border shadow-sm">
-        <div className="container max-w-full px-4 py-4 md:py-6">
+        <div className="container max-w-full px-4 py-1 md:py-2">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-foreground">Arizona Disposal Facilities</h1>
-              <p className="text-muted-foreground mt-1">Find waste disposal and recycling facilities near you</p>
+            <div className="flex items-center gap-4">
+              <img src="/rejunk-logo.svg" alt="reJunk" className="h-20 md:h-[100px] w-auto" />
+              <p className="text-muted-foreground">Find waste disposal and recycling facilities near you</p>
             </div>
             <div className="flex items-center gap-2">
               <Link
