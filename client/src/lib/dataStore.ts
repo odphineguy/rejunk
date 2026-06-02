@@ -14,6 +14,7 @@ import type {
   VehicleType,
   VolumePricingBenchmark,
 } from "@/types/pricing";
+import type { Job } from "@/types/jobs";
 import { defaultPricingSettings } from "@/data/defaultPricing";
 
 type Tables = Database["public"]["Tables"];
@@ -23,6 +24,7 @@ type MaterialRow = Tables["material_pricing_rules"]["Row"];
 type BenchmarkRow = Tables["volume_benchmarks"]["Row"];
 type DefaultsRow = Tables["pricing_defaults"]["Row"];
 type EstimateRow = Tables["saved_estimates"]["Row"];
+type JobRow = Tables["jobs"]["Row"];
 
 // ---------------------------------------------------------------------------
 // Row -> domain mappers
@@ -367,5 +369,51 @@ export async function deleteSavedEstimateRemote(id: string): Promise<void> {
   const ok = await ensureSession();
   if (!ok) return;
   const { error } = await supabase.from("saved_estimates").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Jobs (full Job snapshot stored in the jsonb `data` column, like estimates)
+// ---------------------------------------------------------------------------
+
+export async function loadJobsRemote(): Promise<Job[] | null> {
+  if (!supabase) return null;
+  const ok = await ensureSession();
+  if (!ok) return null;
+
+  const { data, error } = await supabase.from("jobs").select("*");
+  if (error) {
+    console.error("[dataStore] Failed to load jobs:", error.message);
+    return null;
+  }
+  return (data ?? []).map((row: JobRow) => row.data as unknown as Job);
+}
+
+export async function upsertJobRemote(job: Job): Promise<void> {
+  if (!supabase) return;
+  const ok = await ensureSession();
+  if (!ok) return;
+
+  const { error } = await supabase.from("jobs").upsert({
+    id: job.id,
+    created_by: await getUserId(),
+    job_number: job.jobNumber,
+    source: job.source,
+    estimate_id: job.sourceEstimateId ?? null,
+    customer_name: job.customerName ?? null,
+    status: job.status,
+    payment_status: job.paymentStatus,
+    scheduled_start: job.scheduledStart ?? null,
+    quoted_amount: job.quotedAmount ?? null,
+    data: job as unknown as Database["public"]["Tables"]["jobs"]["Insert"]["data"],
+  });
+  if (error) throw error;
+}
+
+export async function deleteJobRemote(id: string): Promise<void> {
+  if (!supabase) return;
+  const ok = await ensureSession();
+  if (!ok) return;
+  const { error } = await supabase.from("jobs").delete().eq("id", id);
   if (error) throw error;
 }

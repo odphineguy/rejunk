@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { CalendarDays, Calculator, Home, Map, Plus, Search, Settings, TableProperties, Truck } from "lucide-react";
+import { CalendarDays, Calculator, Map, Plus, Search, Settings, TableProperties, Truck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -39,15 +39,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-muted/20 md:grid md:grid-cols-[248px_minmax(0,1fr)]">
       <aside className="hidden border-r border-border bg-card md:flex md:min-h-screen md:flex-col">
-        <div className="flex h-20 items-center gap-3 border-b border-border px-6">
-          <div className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Home className="size-5" />
-          </div>
-          <div>
-            <div className="text-sm font-semibold leading-none">reJunk</div>
-            <div className="mt-1 text-xs text-muted-foreground">Operations</div>
-          </div>
-        </div>
+        <Link href="/" className="flex h-20 items-center gap-3 border-b border-border bg-primary px-6">
+          <img src="/rejunk-logo.svg" alt="reJunk" className="h-9 w-auto" />
+          <span className="text-xs font-medium text-primary-foreground/80">Operations</span>
+        </Link>
 
         <nav className="flex-1 space-y-6 overflow-y-auto px-4 py-6">
           {navGroups.map((group) => (

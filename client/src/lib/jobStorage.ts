@@ -1,9 +1,12 @@
 import { defaultDemoJobs } from "@/data/defaultJobs";
 import { actualChargedAmount, actualProfit, actualTotalCost } from "@/lib/jobIntelligence";
+import { deleteJobRemote, loadJobsRemote, upsertJobRemote } from "@/lib/dataStore";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import type { Job } from "@/types/jobs";
 import type { SavedEstimate } from "@/types/pricing";
 
 const JOBS_KEY = "junk_estimator_jobs_v1";
+const JOBS_SEEDED_KEY = "junk_estimator_jobs_seeded_v1";
 
 const canUseLocalStorage = () => typeof window !== "undefined" && Boolean(window.localStorage);
 
@@ -55,7 +58,47 @@ function parseEstimateLocation(address: string | undefined) {
   };
 }
 
+// Synchronous in-memory cache. Pages read this synchronously; Supabase reads
+// happen through hydrateJobs() and writes are fire-and-forget below.
+// localStorage stays as an offline warm cache / fallback.
 let cachedJobs = normalizeJobs(readJson<Job[]>(JOBS_KEY, defaultDemoJobs));
+
+function reportRemoteError(context: string) {
+  return (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[jobStorage] Remote ${context} failed; local cache kept in sync.`, message);
+  };
+}
+
+/**
+ * Loads jobs from Supabase into the in-memory cache. Call once at startup BEFORE
+ * rendering so pages mount with shared data. Falls back to the localStorage cache
+ * when Supabase is unconfigured/unreachable.
+ *
+ * First run against an empty database promotes the local demo jobs to shared
+ * data (one-time, guarded by a localStorage flag) so the Jobs page isn't empty.
+ */
+export async function hydrateJobs(): Promise<void> {
+  if (!isSupabaseConfigured) return;
+
+  const remote = await loadJobsRemote().catch((error) => {
+    reportRemoteError("jobs load")(error);
+    return null;
+  });
+  if (!remote) return; // unreachable — keep the local cache
+
+  const alreadySeeded = canUseLocalStorage() && window.localStorage.getItem(JOBS_SEEDED_KEY) === "1";
+
+  if (remote.length === 0 && !alreadySeeded) {
+    if (canUseLocalStorage()) window.localStorage.setItem(JOBS_SEEDED_KEY, "1");
+    cachedJobs.forEach((job) => void upsertJobRemote(job).catch(reportRemoteError("jobs seed")));
+  } else {
+    cachedJobs = normalizeJobs(remote);
+    writeJson(JOBS_KEY, cachedJobs);
+  }
+
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("jobs-updated"));
+}
 
 export function getJobs(): Job[] {
   return cachedJobs;
@@ -76,6 +119,7 @@ export function saveJob(job: Job): Job {
   };
   cachedJobs = normalizeJobs([nextJob, ...cachedJobs.filter((item) => item.id !== nextJob.id)]);
   writeJson(JOBS_KEY, cachedJobs);
+  void upsertJobRemote(nextJob).catch(reportRemoteError("job save"));
   if (typeof window !== "undefined") window.dispatchEvent(new Event("jobs-updated"));
   return nextJob;
 }
@@ -96,6 +140,7 @@ export function updateJob(jobIdToUpdate: string, updates: Partial<Job>): Job | n
 export function deleteJob(jobIdToDelete: string): Job[] {
   cachedJobs = cachedJobs.filter((job) => job.id !== jobIdToDelete);
   writeJson(JOBS_KEY, cachedJobs);
+  void deleteJobRemote(jobIdToDelete).catch(reportRemoteError("job delete"));
   if (typeof window !== "undefined") window.dispatchEvent(new Event("jobs-updated"));
   return cachedJobs;
 }

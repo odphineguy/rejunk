@@ -153,74 +153,56 @@ export type Database = {
       }
       jobs: {
         Row: {
-          actual_quote: number | null
-          assigned_to: string | null
-          completed_at: string | null
           created_at: string
           created_by: string | null
-          customer_id: string | null
+          customer_name: string | null
+          data: Json
           estimate_id: string | null
           id: string
-          notes: string | null
-          scheduled_for: string | null
-          status: string
+          job_number: string | null
+          payment_status: string | null
+          quoted_amount: number | null
+          scheduled_start: string | null
+          source: string | null
+          status: string | null
           updated_at: string
         }
         Insert: {
-          actual_quote?: number | null
-          assigned_to?: string | null
-          completed_at?: string | null
           created_at?: string
           created_by?: string | null
-          customer_id?: string | null
+          customer_name?: string | null
+          data: Json
           estimate_id?: string | null
-          id?: string
-          notes?: string | null
-          scheduled_for?: string | null
-          status?: string
+          id: string
+          job_number?: string | null
+          payment_status?: string | null
+          quoted_amount?: number | null
+          scheduled_start?: string | null
+          source?: string | null
+          status?: string | null
           updated_at?: string
         }
         Update: {
-          actual_quote?: number | null
-          assigned_to?: string | null
-          completed_at?: string | null
           created_at?: string
           created_by?: string | null
-          customer_id?: string | null
+          customer_name?: string | null
+          data?: Json
           estimate_id?: string | null
           id?: string
-          notes?: string | null
-          scheduled_for?: string | null
-          status?: string
+          job_number?: string | null
+          payment_status?: string | null
+          quoted_amount?: number | null
+          scheduled_start?: string | null
+          source?: string | null
+          status?: string | null
           updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "jobs_assigned_to_fkey"
-            columns: ["assigned_to"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "jobs_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "jobs_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "jobs_estimate_id_fkey"
-            columns: ["estimate_id"]
-            isOneToOne: false
-            referencedRelation: "saved_estimates"
             referencedColumns: ["id"]
           },
         ]
