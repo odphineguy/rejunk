@@ -4,8 +4,7 @@ import FacilityDetails from '@/components/FacilityDetails';
 import FacilityList from '@/components/FacilityList';
 import { Facility, facilityTypeColors } from '@/data/facilities';
 import { loadPricingSettings } from '@/utils/pricingStorage';
-import { AlertCircle, Calculator, MapPin, Menu, X } from 'lucide-react';
-import { Link } from 'wouter';
+import { AlertCircle, MapPin } from 'lucide-react';
 
 /**
  * Design Philosophy: Eco-Conscious Organic
@@ -22,7 +21,6 @@ export default function Home() {
   // hydrated at startup). Editing a facility in Settings updates the map automatically.
   const [facilities, setFacilities] = useState<Facility[]>(() => loadPricingSettings().disposalFacilities);
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
-  const [showSidebar, setShowSidebar] = useState(true);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<Map<string, google.maps.marker.AdvancedMarkerElement>>(new Map());
@@ -141,116 +139,53 @@ export default function Home() {
   );
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
-      <header className="bg-white border-b border-border shadow-sm">
-        <div className="container max-w-full px-4 py-1 md:py-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <img src="/rejunk-logo.svg" alt="reJunk" className="h-20 md:h-[100px] w-auto" />
-              <p className="text-muted-foreground">Find waste disposal and recycling facilities near you</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link
-                href="/estimate-builder"
-                className="hidden md:inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-              >
-                <Calculator size={16} />
-                Estimate Builder
-              </Link>
-              <Link
-                href="/settings"
-                className="hidden md:inline-flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
-              >
-                Settings
-              </Link>
-              <button
-                onClick={() => setShowSidebar(!showSidebar)}
-                className="md:hidden p-2 hover:bg-muted rounded-lg transition-colors"
-                aria-label="Toggle sidebar"
-              >
-                {showSidebar ? <X size={24} /> : <Menu size={24} />}
-              </button>
-            </div>
-          </div>
-          <Link
-            href="/estimate-builder"
-            className="mt-4 inline-flex md:hidden items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            <Calculator size={16} />
-            Estimate Builder
-          </Link>
-          <Link
-            href="/settings"
-            className="ml-2 mt-4 inline-flex md:hidden items-center gap-2 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
-          >
-            Settings
-          </Link>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar - Facility List */}
-        <aside
-          className={`
-            w-full md:w-96 bg-white border-r border-border flex flex-col
-            transition-all duration-300 ease-out
-            ${showSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-            absolute md:relative h-full md:h-auto z-40 md:z-auto
-          `}
-        >
-          <div className="p-4 md:p-6 flex-1 flex flex-col overflow-hidden">
-            <FacilityList
-              facilities={facilities}
-              selectedFacilityId={selectedFacilityId}
-              onSelectFacility={handleSelectFacility}
-              onFacilityClick={() => {
-                // Close sidebar on mobile after selection
-                if (window.innerWidth < 768) {
-                  setShowSidebar(false);
-                }
-              }}
-            />
-          </div>
-        </aside>
-
-        {/* Map Container */}
-        <div className="flex-1 flex flex-col relative">
-          <div className="flex-1 relative">
-            <MapView
-              className="h-full min-h-[520px]"
-              onMapReady={handleMapReady}
-              fallback={(error) => (
-                <LocalFacilityMap
-                  facilities={facilities}
-                  selectedFacilityId={selectedFacilityId}
-                  error={error}
-                  onSelectFacility={handleSelectFacility}
-                />
-              )}
-            />
-          </div>
-
-          {/* Details Panel - Floating */}
-          {selectedFacility && (
-            <div className="absolute bottom-4 left-4 right-4 md:bottom-6 md:left-6 md:right-auto md:w-96 z-30 animate-in fade-in slide-in-from-bottom-4 duration-300">
-              <FacilityDetails
-                facility={selectedFacility}
-                onClose={() => setSelectedFacilityId(null)}
-              />
-            </div>
-          )}
-        </div>
+    <div className="space-y-6 px-4 py-6 md:px-6">
+      <div className="flex flex-col gap-2">
+        <div className="text-sm font-medium text-muted-foreground">Facility map</div>
+        <h1 className="text-2xl font-bold text-foreground md:text-3xl">Arizona Disposal Facilities</h1>
+        <p className="max-w-3xl text-sm text-muted-foreground">
+          Browse facility coverage, select a disposal site, and send it into the estimate flow when needed.
+        </p>
       </div>
 
-      {/* Mobile Overlay */}
-      {showSidebar && (
-        <div
-          className="fixed inset-0 bg-black/50 md:hidden z-30"
-          onClick={() => setShowSidebar(false)}
+      <section className="relative overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+        <MapView
+          className="h-[58vh] min-h-[520px]"
+          onMapReady={handleMapReady}
+          fallback={(error) => (
+            <LocalFacilityMap
+              facilities={facilities}
+              selectedFacilityId={selectedFacilityId}
+              error={error}
+              onSelectFacility={handleSelectFacility}
+            />
+          )}
         />
-      )}
+
+        {selectedFacility && (
+          <div className="absolute bottom-4 left-4 right-4 z-30 animate-in fade-in slide-in-from-bottom-4 duration-300 md:bottom-6 md:left-6 md:right-auto md:w-96">
+            <FacilityDetails
+              facility={selectedFacility}
+              onClose={() => setSelectedFacilityId(null)}
+            />
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
+        <div className="mb-4 flex flex-col gap-1">
+          <h2 className="text-lg font-semibold text-foreground">Facility Directory</h2>
+          <p className="text-sm text-muted-foreground">Search and filter facilities without leaving the map page.</p>
+        </div>
+        <div className="h-[520px]">
+          <FacilityList
+            facilities={facilities}
+            selectedFacilityId={selectedFacilityId}
+            onSelectFacility={handleSelectFacility}
+            onFacilityClick={() => undefined}
+          />
+        </div>
+      </section>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "wouter";
-import { AlertTriangle, Calculator, Copy, CopyPlus, Map, Printer, RotateCcw, Save, Trash2 } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { AlertTriangle, Briefcase, Calculator, Copy, CopyPlus, Printer, RotateCcw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import { defaultPricingSettings } from "@/data/defaultPricing";
 import { calculateEstimate, findVolumeBenchmark } from "@/utils/pricingCalculator";
 import { deleteSavedEstimate, loadPricingSettings, loadSavedEstimates, saveEstimate } from "@/utils/pricingStorage";
 import { materialIcon } from "@/lib/materialIcons";
+import { createJobFromEstimate, getJobByEstimateId } from "@/lib/jobStorage";
 import type { EstimateWarning, ExtraFee, SavedEstimate } from "@/types/pricing";
 
 const loadOptions = [
@@ -182,6 +183,7 @@ function mergeSavedExtraFees(savedFees: ExtraFee[]) {
 }
 
 export default function EstimateBuilder() {
+  const [, navigate] = useLocation();
   const [settings, setSettings] = useState(() => loadPricingSettings());
   const activeFacilities = settings.disposalFacilities.filter((facility) => facility.isActive);
   const activeVehicles = settings.vehicles.filter((vehicle) => vehicle.isActive);
@@ -289,6 +291,7 @@ export default function EstimateBuilder() {
   const range = quoteRange(result.finalRecommendedQuote);
   const selectedLoadLabel = loadOptions.find((option) => option.value === loadFraction)?.label ?? "Manual load";
   const selectedSavedEstimate = savedEstimates.find((estimate) => estimate.id === selectedSavedId) ?? null;
+  const selectedEstimateJob = selectedSavedEstimate ? getJobByEstimateId(selectedSavedEstimate.id) : null;
 
   const resetForm = () => {
     setCustomerName("");
@@ -464,6 +467,12 @@ export default function EstimateBuilder() {
     toast.success("Estimate deleted");
   };
 
+  const convertEstimateToJob = (estimate: SavedEstimate) => {
+    const job = createJobFromEstimate(estimate);
+    toast.success("Estimate converted to job");
+    navigate(`/jobs/${job.id}`);
+  };
+
   const printQuote = () => {
     const printWindow = window.open("", "_blank", "width=720,height=900");
     if (!printWindow) {
@@ -514,33 +523,16 @@ export default function EstimateBuilder() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card shadow-sm">
-        <div className="container max-w-full px-4 py-4 md:py-5">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Calculator className="size-4" />
-                Internal pricing tool
-              </div>
-              <h1 className="mt-1 text-3xl font-bold text-foreground md:text-4xl">Estimate Builder</h1>
-              <p className="mt-1 text-muted-foreground">Build weight-aware junk removal quotes with payload and disposal checks.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild variant="outline">
-                <Link href="/">
-                  <Map className="size-4" />
-                  Facility Map
-                </Link>
-              </Button>
-              <Button asChild>
-                <Link href="/settings">Settings</Link>
-              </Button>
-            </div>
-          </div>
+      <header className="border-b border-border bg-background px-4 py-5 md:px-6">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Calculator className="size-4" />
+          Internal pricing tool
         </div>
+        <h1 className="mt-1 text-2xl font-bold text-foreground md:text-3xl">Estimate Builder</h1>
+        <p className="mt-1 text-muted-foreground">Build weight-aware junk removal quotes with payload and disposal checks.</p>
       </header>
 
-      <main className="container max-w-full px-4 py-6">
+      <main className="px-4 py-6 md:px-6">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
           <div className="space-y-6">
             <Card>
@@ -833,9 +825,11 @@ export default function EstimateBuilder() {
             {selectedSavedEstimate && (
               <SavedEstimateDetail
                 estimate={selectedSavedEstimate}
+                convertedJobId={selectedEstimateJob?.id}
                 onLoad={() => loadSavedIntoBuilder(selectedSavedEstimate)}
                 onDuplicate={() => duplicateEstimate(selectedSavedEstimate)}
                 onDelete={() => removeEstimate(selectedSavedEstimate.id)}
+                onConvert={() => convertEstimateToJob(selectedSavedEstimate)}
               />
             )}
           </aside>
@@ -847,14 +841,18 @@ export default function EstimateBuilder() {
 
 function SavedEstimateDetail({
   estimate,
+  convertedJobId,
   onLoad,
   onDuplicate,
   onDelete,
+  onConvert,
 }: {
   estimate: SavedEstimate;
+  convertedJobId?: string;
   onLoad: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  onConvert: () => void;
 }) {
   const estimateRange = {
     lower: estimate.quoteRangeLower ?? quoteRange(estimate.finalQuote).lower,
@@ -913,13 +911,26 @@ function SavedEstimateDetail({
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
+          {convertedJobId ? (
+            <Button className="col-span-2" asChild>
+              <Link href={`/jobs/${convertedJobId}`}>
+                <Briefcase className="size-4" />
+                Open Job
+              </Link>
+            </Button>
+          ) : (
+            <Button className="col-span-2" onClick={onConvert}>
+              <Briefcase className="size-4" />
+              Convert to Job
+            </Button>
+          )}
           <Button onClick={onLoad}>Load</Button>
           <Button variant="outline" onClick={onDuplicate}>
             <CopyPlus className="size-4" />
             Duplicate
           </Button>
-          <Button variant="destructive" onClick={onDelete}>
+          <Button variant="destructive" className="col-span-2" onClick={onDelete}>
             <Trash2 className="size-4" />
             Delete
           </Button>

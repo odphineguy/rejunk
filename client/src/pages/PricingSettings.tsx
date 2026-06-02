@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "wouter";
-import { Calculator, Map, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
+import { Plus, RotateCcw, Save, Settings, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -320,32 +319,16 @@ export default function PricingSettings() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card shadow-sm">
-        <div className="container max-w-full px-4 py-1 md:py-2">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-4">
-              <img src="/rejunk-logo.svg" alt="reJunk" className="h-20 md:h-[100px] w-auto" />
-              <p className="text-muted-foreground">Manage the editable data used by the Estimate Builder.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild variant="outline">
-                <Link href="/">
-                  <Map className="size-4" />
-                  Map
-                </Link>
-              </Button>
-              <Button asChild>
-                <Link href="/estimate-builder">
-                  <Calculator className="size-4" />
-                  Estimate Builder
-                </Link>
-              </Button>
-            </div>
-          </div>
+      <header className="border-b border-border bg-background px-4 py-5 md:px-6">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Settings className="size-4" />
+          Admin
         </div>
+        <h1 className="mt-1 text-2xl font-bold text-foreground md:text-3xl">Pricing Settings</h1>
+        <p className="mt-1 text-muted-foreground">Manage the editable data used by the Estimate Builder.</p>
       </header>
 
-      <main className="container max-w-full px-4 py-6">
+      <main className="px-4 py-6 md:px-6">
         <Tabs defaultValue="facilities" className="gap-5">
           <TabsList className="h-auto flex-wrap justify-start">
             <TabsTrigger value="facilities">Facilities</TabsTrigger>
