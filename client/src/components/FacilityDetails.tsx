@@ -17,7 +17,7 @@ export default function FacilityDetails({ facility, onClose }: FacilityDetailsPr
 
   return (
     <Card
-      className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden border-0 shadow-xl"
+      className="flex h-full w-full flex-col overflow-hidden rounded-none border-0 shadow-none"
       style={{ borderTop: `4px solid ${typeColor}` }}
     >
       {/* Header — stays put so the close button is always reachable */}

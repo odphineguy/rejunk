@@ -4,6 +4,7 @@ import FacilityDetails from '@/components/FacilityDetails';
 import FacilityList from '@/components/FacilityList';
 import { Facility, facilityTypeColors } from '@/data/facilities';
 import { loadPricingSettings } from '@/utils/pricingStorage';
+import { cn } from '@/lib/utils';
 import { AlertCircle, MapPin } from 'lucide-react';
 
 /**
@@ -148,7 +149,7 @@ export default function Home() {
         </p>
       </div>
 
-      <div className="relative">
+      <div className="grid gap-3 lg:grid-cols-[2fr_1fr]">
         <section className="relative overflow-hidden rounded-lg border border-border bg-card shadow-sm">
           <MapView
             className="h-[58vh] min-h-[520px]"
@@ -164,14 +165,24 @@ export default function Home() {
           />
         </section>
 
-        {selectedFacility && (
-          <div className="absolute left-4 right-4 top-4 z-30 animate-in fade-in slide-in-from-top-2 duration-300 md:left-6 md:right-auto md:top-6 md:w-96">
-            <FacilityDetails
-              facility={selectedFacility}
-              onClose={() => setSelectedFacilityId(null)}
-            />
-          </div>
-        )}
+        {/* Facility detail panel: always shown on wide screens, stacks below the
+            map (and only when a facility is selected) on smaller screens. */}
+        <div
+          className={cn(
+            "h-[58vh] min-h-[520px] overflow-hidden rounded-lg border border-border bg-card shadow-sm",
+            selectedFacility ? "block" : "hidden lg:block",
+          )}
+        >
+          {selectedFacility ? (
+            <FacilityDetails facility={selectedFacility} onClose={() => setSelectedFacilityId(null)} />
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-muted-foreground">
+              <MapPin className="size-8 opacity-40" />
+              <p className="text-sm font-medium text-foreground">Select a facility</p>
+              <p className="text-xs">Tap a pin on the map or a card below to see its details, pricing, and what it accepts.</p>
+            </div>
+          )}
+        </div>
       </div>
 
       <section className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
