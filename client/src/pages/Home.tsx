@@ -148,29 +148,31 @@ export default function Home() {
         </p>
       </div>
 
-      <section className="relative overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-        <MapView
-          className="h-[58vh] min-h-[520px]"
-          onMapReady={handleMapReady}
-          fallback={(error) => (
-            <LocalFacilityMap
-              facilities={facilities}
-              selectedFacilityId={selectedFacilityId}
-              error={error}
-              onSelectFacility={handleSelectFacility}
-            />
-          )}
-        />
+      <div className="relative">
+        <section className="relative overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+          <MapView
+            className="h-[58vh] min-h-[520px]"
+            onMapReady={handleMapReady}
+            fallback={(error) => (
+              <LocalFacilityMap
+                facilities={facilities}
+                selectedFacilityId={selectedFacilityId}
+                error={error}
+                onSelectFacility={handleSelectFacility}
+              />
+            )}
+          />
+        </section>
 
         {selectedFacility && (
-          <div className="absolute bottom-4 left-4 right-4 z-30 animate-in fade-in slide-in-from-bottom-4 duration-300 md:bottom-6 md:left-6 md:right-auto md:w-96">
+          <div className="absolute left-4 right-4 top-4 z-30 animate-in fade-in slide-in-from-top-2 duration-300 md:left-6 md:right-auto md:top-6 md:w-96">
             <FacilityDetails
               facility={selectedFacility}
               onClose={() => setSelectedFacilityId(null)}
             />
           </div>
         )}
-      </section>
+      </div>
 
       <section className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
         <div className="mb-4 flex flex-col gap-1">
