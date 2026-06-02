@@ -37,11 +37,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
 
   return (
-    <div className="min-h-screen bg-muted/20 md:grid md:grid-cols-[248px_minmax(0,1fr)]">
-      <aside className="hidden border-r border-border bg-card md:flex md:min-h-screen md:flex-col">
-        <Link href="/" className="flex h-20 items-center gap-3 border-b border-border bg-primary px-6">
-          <img src="/rejunk-logo.svg" alt="reJunk" className="h-9 w-auto" />
-          <span className="text-xs font-medium text-primary-foreground/80">Operations</span>
+    <div className="min-h-screen bg-muted/20 md:flex md:h-screen md:overflow-hidden">
+      <aside className="hidden w-[248px] shrink-0 border-r border-border bg-card md:flex md:h-screen md:flex-col">
+        <Link href="/" className="flex h-20 items-center border-b border-border px-6">
+          <img src="/rejunk-whites.png" alt="reJunk" className="h-10 w-auto" />
         </Link>
 
         <nav className="flex-1 space-y-6 overflow-y-auto px-4 py-6">
@@ -72,8 +71,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
       </aside>
 
-      <div className="min-w-0">
-        <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
+      <div className="flex min-w-0 flex-1 flex-col md:h-screen md:overflow-hidden">
+        <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur md:static">
           <div className="flex min-h-20 flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between md:px-6">
             <div className="relative w-full md:max-w-md">
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -105,7 +104,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="min-w-0">
+        <main className="min-w-0 md:flex-1 md:overflow-y-auto">
           {children}
         </main>
       </div>
