@@ -177,14 +177,12 @@ export default function Home() {
           <h2 className="text-lg font-semibold text-foreground">Facility Directory</h2>
           <p className="text-sm text-muted-foreground">Search and filter facilities without leaving the map page.</p>
         </div>
-        <div className="h-[520px]">
-          <FacilityList
-            facilities={facilities}
-            selectedFacilityId={selectedFacilityId}
-            onSelectFacility={handleSelectFacility}
-            onFacilityClick={() => undefined}
-          />
-        </div>
+        <FacilityList
+          facilities={facilities}
+          selectedFacilityId={selectedFacilityId}
+          onSelectFacility={handleSelectFacility}
+          onFacilityClick={() => undefined}
+        />
       </section>
     </div>
   );

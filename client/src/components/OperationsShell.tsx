@@ -40,7 +40,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-muted/20 md:flex md:h-screen md:overflow-hidden">
       <aside className="hidden w-[248px] shrink-0 border-r border-border bg-card md:flex md:h-screen md:flex-col">
         <Link href="/" className="flex h-20 items-center border-b border-border px-6">
-          <img src="/rejunk-whites.png" alt="reJunk" className="h-10 w-auto" />
+          <img src="/rejunk-whites.png" alt="reJunk" className="h-20 w-auto" />
         </Link>
 
         <nav className="flex-1 space-y-6 overflow-y-auto px-4 py-6">
