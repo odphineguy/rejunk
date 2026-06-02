@@ -283,8 +283,8 @@ export const facilities: Facility[] = [
   },
   {
     id: "wm-san-tan-transfer",
-    facilityName: "Waste Management - San Tan",
-    name: "Waste Management - San Tan",
+    facilityName: "San Tan Transfer Station",
+    name: "San Tan Transfer Station",
     facilityType: "transfer_station",
     type: "transfer_station",
     address: "4040 S 80th St",

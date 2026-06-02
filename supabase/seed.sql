@@ -77,7 +77,7 @@ values
   ('republic-germann-transfer', 'Republic Services - Germann', 'transfer_station', '11530 E Germann Rd', 'Chandler', 'AZ', '85286', '480-222-8434', 'https://www.republicservices.com/', 33.2781897, -111.8348656,
    '{household_junk,furniture,mixed_c_and_d,tires,appliances,cardboard,metal}', '{hazardous_excluded}', 'per_ton', 70, 20, 0, 0, 0,
    '{"Mon-Fri: 6:00 AM - 4:00 PM"}', 'Accepts tires and appliances (fees apply; ~$20 for refrigerant units). Confirm commercial gate rates before dispatch.', 'Southeast Valley mixed loads, plus tires and appliances in one stop.', 'Standard transfer station disposal', '2026-05-31', false, true),
-  ('wm-san-tan-transfer', 'Waste Management - San Tan', 'transfer_station', '4040 S 80th St', 'Mesa', 'AZ', '85212', '602-308-0915', 'https://www.wmsolutions.com/', 33.3420798, -111.6639574,
+  ('wm-san-tan-transfer', 'San Tan Transfer Station', 'transfer_station', '4040 S 80th St', 'Mesa', 'AZ', '85212', '602-308-0915', 'https://www.wmsolutions.com/', 33.3420798, -111.6639574,
    '{household_junk,furniture,mixed_c_and_d,green_waste,cardboard}', '{hazardous_excluded,tires,appliances}', 'per_ton', 65, 40, 0, 0, 0,
    '{"Mon-Fri: 7:00 AM - 4:00 PM","Sat: 7:00 AM - 12:00 PM","Sun: Closed"}', 'Does not accept tires or appliances. Typical 1-ton minimum or small-load flat fee.', 'Southeast Valley (Mesa/Queen Creek) household junk and mixed C&D.', 'Standard transfer station disposal', '2026-05-31', false, true),
   ('white-tank-transfer', 'White Tank Transfer Station', 'transfer_station', '18605 W McDowell Rd', 'Goodyear', 'AZ', '85338', '623-853-1707', 'https://www.wmsolutions.com/', 33.464579, -112.4613901,

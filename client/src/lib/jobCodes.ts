@@ -29,7 +29,7 @@ export const FACILITY_CODE: Record<string, string> = {
   "buesing-recycling": "BUE",
   "crm-tires": "CRM",
   "republic-germann-transfer": "RPG",
-  "wm-san-tan-transfer": "WST",
+  "wm-san-tan-transfer": "SAN",
   "white-tank-transfer": "WTT",
   "butterfield-landfill": "BSL",
   "phoenix-27th-ave-transfer": "PHS",
