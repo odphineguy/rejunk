@@ -1,4 +1,7 @@
+import { AlertTriangle } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import type { JobWarning } from "@/lib/jobIntelligence";
 import type { JobStatus, PaymentStatus } from "@/types/jobs";
 
@@ -61,6 +64,27 @@ export function JobWarningBadge({ warning }: { warning: JobWarning }) {
   return (
     <Badge variant="outline" className={tone}>
       {warning.label}
+    </Badge>
+  );
+}
+
+/** Collapses all of a job's warnings into one count chip, colored by the most
+ *  severe warning. Full list shown on hover. Renders a muted dash when clean. */
+export function JobWarningSummary({ warnings }: { warnings: JobWarning[] }) {
+  if (warnings.length === 0) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+
+  const tone = warnings.some((w) => w.severity === "critical")
+    ? "border-red-200 bg-red-100 text-red-700"
+    : warnings.some((w) => w.severity === "warning")
+      ? "border-amber-200 bg-amber-100 text-amber-800"
+      : "border-slate-200 bg-slate-100 text-slate-700";
+
+  return (
+    <Badge variant="outline" className={cn(tone, "gap-1")} title={warnings.map((w) => w.label).join(", ")}>
+      <AlertTriangle className="size-3" />
+      {warnings.length}
     </Badge>
   );
 }

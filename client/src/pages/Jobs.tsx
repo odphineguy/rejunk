@@ -3,7 +3,8 @@ import { useLocation } from "wouter";
 import { Briefcase, CalendarCheck, CheckCircle2, Clock, Search, Trash2, Truck, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { JobStatusBadge, JobWarningBadge, PaymentStatusBadge, jobStatusLabels } from "@/components/JobBadges";
+import { JobStatusBadge, JobWarningSummary, PaymentStatusBadge, jobStatusLabels } from "@/components/JobBadges";
+import { facilityCode, materialCode } from "@/lib/jobCodes";
 import { OperationsShell } from "@/components/OperationsShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,6 @@ function money(value: number | undefined) {
 function formatDate(value?: string) {
   if (!value) return "Unscheduled";
   return new Intl.DateTimeFormat("en-US", {
-    weekday: "short",
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -152,10 +152,10 @@ export default function Jobs() {
                   <TableHead>Material</TableHead>
                   <TableHead>Facility</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Payment Status</TableHead>
-                  <TableHead>Warnings</TableHead>
+                  <TableHead>Payment</TableHead>
+                  <TableHead>Warn</TableHead>
                   <TableHead className="text-right">Quote</TableHead>
-                  <TableHead className="text-right">Actual Profit</TableHead>
+                  <TableHead className="text-right">Profit</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -172,12 +172,20 @@ export default function Jobs() {
                         <div className="font-medium">{job.customerName}</div>
                         {job.jobLabel && <div className="text-xs text-muted-foreground">{job.jobLabel}</div>}
                       </TableCell>
-                      <TableCell>{formatDate(job.scheduledStart)}</TableCell>
-                      <TableCell className="max-w-[240px] truncate">
+                      <TableCell className="whitespace-nowrap">{formatDate(job.scheduledStart)}</TableCell>
+                      <TableCell className="max-w-[150px] truncate" title={[job.address, job.city, job.zip].filter(Boolean).join(", ") || "Not provided"}>
                         {[job.address, job.city, job.zip].filter(Boolean).join(", ") || "Not provided"}
                       </TableCell>
-                      <TableCell>{job.materialName || job.materialType?.replaceAll("_", " ") || "Not set"}</TableCell>
-                      <TableCell className="max-w-[220px] truncate">{job.facilityName || "Not selected"}</TableCell>
+                      <TableCell>
+                        <span className="font-medium" title={job.materialName || job.materialType?.replaceAll("_", " ") || "Not set"}>
+                          {materialCode(job.materialType, job.materialName)}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-medium" title={job.facilityName || "Not selected"}>
+                          {facilityCode(job.facilityId, job.facilityName)}
+                        </span>
+                      </TableCell>
                       <TableCell>
                         <JobStatusBadge status={job.status} />
                       </TableCell>
@@ -185,12 +193,7 @@ export default function Jobs() {
                         <PaymentStatusBadge status={job.paymentStatus} />
                       </TableCell>
                       <TableCell>
-                        <div className="flex max-w-[190px] flex-wrap gap-1">
-                          {warnings.slice(0, 2).map((warning) => (
-                            <JobWarningBadge key={warning.code} warning={warning} />
-                          ))}
-                          {warnings.length > 2 && <Badge variant="secondary">+{warnings.length - 2}</Badge>}
-                        </div>
+                        <JobWarningSummary warnings={warnings} />
                       </TableCell>
                       <TableCell className="text-right font-semibold">{money(job.quotedAmount)}</TableCell>
                       <TableCell className="text-right font-semibold">{money(getActualFinancials(job).profit)}</TableCell>
