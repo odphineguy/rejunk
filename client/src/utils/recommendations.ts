@@ -80,7 +80,7 @@ function vehicleFuelCost(vehicle: Vehicle, miles: number | null, trips: number, 
 }
 
 function heavyPlanningCapacity(vehicle: Vehicle) {
-  return vehicle.vehicleType === "cargo_van" ? Math.min(vehicle.usableCubicYards, 5) : vehicle.usableCubicYards;
+  return vehicle.vehicleType === "cargo_van" ? Math.min(vehicle.usableCubicYards, 3) : vehicle.usableCubicYards;
 }
 
 function tripsRequired(vehicle: Vehicle, cubicYards: number, estimatedWeightLbs: number, handlingClass: MaterialHandlingClass) {
@@ -102,8 +102,12 @@ function vehicleIsEligible(vehicle: Vehicle, handlingClass: MaterialHandlingClas
   return vehicle.allowedHandlingClasses.includes(handlingClass);
 }
 
-function lowboyPackageYards(cubicYards: number) {
-  return Math.max(5, Math.ceil(positive(cubicYards, 0) / 5) * 5);
+function chargedBedloads(cubicYards: number) {
+  if (cubicYards <= 0.75) return 0.25;
+  if (cubicYards <= 1.5) return 0.5;
+  if (cubicYards <= 2.25) return 0.75;
+  if (cubicYards <= 3) return 1;
+  return Math.ceil(cubicYards / 3);
 }
 
 function includedTonDetails(materialRule: MaterialPricingRule | undefined, estimatedTons: number, cubicYards: number) {
@@ -111,8 +115,7 @@ function includedTonDetails(materialRule: MaterialPricingRule | undefined, estim
     return { includedTons: undefined, extraTons: undefined, extraTonCost: undefined };
   }
 
-  const packageMultiplier = lowboyPackageYards(cubicYards) / 5;
-  const includedTons = positive(materialRule.includedTons, materialRule.materialCategory === "heavy_clean_debris" ? 3 : 4) * packageMultiplier;
+  const includedTons = positive(materialRule.includedTons, materialRule.materialCategory === "heavy_clean_debris" ? 3 : 4) * chargedBedloads(cubicYards);
   const extraTons = Math.max(0, estimatedTons - includedTons);
   const extraTonCost = extraTons * positive(materialRule.extraTonRate, 95);
   return { includedTons, extraTons, extraTonCost };
@@ -214,7 +217,10 @@ export function buildVehicleJobComparisons(
           ? ["High-bed vehicle excluded for dense loose debris."]
           : []),
         ...(handlingClass === "heavy_lowboy" && vehicle.vehicleType === "cargo_van"
-          ? ["Van fallback uses 5 yd3 per trip for heavy material planning."]
+          ? ["Van fallback uses 3 yd3 bedloads for heavy material planning."]
+          : []),
+        ...(handlingClass === "heavy_lowboy" && cubicYards > 10 && vehicle.vehicleType !== "dump_trailer"
+          ? ["Manual review recommended above 10 yd3 without dump trailer."]
           : []),
         ...(payloadWarning ? [payloadWarning] : []),
         ...(trips > 1 ? [`${trips} trips required`] : []),

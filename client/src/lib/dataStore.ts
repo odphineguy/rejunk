@@ -66,7 +66,7 @@ function derivePricing(row: FacilityRow): LegacyFacilityPricing {
 }
 
 function defaultHandlingClass(materialCategory: MaterialCategory): MaterialHandlingClass {
-  if (["clean_concrete", "dirt", "rock", "brick", "clean_tile", "asphalt", "pavers", "heavy_clean_debris"].includes(materialCategory)) {
+  if (["clean_concrete", "dirt", "rock", "sod", "stone", "brick", "clean_tile", "asphalt", "pavers", "heavy_clean_debris"].includes(materialCategory)) {
     return "heavy_lowboy";
   }
   if (materialCategory === "green_waste") return "green_waste";
@@ -329,6 +329,7 @@ export async function loadAllSettings(): Promise<PricingSettings | null> {
     vehicles: (vehicles.data ?? []).map(vehicleFromRow),
     materialPricingRules: (materials.data ?? []).map(materialFromRow),
     volumePricingBenchmarks: (benchmarks.data ?? []).map(benchmarkFromRow),
+    heavyBedloadPricing: defaultPricingSettings.heavyBedloadPricing,
     defaults: defaults.data ? defaultsFromRow(defaults.data) : defaultPricingSettings.defaults,
   };
 }

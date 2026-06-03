@@ -234,13 +234,16 @@ export default function EstimateBuilder() {
   const vehicle = activeVehicles.find((item) => item.id === vehicleId) ?? activeVehicles[0] ?? defaultPricingSettings.vehicles[0];
   const selectedFacility = activeFacilities.find((item) => item.id === facilityId);
   const facility = selectedFacility ?? activeFacilities.find((item) => item.isDefault) ?? activeFacilities[0] ?? defaultPricingSettings.disposalFacilities[0];
+  const heavyMode = materialRule.handlingClass === "heavy_lowboy";
   const hasJobAddress = Boolean(jobAddress.trim());
-  const quoteReady = hasJobAddress && Boolean(selectedFacility);
+  const heavyVolumeEntered = !heavyMode || numericValue(manualCubicYards) > 0;
+  const quoteReady = hasJobAddress && Boolean(selectedFacility) && heavyVolumeEntered;
 
   const selectedLoadFraction = numericValue(loadFraction);
   const volumeBenchmark = findVolumeBenchmark(settings.volumePricingBenchmarks, selectedLoadFraction);
   const cubicYards = manualCubicYards ? numericValue(manualCubicYards) : undefined;
-  const calculatedCubicYards = cubicYards ?? vehicle.usableCubicYards * selectedLoadFraction;
+  const estimateCubicYards = heavyMode ? numericValue(manualCubicYards) : cubicYards;
+  const calculatedCubicYards = heavyMode ? numericValue(manualCubicYards) : cubicYards ?? vehicle.usableCubicYards * selectedLoadFraction;
   const selectedExtraFees = extraFees.filter((fee) => fee.amount > 0);
 
   const result = useMemo(
@@ -250,7 +253,7 @@ export default function EstimateBuilder() {
         vehicle,
         facility,
         loadFraction: selectedLoadFraction,
-        cubicYards,
+        cubicYards: estimateCubicYards,
         manualWeightLbs: manualWeightLbs ? numericValue(manualWeightLbs) : undefined,
         workers: numericValue(workers),
         estimatedHours: numericValue(estimatedHours),
@@ -262,9 +265,11 @@ export default function EstimateBuilder() {
         targetMarginDecimal: numericValue(targetMargin) / 100,
         minimumProfitDollars: numericValue(minimumProfit),
         volumeBenchmarkPrice: volumeBenchmark?.price,
+        heavyBedloadPricing: settings.heavyBedloadPricing,
       }),
     [
       cubicYards,
+      estimateCubicYards,
       estimatedHours,
       facility,
       fuelPrice,
@@ -280,6 +285,7 @@ export default function EstimateBuilder() {
       vehicle,
       volumeBenchmark?.price,
       workers,
+      settings.heavyBedloadPricing,
     ],
   );
 
@@ -327,8 +333,11 @@ export default function EstimateBuilder() {
     [fuelPrice, jobAddress, materialRule, result, routeEstimates, roundTripMiles, selectedFacility?.id, settings, vehicle.id],
   );
   const recommendation = hasJobAddress ? recommendationBundle.recommendation : null;
-  const heavyMode = materialRule.handlingClass === "heavy_lowboy";
   const heavyVehicle = recommendation?.vehicleComparison;
+  const heavyBedload = result.heavyBedload;
+  const trailerComparison = heavyMode
+    ? recommendationBundle.vehicleComparisons.find((comparison) => comparison.vehicleType === "dump_trailer" && !comparison.excludedFromRecommendation)
+    : undefined;
 
   const uiWarnings = useMemo(() => {
     const warnings = [...result.warnings];
@@ -343,7 +352,9 @@ export default function EstimateBuilder() {
   }, [result, targetMargin]);
 
   const range = quoteRange(result.finalRecommendedQuote);
-  const selectedLoadLabel = loadOptions.find((option) => option.value === loadFraction)?.label ?? "Manual load";
+  const selectedLoadLabel = heavyMode
+    ? `${numberFormatter.format(result.cubicYards)} yd3 heavy material`
+    : loadOptions.find((option) => option.value === loadFraction)?.label ?? "Manual load";
   const selectedSavedEstimate = savedEstimates.find((estimate) => estimate.id === selectedSavedId) ?? null;
   const selectedEstimateJob = selectedSavedEstimate ? getJobByEstimateId(selectedSavedEstimate.id) : null;
 
@@ -468,6 +479,7 @@ export default function EstimateBuilder() {
       targetMarginDecimal: numericValue(targetMargin) / 100,
       minimumProfitDollars: numericValue(minimumProfit),
       recommendationSnapshot: recommendation ?? undefined,
+      heavyBedload: result.heavyBedload,
       notes: notes || undefined,
       ...overrides,
     };
@@ -475,7 +487,7 @@ export default function EstimateBuilder() {
 
   const handleSaveEstimate = () => {
     if (!quoteReady) {
-      toast.error("Add a job address and choose a disposal facility before saving.");
+      toast.error(heavyMode ? "Add a job address, heavy material volume, and disposal facility before saving." : "Add a job address and choose a disposal facility before saving.");
       return;
     }
     const saved = saveEstimate(buildSavedEstimate());
@@ -660,23 +672,31 @@ export default function EstimateBuilder() {
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field label="Load size">
-                  <Select value={loadFraction} onValueChange={setLoadFraction}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {loadOptions.map((option) => (
-                        <SelectItem key={option.label} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field label="Manual cubic yards">
-                  <Input type="number" min="0" step="0.1" value={manualCubicYards} onChange={(event) => setManualCubicYards(event.target.value)} placeholder={numberFormatter.format(calculatedCubicYards)} />
-                </Field>
+                {heavyMode ? (
+                  <Field label="Heavy Material Volume">
+                    <Input type="number" min="0" step="0.25" value={manualCubicYards} onChange={(event) => setManualCubicYards(event.target.value)} placeholder="0.75, 1.5, 2.25, 3..." />
+                  </Field>
+                ) : (
+                  <Field label="Load size">
+                    <Select value={loadFraction} onValueChange={setLoadFraction}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {loadOptions.map((option) => (
+                          <SelectItem key={option.label} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+                {!heavyMode && (
+                  <Field label="Manual cubic yards">
+                    <Input type="number" min="0" step="0.1" value={manualCubicYards} onChange={(event) => setManualCubicYards(event.target.value)} placeholder={numberFormatter.format(calculatedCubicYards)} />
+                  </Field>
+                )}
                 <Field label="Manual weight override (lb)">
                   <Input type="number" min="0" step="25" value={manualWeightLbs} onChange={(event) => setManualWeightLbs(event.target.value)} placeholder={String(Math.round(calculatedCubicYards * materialRule.defaultDensityLbsPerYard))} />
                 </Field>
@@ -684,6 +704,16 @@ export default function EstimateBuilder() {
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Vehicle capacity</p>
                   <p className="mt-1 text-sm font-semibold">{vehicle.usableCubicYards} yd3 usable / {vehicle.maxPayloadLbs.toLocaleString()} lb payload</p>
                 </div>
+                {heavyMode && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 xl:col-span-3">
+                    <div className="font-semibold">Heavy Material Mode</div>
+                    <div className="mt-1 grid gap-1 md:grid-cols-3">
+                      <span>Bedload equivalent: {heavyBedload ? heavyBedload.bedloadEquivalent.toFixed(2) : "0.00"}</span>
+                      <span>Estimated tons: {result.estimatedTons.toFixed(2)}</span>
+                      <span>Dense material: volume may fit, but weight controls legality.</span>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -786,12 +816,13 @@ export default function EstimateBuilder() {
                 {!quoteReady ? (
                   <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
                     The quote summary will stay clear until a job address is entered and a disposal facility is selected.
+                    {heavyMode ? " Heavy materials also need cubic yards." : ""}
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-3">
                     <Stat label="Recommended" value={money(result.finalRecommendedQuote)} tone="strong" />
-                    <Stat label="Minimum quote" value={money(result.minimumQuote)} />
-                    <Stat label="Quote range" value={`${money(range.lower)}-${money(range.upper)}`} />
+                    <Stat label={heavyMode ? "Bedload base" : "Minimum quote"} value={heavyMode ? money(heavyBedload?.baseBedloadPrice) : money(result.minimumQuote)} />
+                    <Stat label={heavyMode ? "Extra ton charge" : "Quote range"} value={heavyMode ? money(heavyBedload?.extraTonCharge) : `${money(range.lower)}-${money(range.upper)}`} />
                     <Stat label="Base cost" value={money(result.baseCost)} />
                   </div>
                 )}
@@ -819,15 +850,21 @@ export default function EstimateBuilder() {
                     )}
                     <div className="grid gap-2">
                       {heavyMode && <DetailRow label="Cubic yards" value={numberFormatter.format(result.cubicYards)} />}
+                      {heavyMode && <DetailRow label="Bedload equivalent" value={`${heavyBedload?.bedloadEquivalent.toFixed(2) ?? "0.00"} bedloads`} />}
                       {heavyMode && <DetailRow label="Estimated tons" value={result.estimatedTons.toFixed(2)} />}
-                      {heavyMode && <DetailRow label="Included tons" value={heavyVehicle?.includedTons?.toFixed(2) ?? "—"} />}
-                      {heavyMode && <DetailRow label="Extra tons" value={heavyVehicle?.extraTons?.toFixed(2) ?? "0.00"} />}
+                      {heavyMode && <DetailRow label="Included tons" value={heavyBedload?.includedTons.toFixed(2) ?? heavyVehicle?.includedTons?.toFixed(2) ?? "—"} />}
+                      {heavyMode && <DetailRow label="Extra tons" value={heavyBedload?.extraTons.toFixed(2) ?? heavyVehicle?.extraTons?.toFixed(2) ?? "0.00"} />}
+                      {heavyMode && <DetailRow label="Base bedload/package price" value={money(heavyBedload?.baseBedloadPrice)} />}
+                      {heavyMode && <DetailRow label="Extra ton charge" value={money(heavyBedload?.extraTonCharge)} />}
+                      {heavyMode && <DetailRow label="Bedload pricing" value={money((heavyBedload?.baseBedloadPrice ?? 0) + (heavyBedload?.extraTonCharge ?? 0))} />}
+                      {heavyMode && trailerComparison && <DetailRow label="Trailer package estimate" value={money(trailerComparison.totalOperationalCost)} />}
+                      {heavyMode && heavyBedload?.lowboyEquivalent && <DetailRow label="Lowboy equivalent" value="10 yd3 heavy load" />}
                       {heavyMode && <DetailRow label="Trips required" value={String(heavyVehicle?.tripsRequired ?? "—")} />}
-                      {heavyMode && <DetailRow label="Recommended service" value={heavyVehicle?.recommendedService ?? "manual review"} />}
+                      {heavyMode && <DetailRow label="Recommended service" value={heavyBedload?.recommendedService ?? heavyVehicle?.recommendedService ?? "manual review"} />}
                       <DetailRow label="Vehicle" value={recommendation.vehicleName ?? "No recommendation"} />
                       <DetailRow label="Round trip" value={miles(recommendation.facilityComparison?.roundTripMiles)} />
-                      <DetailRow label="Recommended cost" value={money(recommendation.recommendedTotalCost)} />
-                      <DetailRow label="Selected cost" value={money(recommendation.selectedTotalCost)} />
+                      {!heavyMode && <DetailRow label="Recommended cost" value={money(recommendation.recommendedTotalCost)} />}
+                      {!heavyMode && <DetailRow label="Selected cost" value={money(recommendation.selectedTotalCost)} />}
                       {heavyMode && heavyVehicle?.payloadWarning && <DetailRow label="Payload warning" value={heavyVehicle.payloadWarning} />}
                     </div>
                     <p className="mt-3 text-muted-foreground">{recommendation.reason}</p>
@@ -848,7 +885,7 @@ export default function EstimateBuilder() {
                 {quoteReady && (
                   <div className="grid grid-cols-2 gap-3">
                     <Stat label="Labor" value={money(result.laborCost)} />
-                    <Stat label="Disposal" value={money(result.disposalCost)} />
+                    <Stat label="Disposal estimate" value={money(result.disposalCost)} />
                     <Stat label="Fuel" value={money(result.fuelCost)} />
                     <Stat label="Vehicle" value={money(result.vehicleCost)} />
                     <Stat label="Extra fees" value={money(result.extraFeesTotal)} />

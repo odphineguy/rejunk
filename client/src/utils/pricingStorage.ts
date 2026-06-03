@@ -38,7 +38,7 @@ function writeJson<T>(key: string, value: T) {
 function defaultHandlingClass(material: Partial<MaterialPricingRule>): MaterialHandlingClass {
   if (
     material.materialCategory &&
-    ["clean_concrete", "dirt", "rock", "brick", "clean_tile", "asphalt", "pavers", "heavy_clean_debris"].includes(material.materialCategory)
+    ["clean_concrete", "dirt", "rock", "sod", "stone", "brick", "clean_tile", "asphalt", "pavers", "heavy_clean_debris"].includes(material.materialCategory)
   ) {
     return "heavy_lowboy";
   }
@@ -106,6 +106,10 @@ function mergeSettings(stored: Partial<PricingSettings>): PricingSettings {
   return {
     ...defaultPricingSettings,
     ...stored,
+    heavyBedloadPricing: {
+      ...defaultPricingSettings.heavyBedloadPricing,
+      ...stored.heavyBedloadPricing,
+    },
     defaults: {
       ...defaultPricingSettings.defaults,
       ...stored.defaults,

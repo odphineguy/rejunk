@@ -15,6 +15,8 @@ export const MATERIAL_CODE: Record<MaterialCategory, string> = {
   brick: "BRK",
   dirt: "DRT",
   rock: "RCK",
+  sod: "SOD",
+  stone: "STN",
   asphalt: "ASP",
   pavers: "PAV",
   heavy_clean_debris: "HCD",

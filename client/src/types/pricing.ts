@@ -19,6 +19,8 @@ export type MaterialCategory =
   | "brick"
   | "dirt"
   | "rock"
+  | "sod"
+  | "stone"
   | "asphalt"
   | "pavers"
   | "heavy_clean_debris"
@@ -162,6 +164,7 @@ export interface PricingSettings {
   vehicles: Vehicle[];
   materialPricingRules: MaterialPricingRule[];
   volumePricingBenchmarks: VolumePricingBenchmark[];
+  heavyBedloadPricing: HeavyBedloadPricing;
   defaults: {
     fuelPricePerGallon: number;
     workers: number;
@@ -171,6 +174,14 @@ export interface PricingSettings {
     minimumProfitDollars: number;
     defaultFacilityRatePerTon: number;
   };
+}
+
+export interface HeavyBedloadPricing {
+  minimumEnvironmentalFee: number;
+  quarterBedload: number;
+  halfBedload: number;
+  threeQuarterBedload: number;
+  fullBedload: number;
 }
 
 export interface EstimateCalculatorInput {
@@ -194,6 +205,7 @@ export interface EstimateCalculatorInput {
   minimumProfitDollars?: number;
   volumeBenchmarkPrice?: number;
   minimumAcceptablePrice?: number;
+  heavyBedloadPricing?: HeavyBedloadPricing;
 }
 
 export type EstimateWarningCode =
@@ -213,6 +225,19 @@ export interface EstimateWarning {
   severity: "info" | "warning" | "critical";
 }
 
+export interface HeavyBedloadCalculation {
+  bedloadYards: number;
+  bedloadEquivalent: number;
+  chargedBedloads: number;
+  tierLabel: string;
+  baseBedloadPrice: number;
+  includedTons: number;
+  extraTons: number;
+  extraTonCharge: number;
+  recommendedService: string;
+  lowboyEquivalent: boolean;
+}
+
 export interface EstimateCalculationResult {
   cubicYards: number;
   estimatedWeightLbs: number;
@@ -229,6 +254,7 @@ export interface EstimateCalculationResult {
   grossProfitDollars: number;
   grossMarginDecimal: number;
   selectedVolumeBenchmark?: number;
+  heavyBedload?: HeavyBedloadCalculation;
   payloadStatus: "ok" | "near_limit" | "over_limit";
   warnings: EstimateWarning[];
 }
@@ -354,5 +380,6 @@ export interface SavedEstimate {
   targetMarginDecimal?: number;
   minimumProfitDollars?: number;
   recommendationSnapshot?: BestFacilityRecommendation;
+  heavyBedload?: HeavyBedloadCalculation;
   notes?: string;
 }

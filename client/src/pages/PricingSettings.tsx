@@ -60,6 +60,8 @@ const materialCategories: MaterialCategory[] = [
   "brick",
   "dirt",
   "rock",
+  "sod",
+  "stone",
   "asphalt",
   "pavers",
   "heavy_clean_debris",

@@ -3,6 +3,7 @@ import type {
   EstimateCalculatorInput,
   EstimateWarning,
   FacilityPriceType,
+  HeavyBedloadPricing,
   MaterialPricingRule,
   Vehicle,
   VolumePricingBenchmark,
@@ -10,6 +11,14 @@ import type {
 
 const ROUND_TO_DOLLAR = 1;
 const RECENT_VERIFICATION_DAYS = 180;
+const BEDLOAD_YARDS = 3;
+const DEFAULT_HEAVY_BEDLOAD_PRICING: HeavyBedloadPricing = {
+  minimumEnvironmentalFee: 150,
+  quarterBedload: 325,
+  halfBedload: 495,
+  threeQuarterBedload: 640,
+  fullBedload: 775,
+};
 
 function money(value: number) {
   if (!Number.isFinite(value)) {
@@ -25,11 +34,78 @@ function positive(value: number | undefined, fallback = 0) {
 
 function isHeavyMaterial(rule: MaterialPricingRule) {
   return (
+    rule.handlingClass === "heavy_lowboy" ||
     rule.requiresWeightOverride ||
     rule.pricingMode === "weight_based" ||
     rule.defaultDensityLbsPerYard >= 700 ||
     ["clean_concrete", "clean_tile", "brick", "dirt", "rock"].includes(rule.materialCategory)
   );
+}
+
+function bedloadTier(cubicYards: number, pricing: HeavyBedloadPricing) {
+  const bedloadEquivalent = cubicYards / BEDLOAD_YARDS;
+  if (cubicYards <= 0) {
+    return {
+      bedloadEquivalent,
+      chargedBedloads: 0,
+      tierLabel: "Minimum / environmental fee",
+      baseBedloadPrice: pricing.minimumEnvironmentalFee,
+    };
+  }
+  if (cubicYards <= 0.75) {
+    return { bedloadEquivalent, chargedBedloads: 0.25, tierLabel: "1/4 bedload", baseBedloadPrice: pricing.quarterBedload };
+  }
+  if (cubicYards <= 1.5) {
+    return { bedloadEquivalent, chargedBedloads: 0.5, tierLabel: "1/2 bedload", baseBedloadPrice: pricing.halfBedload };
+  }
+  if (cubicYards <= 2.25) {
+    return { bedloadEquivalent, chargedBedloads: 0.75, tierLabel: "3/4 bedload", baseBedloadPrice: pricing.threeQuarterBedload };
+  }
+  if (cubicYards <= BEDLOAD_YARDS) {
+    return { bedloadEquivalent, chargedBedloads: 1, tierLabel: "Full bedload", baseBedloadPrice: pricing.fullBedload };
+  }
+
+  const chargedBedloads = Math.ceil(cubicYards / BEDLOAD_YARDS);
+  return {
+    bedloadEquivalent,
+    chargedBedloads,
+    tierLabel: `${chargedBedloads} full bedloads`,
+    baseBedloadPrice: chargedBedloads * pricing.fullBedload,
+  };
+}
+
+function serviceForHeavyLoad(cubicYards: number, vehicle: Vehicle) {
+  if (vehicle.vehicleType === "dump_trailer" && cubicYards >= 5 && cubicYards <= 10) return "dump trailer package";
+  if (cubicYards > 10) return "manual review";
+  const bedloads = Math.ceil(Math.max(cubicYards, 0.1) / BEDLOAD_YARDS);
+  if (bedloads <= 1) return "1-trip heavy pickup";
+  if (bedloads === 2) return "2-trip heavy pickup";
+  return `${bedloads}-trip heavy pickup`;
+}
+
+function heavyBedloadDetails(input: EstimateCalculatorInput, cubicYards: number, estimatedTons: number) {
+  if (input.materialRule.handlingClass !== "heavy_lowboy") return undefined;
+  const pricing = {
+    ...DEFAULT_HEAVY_BEDLOAD_PRICING,
+    ...input.heavyBedloadPricing,
+  };
+  const tier = bedloadTier(cubicYards, pricing);
+  const includedTons = positive(input.materialRule.includedTons, 4) * Math.max(tier.chargedBedloads, 1);
+  const extraTons = Math.max(0, estimatedTons - includedTons);
+  const extraTonCharge = extraTons * positive(input.materialRule.extraTonRate, 95);
+
+  return {
+    bedloadYards: BEDLOAD_YARDS,
+    bedloadEquivalent: tier.bedloadEquivalent,
+    chargedBedloads: tier.chargedBedloads,
+    tierLabel: tier.tierLabel,
+    baseBedloadPrice: tier.baseBedloadPrice,
+    includedTons,
+    extraTons,
+    extraTonCharge,
+    recommendedService: serviceForHeavyLoad(cubicYards, input.vehicle),
+    lowboyEquivalent: cubicYards >= 9.5 && cubicYards <= 10.5,
+  };
 }
 
 function facilityVerificationIsStale(lastVerifiedDate?: string) {
@@ -112,7 +188,17 @@ function buildWarnings(input: EstimateCalculatorInput, result: Omit<EstimateCalc
       code: "heavy_material",
       severity: input.manualWeightLbs ? "warning" : "critical",
       message:
-        "Heavy material detected. Do not price by volume alone; use estimated weight, payload, labor, and facility disposal cost.",
+        input.materialRule.handlingClass === "heavy_lowboy"
+          ? "Dense material: volume may fit, but weight controls legality. Use bedload pricing and verify payload."
+          : "Heavy material detected. Do not price by volume alone; use estimated weight, payload, labor, and facility disposal cost.",
+    });
+  }
+
+  if (input.materialRule.handlingClass === "heavy_lowboy" && input.vehicle.vehicleType === "box_truck") {
+    warnings.push({
+      code: "vehicle_mismatch",
+      severity: "critical",
+      message: "Box truck excluded: heavy loose debris should be handled with low-load equipment or split van/trailer trips.",
     });
   }
 
@@ -145,6 +231,22 @@ function buildWarnings(input: EstimateCalculatorInput, result: Omit<EstimateCalc
       code: "vehicle_mismatch",
       severity: "critical",
       message: "Dump trailer selected with a heavy load near or over payload. Confirm trailer payload and tow rating.",
+    });
+  }
+
+  if (input.materialRule.handlingClass === "heavy_lowboy" && result.cubicYards > 3 && input.vehicle.vehicleType !== "dump_trailer") {
+    warnings.push({
+      code: "multiple_trips_likely",
+      severity: "warning",
+      message: "Split load required for more than one heavy material bedload.",
+    });
+  }
+
+  if (input.materialRule.handlingClass === "heavy_lowboy" && result.cubicYards > 10 && input.vehicle.vehicleType !== "dump_trailer") {
+    warnings.push({
+      code: "vehicle_mismatch",
+      severity: "critical",
+      message: "Manual review recommended above 10 yd3 without a dump trailer or lowboy plan.",
     });
   }
 
@@ -193,15 +295,18 @@ export function calculateEstimate(input: EstimateCalculatorInput): EstimateCalcu
       ? estimatedHours * input.vehicle.hourlyVehicleCost
       : roundTripMiles * positive(input.vehicle.mileageCost, 0);
   const extraFeesTotal = (input.extraFees ?? []).reduce((total, fee) => total + positive(fee.amount, 0), 0);
+  const heavyBedload = heavyBedloadDetails(input, cubicYards, estimatedTons);
   const baseCost = laborCost + disposalCost + fuelCost + vehicleCost + extraFeesTotal;
   const recommendedQuote = targetMarginDecimal >= 0.95 ? baseCost : baseCost / (1 - targetMarginDecimal);
   const minimumQuote = baseCost + minimumProfitDollars;
   const heavyMaterial = isHeavyMaterial(input.materialRule);
   const applicableBenchmark = heavyMaterial ? undefined : input.volumeBenchmarkPrice;
+  const heavyBedloadQuote = heavyBedload ? heavyBedload.baseBedloadPrice + heavyBedload.extraTonCharge : 0;
   const finalRecommendedQuote = Math.max(
     recommendedQuote,
     minimumQuote,
     positive(applicableBenchmark, 0),
+    heavyBedloadQuote,
     positive(input.minimumAcceptablePrice, 0),
   );
   const grossProfitDollars = finalRecommendedQuote - baseCost;
@@ -224,6 +329,13 @@ export function calculateEstimate(input: EstimateCalculatorInput): EstimateCalcu
     grossProfitDollars: money(grossProfitDollars),
     grossMarginDecimal,
     selectedVolumeBenchmark: applicableBenchmark,
+    heavyBedload: heavyBedload
+      ? {
+          ...heavyBedload,
+          baseBedloadPrice: money(heavyBedload.baseBedloadPrice),
+          extraTonCharge: money(heavyBedload.extraTonCharge),
+        }
+      : undefined,
     payloadStatus,
   };
 

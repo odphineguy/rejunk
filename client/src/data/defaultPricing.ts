@@ -1,6 +1,14 @@
 import { facilities } from "@/data/facilities";
 import type { MaterialPricingRule, PricingSettings, Vehicle, VolumePricingBenchmark } from "@/types/pricing";
 
+export const defaultHeavyBedloadPricing = {
+  minimumEnvironmentalFee: 150,
+  quarterBedload: 325,
+  halfBedload: 495,
+  threeQuarterBedload: 640,
+  fullBedload: 775,
+};
+
 export const defaultVehicles: Vehicle[] = [
   {
     id: "ford-transit-t250",
@@ -291,6 +299,40 @@ export const defaultMaterialPricingRules: MaterialPricingRule[] = [
     isActive: true,
   },
   {
+    id: "sod",
+    materialName: "Sod",
+    materialCategory: "sod",
+    defaultDensityLbsPerYard: 1700,
+    densityRangeLbsPerYard: [1200, 2200],
+    pricingMode: "weight_based",
+    handlingClass: "heavy_lowboy",
+    requiresWeightOverride: true,
+    preferredFacilityTypes: ["green_waste", "clean_fill", "landfill"],
+    includedTons: 3,
+    extraTonRate: 95,
+    warningText: "Sod is dense, wet organic material. Quote by bedload and verify payload.",
+    laborDifficultyMultiplier: 1.45,
+    disposalDifficultyMultiplier: 1.25,
+    isActive: true,
+  },
+  {
+    id: "stone",
+    materialName: "Stone",
+    materialCategory: "stone",
+    defaultDensityLbsPerYard: 2600,
+    densityRangeLbsPerYard: [2200, 3000],
+    pricingMode: "weight_based",
+    handlingClass: "heavy_lowboy",
+    requiresWeightOverride: true,
+    preferredFacilityTypes: ["clean_fill", "landfill"],
+    includedTons: 4,
+    extraTonRate: 95,
+    warningText: "Stone is dense loose debris. Avoid box trucks and verify payload.",
+    laborDifficultyMultiplier: 1.6,
+    disposalDifficultyMultiplier: 1.35,
+    isActive: true,
+  },
+  {
     id: "pavers",
     materialName: "Pavers",
     materialCategory: "pavers",
@@ -346,6 +388,7 @@ export const defaultPricingSettings: PricingSettings = {
   vehicles: defaultVehicles,
   materialPricingRules: defaultMaterialPricingRules,
   volumePricingBenchmarks: defaultVolumePricingBenchmarks,
+  heavyBedloadPricing: defaultHeavyBedloadPricing,
   defaults: {
     fuelPricePerGallon: 4,
     workers: 2,
