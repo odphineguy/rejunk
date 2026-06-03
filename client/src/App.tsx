@@ -5,23 +5,31 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { AppShell } from "./components/OperationsShell";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import Dashboard from "./pages/Dashboard";
 import EstimateBuilder from "./pages/EstimateBuilder";
 import Home from "./pages/Home";
 import JobDetail, { NewJob } from "./pages/JobDetail";
 import Jobs from "./pages/Jobs";
 import PricingSettings from "./pages/PricingSettings";
 import Schedule from "./pages/Schedule";
+import { PlaceholderPage } from "./pages/PlaceholderPage";
 
 
 function Router() {
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
+      <Route path={"/"} component={Dashboard} />
+      <Route path={"/map"} component={Home} />
       <Route path={"/estimate-builder"} component={EstimateBuilder} />
       <Route path={"/jobs/new"} component={NewJob} />
       <Route path={"/jobs/:jobId"} component={JobDetail} />
       <Route path={"/jobs"} component={Jobs} />
       <Route path={"/schedule"} component={Schedule} />
+      <Route path={"/messages"}>{() => <PlaceholderPage title="Messages" />}</Route>
+      <Route path={"/clients"}>{() => <PlaceholderPage title="Clients & Leads" />}</Route>
+      <Route path={"/employees"}>{() => <PlaceholderPage title="Employees" />}</Route>
+      <Route path={"/invoices"}>{() => <PlaceholderPage title="Invoices" />}</Route>
+      <Route path={"/events"}>{() => <PlaceholderPage title="Events" />}</Route>
       <Route path={"/settings"} component={PricingSettings} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}

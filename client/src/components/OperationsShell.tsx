@@ -1,6 +1,27 @@
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { CalendarDays, Calculator, Map, Plus, Search, Settings, TableProperties, Truck } from "lucide-react";
+import {
+  Bell,
+  BriefcaseBusiness,
+  Calculator,
+  CalendarDays,
+  CalendarPlus,
+  ChevronDown,
+  ClipboardList,
+  FileText,
+  LayoutDashboard,
+  Map as MapIcon,
+  MessageSquare,
+  Plus,
+  Search,
+  Settings,
+  SquareArrowOutUpRight,
+  Truck,
+  UserPlus,
+  UsersRound,
+  Wrench,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -10,21 +31,29 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { getJobs } from "@/lib/jobStorage";
 import { cn } from "@/lib/utils";
+import { loadSavedEstimates } from "@/utils/pricingStorage";
+import type { Job } from "@/types/jobs";
 
 const navGroups = [
   {
-    label: "Main Menu",
+    label: "Workspace",
     items: [
-      { href: "/", label: "Facility Map", icon: Map },
-      { href: "/estimate-builder", label: "Estimate Builder", icon: Calculator },
+      { href: "/", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/messages", label: "Messages", icon: MessageSquare },
+      { href: "/clients", label: "Clients & Leads", icon: UsersRound },
     ],
   },
   {
     label: "Operations",
     items: [
       { href: "/jobs", label: "Jobs", icon: Truck },
+      { href: "/map", label: "Map Facility", icon: MapIcon },
+      { href: "/estimate-builder", label: "Estimates", icon: Calculator },
       { href: "/schedule", label: "Schedule", icon: CalendarDays },
+      { href: "/invoices", label: "Invoices", icon: FileText },
+      { href: "/employees", label: "Employees", icon: BriefcaseBusiness },
     ],
   },
   {
@@ -32,6 +61,53 @@ const navGroups = [
     items: [{ href: "/settings", label: "Pricing Settings", icon: Settings }],
   },
 ];
+
+const actionItems = [
+  { href: "/messages", label: "Message", icon: MessageSquare },
+  { href: "/clients", label: "Client or Lead", icon: UsersRound },
+  { href: "/employees", label: "Employee", icon: UserPlus },
+  { href: "/jobs/new", label: "Job", icon: Wrench },
+  { href: "/invoices", label: "Invoice", icon: FileText },
+  { href: "/estimate-builder", label: "Estimate", icon: Calculator },
+  { href: "/events", label: "Event", icon: CalendarPlus },
+];
+
+type SearchGroup = {
+  label: string;
+  href: string;
+  icon: typeof UsersRound;
+  items: Array<{
+    id: string;
+    title: string;
+    subtitle?: string;
+    href: string;
+  }>;
+};
+
+function formatSearchDate(value?: string) {
+  if (!value) return "Unscheduled";
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function clientRows(jobs: Job[]) {
+  const clients = new Map<string, { id: string; title: string; subtitle?: string; href: string }>();
+  jobs.forEach((job) => {
+    const key = job.customerName.trim().toLowerCase();
+    if (!key || clients.has(key)) return;
+    clients.set(key, {
+      id: key,
+      title: job.customerName,
+      subtitle: [job.phone, job.email].filter(Boolean).join(", ") || [job.city, job.state].filter(Boolean).join(", "),
+      href: "/clients",
+    });
+  });
+  return Array.from(clients.values());
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
@@ -74,12 +150,16 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col md:h-screen md:overflow-hidden">
         <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur md:static">
           <div className="flex min-h-20 flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between md:px-6">
-            <div className="relative w-full md:max-w-md">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Type to search" className="h-10 bg-card pl-9" />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <GlobalSearch />
+            <div className="flex flex-wrap items-center gap-3">
               <AddNewMenu />
+              <button className="flex size-10 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted" aria-label="Notifications">
+                <Bell className="size-5" />
+              </button>
+              <button className="flex h-10 items-center gap-2 rounded-full px-2 text-sm font-medium text-primary transition-colors hover:bg-muted" aria-label="Account menu">
+                <span className="flex size-7 items-center justify-center rounded-full bg-primary/10">AM</span>
+                <ChevronDown className="size-4 text-foreground" />
+              </button>
             </div>
           </div>
 
@@ -133,25 +213,162 @@ export function AddNewMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button>
-          <Plus className="size-4" />
-          Add New
+        <Button className="h-10 gap-2 rounded-lg bg-[#3f3df1] px-2 pr-4 text-white hover:bg-[#3330df]">
+          <span className="flex size-8 items-center justify-center rounded-md bg-[#1515d6]">
+            <Plus className="size-5" />
+          </span>
+          <span>Add New</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem asChild>
-          <Link href="/estimate-builder">
-            <Calculator className="size-4" />
-            New Estimate
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/jobs/new">
-            <TableProperties className="size-4" />
-            New Job
-          </Link>
-        </DropdownMenuItem>
+      <DropdownMenuContent align="start" className="w-52 rounded-lg p-3">
+        {actionItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <DropdownMenuItem key={item.label} asChild className="rounded-md px-3 py-2.5 text-[15px]">
+              <Link href={item.href}>
+                <Icon className="size-4 text-foreground" />
+                {item.label}
+              </Link>
+            </DropdownMenuItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function GlobalSearch() {
+  const [query, setQuery] = useState("");
+  const [jobs, setJobs] = useState<Job[]>(() => getJobs());
+  const [estimates, setEstimates] = useState(() => loadSavedEstimates());
+  const trimmedQuery = query.trim().toLowerCase();
+
+  useEffect(() => {
+    const refresh = () => {
+      setJobs(getJobs());
+      setEstimates(loadSavedEstimates());
+    };
+    window.addEventListener("jobs-updated", refresh);
+    window.addEventListener("pricing-settings-updated", refresh);
+    return () => {
+      window.removeEventListener("jobs-updated", refresh);
+      window.removeEventListener("pricing-settings-updated", refresh);
+    };
+  }, []);
+
+  const groups = useMemo<SearchGroup[]>(() => {
+    if (!trimmedQuery) return [];
+    const matches = (values: Array<string | number | undefined>) =>
+      values
+        .filter((value) => value !== undefined && value !== null)
+        .join(" ")
+        .toLowerCase()
+        .includes(trimmedQuery);
+
+    const clients = clientRows(jobs)
+      .filter((client) => matches([client.title, client.subtitle]))
+      .slice(0, 4);
+
+    const jobRows = jobs
+      .filter((job) => matches([job.jobNumber, job.customerName, job.jobLabel, job.address, job.city, job.quotedAmount]))
+      .slice(0, 4)
+      .map((job) => ({
+        id: job.id,
+        title: `${job.jobNumber} - ${job.customerName}`,
+        subtitle: `${formatSearchDate(job.scheduledStart)}, ${job.city ?? "no city"}`,
+        href: `/jobs/${job.id}`,
+      }));
+
+    const invoiceRows = jobs
+      .filter((job) => job.paymentStatus !== "unpaid" && matches([job.jobNumber, job.customerName, job.quotedAmount]))
+      .slice(0, 3)
+      .map((job) => ({
+        id: `invoice-${job.id}`,
+        title: `Invoice ${job.jobNumber}`,
+        subtitle: `${job.customerName} - ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(job.actuals?.chargedAmount ?? job.quotedAmount)}`,
+        href: "/invoices",
+      }));
+
+    const estimateRows = estimates
+      .filter((estimate) => matches([estimate.customerName, estimate.loadLabel, estimate.jobAddress, estimate.finalQuote]))
+      .slice(0, 3)
+      .map((estimate) => ({
+        id: estimate.id,
+        title: estimate.customerName || estimate.loadLabel || "Saved estimate",
+        subtitle: new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(estimate.finalQuote),
+        href: "/estimate-builder",
+      }));
+
+    return [
+      { label: "Clients", href: "/clients", icon: UsersRound, items: clients },
+      { label: "Jobs", href: "/jobs", icon: ClipboardList, items: jobRows },
+      { label: "Invoices", href: "/invoices", icon: FileText, items: invoiceRows },
+      { label: "Estimates", href: "/estimate-builder", icon: Calculator, items: estimateRows },
+    ].filter((group) => group.items.length > 0);
+  }, [estimates, jobs, trimmedQuery]);
+
+  const resultCount = groups.reduce((sum, group) => sum + group.items.length, 0);
+
+  return (
+    <div className="relative w-full md:max-w-[370px]">
+      <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-foreground" />
+      <Input
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Search"
+        className="h-10 rounded-lg bg-card pl-10 pr-10 text-base"
+      />
+      {query && (
+        <button
+          type="button"
+          onClick={() => setQuery("")}
+          className="absolute right-3 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-full border border-foreground text-foreground"
+          aria-label="Clear search"
+        >
+          <X className="size-3" />
+        </button>
+      )}
+
+      {query && (
+        <div className="absolute left-0 top-[calc(100%+6px)] z-50 max-h-[70vh] w-full overflow-y-auto rounded-lg border border-border bg-popover p-6 shadow-xl md:w-[370px]">
+          {groups.length > 0 ? (
+            <div className="space-y-6">
+              {groups.map((group) => {
+                const Icon = group.icon;
+                return (
+                  <section key={group.label} className="space-y-3">
+                    <div className="flex items-center gap-2 text-primary">
+                      <Icon className="size-4" />
+                      <span className="text-base font-medium">{group.label}</span>
+                      <span className="h-px flex-1 bg-border" />
+                      <span className="text-xs text-[#7180a8]">{group.items.length} result</span>
+                    </div>
+                    <div className="space-y-3">
+                      {group.items.map((item) => (
+                        <Link
+                          key={item.id}
+                          href={item.href}
+                          onClick={() => setQuery("")}
+                          className="group flex items-start justify-between gap-3 rounded-md"
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate text-base font-semibold text-foreground">{item.title}</span>
+                            {item.subtitle && <span className="mt-0.5 block truncate text-sm text-[#7180a8]">{item.subtitle}</span>}
+                          </span>
+                          <SquareArrowOutUpRight className="mt-1 size-4 shrink-0 text-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                        </Link>
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+              <div className="border-t border-border pt-3 text-xs text-[#7180a8]">{resultCount} total results</div>
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">No clients, jobs, invoices, or estimates match that search.</div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
