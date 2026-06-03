@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { AlertTriangle, Briefcase, Calculator, Copy, CopyPlus, Printer, RotateCcw, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, Briefcase, Calculator, ChevronDown, Copy, CopyPlus, Printer, RotateCcw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { loadMapScript } from "@/components/Map";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -174,6 +175,22 @@ function WarningList({ warnings }: { warnings: EstimateWarning[] }) {
       ))}
     </div>
   );
+}
+
+function simpleHeavyWarnings(warnings: EstimateWarning[], recommendationWarnings: string[]) {
+  const labels = new Set<string>();
+  warnings.forEach((warning) => {
+    if (warning.code === "payload_exceeded") labels.add("Payload Exceeded");
+    if (warning.code === "multiple_trips_likely") labels.add("Multiple Trips");
+    if (warning.code === "heavy_material") labels.add("Heavy Material");
+    if (warning.code === "vehicle_mismatch" && warning.message.toLowerCase().includes("box truck")) labels.add("Box Truck Excluded");
+  });
+  recommendationWarnings.forEach((warning) => {
+    if (warning.toLowerCase().includes("box truck")) labels.add("Box Truck Excluded");
+    if (warning.toLowerCase().includes("trips required")) labels.add("Multiple Trips");
+    if (warning.toLowerCase().includes("payload exceeded")) labels.add("Payload Exceeded");
+  });
+  return Array.from(labels);
 }
 
 function resultDependencyExtraFees(extraFees: ExtraFee[]) {
@@ -350,6 +367,7 @@ export default function EstimateBuilder() {
     }
     return warnings;
   }, [result, targetMargin]);
+  const heavyWarnings = heavyMode ? simpleHeavyWarnings(uiWarnings, recommendation?.warnings ?? []) : [];
 
   const range = quoteRange(result.finalRecommendedQuote);
   const selectedLoadLabel = heavyMode
@@ -674,7 +692,12 @@ export default function EstimateBuilder() {
                 </Field>
                 {heavyMode ? (
                   <Field label="Heavy Material Volume">
-                    <Input type="number" min="0" step="0.25" value={manualCubicYards} onChange={(event) => setManualCubicYards(event.target.value)} placeholder="0.75, 1.5, 2.25, 3..." />
+                    <div className="space-y-2">
+                      <Input type="number" min="0" step="0.25" value={manualCubicYards} onChange={(event) => setManualCubicYards(event.target.value)} placeholder="0.75, 1.5, 2.25, 3..." />
+                      <p className="text-xs text-muted-foreground">
+                        Use cubic yards for heavy debris. The system estimates tons, safe trips, and payload risk.
+                      </p>
+                    </div>
                   </Field>
                 ) : (
                   <Field label="Load size">
@@ -697,7 +720,7 @@ export default function EstimateBuilder() {
                     <Input type="number" min="0" step="0.1" value={manualCubicYards} onChange={(event) => setManualCubicYards(event.target.value)} placeholder={numberFormatter.format(calculatedCubicYards)} />
                   </Field>
                 )}
-                <Field label="Manual weight override (lb)">
+                <Field label={heavyMode ? "Manual weight override optional" : "Manual weight override (lb)"}>
                   <Input type="number" min="0" step="25" value={manualWeightLbs} onChange={(event) => setManualWeightLbs(event.target.value)} placeholder={String(Math.round(calculatedCubicYards * materialRule.defaultDensityLbsPerYard))} />
                 </Field>
                 <div className="rounded-lg border border-border bg-muted/40 p-3">
@@ -708,7 +731,7 @@ export default function EstimateBuilder() {
                   <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 xl:col-span-3">
                     <div className="font-semibold">Heavy Material Mode</div>
                     <div className="mt-1 grid gap-1 md:grid-cols-3">
-                      <span>Bedload equivalent: {heavyBedload ? heavyBedload.bedloadEquivalent.toFixed(2) : "0.00"}</span>
+                      <span>Heavy load units: {heavyBedload ? heavyBedload.bedloadEquivalent.toFixed(2) : "0.00"}</span>
                       <span>Estimated tons: {result.estimatedTons.toFixed(2)}</span>
                       <span>Dense material: volume may fit, but weight controls legality.</span>
                     </div>
@@ -820,52 +843,83 @@ export default function EstimateBuilder() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-3">
-                    <Stat label="Recommended" value={money(result.finalRecommendedQuote)} tone="strong" />
-                    <Stat label={heavyMode ? "Bedload base" : "Minimum quote"} value={heavyMode ? money(heavyBedload?.baseBedloadPrice) : money(result.minimumQuote)} />
-                    <Stat label={heavyMode ? "Extra ton charge" : "Quote range"} value={heavyMode ? money(heavyBedload?.extraTonCharge) : `${money(range.lower)}-${money(range.upper)}`} />
-                    <Stat label="Base cost" value={money(result.baseCost)} />
+                    <Stat label="Recommended Quote" value={money(result.finalRecommendedQuote)} tone="strong" />
+                    <Stat label="Minimum Quote" value={money(result.minimumQuote)} />
+                    <Stat label="Estimated Cost" value={money(result.baseCost)} />
+                    <Stat label="Estimated Profit" value={money(result.grossProfitDollars)} tone="strong" />
                   </div>
                 )}
 
                 <Separator />
 
-                {quoteReady && recommendation && (
+                {quoteReady && recommendation && heavyMode && (
+                  <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
+                    <div className="mb-3">
+                      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Heavy Material Summary</div>
+                      <div className="font-semibold">Heavy Material Mode</div>
+                    </div>
+                    <div className="grid gap-2">
+                      <DetailRow label="Material" value={materialRule.materialName} />
+                      <DetailRow label="Heavy material volume" value={`${numberFormatter.format(result.cubicYards)} yd3`} />
+                      <DetailRow label="Estimated weight / tons" value={`${Math.round(result.estimatedWeightLbs).toLocaleString()} lb / ${result.estimatedTons.toFixed(2)} tons`} />
+                      <DetailRow label="Recommended service" value={heavyBedload?.recommendedService ?? heavyVehicle?.recommendedService ?? "manual review"} />
+                      <DetailRow label="Recommended equipment" value={recommendation.vehicleName ?? "No recommendation"} />
+                      <DetailRow label="Trips required" value={String(heavyVehicle?.tripsRequired ?? "—")} />
+                      <DetailRow label="Recommended quote" value={money(result.finalRecommendedQuote)} />
+                    </div>
+                    {heavyWarnings.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {heavyWarnings.map((warning) => (
+                          <Badge key={warning} variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+                            {warning}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    <Collapsible className="mt-4">
+                      <CollapsibleTrigger asChild>
+                        <Button variant="outline" size="sm" className="w-full justify-between">
+                          Show Pricing Breakdown
+                          <ChevronDown className="size-4" />
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="mt-3 rounded-lg border border-border bg-background p-3">
+                        <div className="grid gap-2">
+                          <DetailRow label="Heavy load units" value={`${heavyBedload?.bedloadEquivalent.toFixed(2) ?? "0.00"} units`} />
+                          <DetailRow label="Included tons" value={heavyBedload?.includedTons.toFixed(2) ?? heavyVehicle?.includedTons?.toFixed(2) ?? "—"} />
+                          <DetailRow label="Extra tons" value={heavyBedload?.extraTons.toFixed(2) ?? heavyVehicle?.extraTons?.toFixed(2) ?? "0.00"} />
+                          <DetailRow label="Heavy load base price" value={money(heavyBedload?.baseBedloadPrice)} />
+                          <DetailRow label="Extra ton charge" value={money(heavyBedload?.extraTonCharge)} />
+                          <DetailRow label="Bedload pricing" value={money((heavyBedload?.baseBedloadPrice ?? 0) + (heavyBedload?.extraTonCharge ?? 0))} />
+                          {trailerComparison && <DetailRow label="Trailer cost estimate" value={money(trailerComparison.totalOperationalCost)} />}
+                          <DetailRow label="Disposal estimate" value={money(result.disposalCost)} />
+                          <DetailRow label="Labor" value={money(result.laborCost)} />
+                          <DetailRow label="Fuel" value={money(result.fuelCost)} />
+                          <DetailRow label="Vehicle" value={money(result.vehicleCost)} />
+                          <DetailRow label="Gross profit" value={money(result.grossProfitDollars)} />
+                          <DetailRow label="Gross margin" value={`${Math.round(result.grossMarginDecimal * 100)}%`} />
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </div>
+                )}
+
+                {quoteReady && recommendation && !heavyMode && (
                   <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
                     <div className="mb-3 flex items-start justify-between gap-3">
                       <div>
-                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          {heavyMode ? "Heavy Material Mode" : "Recommendation"}
-                        </div>
-                        <div className="font-semibold">{heavyMode ? "Lowboy-style heavy load" : recommendation.facilityName}</div>
+                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recommendation</div>
+                        <div className="font-semibold">{recommendation.facilityName}</div>
                       </div>
                       {recommendation.facilityId !== facility.id && recommendation.estimatedSavings > 0 && (
                         <Badge className="bg-green-100 text-green-700">Save {money(recommendation.estimatedSavings)}</Badge>
                       )}
                     </div>
-                    {heavyMode && (
-                      <div className="mb-3 space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
-                        <div className="font-semibold">10 yd3 roll-off equivalent ≈ 2 van trips</div>
-                        <div>Dense material: volume may fit, but weight controls legality.</div>
-                      </div>
-                    )}
                     <div className="grid gap-2">
-                      {heavyMode && <DetailRow label="Cubic yards" value={numberFormatter.format(result.cubicYards)} />}
-                      {heavyMode && <DetailRow label="Bedload equivalent" value={`${heavyBedload?.bedloadEquivalent.toFixed(2) ?? "0.00"} bedloads`} />}
-                      {heavyMode && <DetailRow label="Estimated tons" value={result.estimatedTons.toFixed(2)} />}
-                      {heavyMode && <DetailRow label="Included tons" value={heavyBedload?.includedTons.toFixed(2) ?? heavyVehicle?.includedTons?.toFixed(2) ?? "—"} />}
-                      {heavyMode && <DetailRow label="Extra tons" value={heavyBedload?.extraTons.toFixed(2) ?? heavyVehicle?.extraTons?.toFixed(2) ?? "0.00"} />}
-                      {heavyMode && <DetailRow label="Base bedload/package price" value={money(heavyBedload?.baseBedloadPrice)} />}
-                      {heavyMode && <DetailRow label="Extra ton charge" value={money(heavyBedload?.extraTonCharge)} />}
-                      {heavyMode && <DetailRow label="Bedload pricing" value={money((heavyBedload?.baseBedloadPrice ?? 0) + (heavyBedload?.extraTonCharge ?? 0))} />}
-                      {heavyMode && trailerComparison && <DetailRow label="Trailer package estimate" value={money(trailerComparison.totalOperationalCost)} />}
-                      {heavyMode && heavyBedload?.lowboyEquivalent && <DetailRow label="Lowboy equivalent" value="10 yd3 heavy load" />}
-                      {heavyMode && <DetailRow label="Trips required" value={String(heavyVehicle?.tripsRequired ?? "—")} />}
-                      {heavyMode && <DetailRow label="Recommended service" value={heavyBedload?.recommendedService ?? heavyVehicle?.recommendedService ?? "manual review"} />}
                       <DetailRow label="Vehicle" value={recommendation.vehicleName ?? "No recommendation"} />
                       <DetailRow label="Round trip" value={miles(recommendation.facilityComparison?.roundTripMiles)} />
-                      {!heavyMode && <DetailRow label="Recommended cost" value={money(recommendation.recommendedTotalCost)} />}
-                      {!heavyMode && <DetailRow label="Selected cost" value={money(recommendation.selectedTotalCost)} />}
-                      {heavyMode && heavyVehicle?.payloadWarning && <DetailRow label="Payload warning" value={heavyVehicle.payloadWarning} />}
+                      <DetailRow label="Estimated operating cost" value={money(recommendation.recommendedTotalCost)} />
+                      <DetailRow label="Selected cost" value={money(recommendation.selectedTotalCost)} />
                     </div>
                     <p className="mt-3 text-muted-foreground">{recommendation.reason}</p>
                     {recommendation.warnings.length > 0 && (
@@ -882,7 +936,7 @@ export default function EstimateBuilder() {
 
                 <Separator />
 
-                {quoteReady && (
+                {quoteReady && !heavyMode && (
                   <div className="grid grid-cols-2 gap-3">
                     <Stat label="Labor" value={money(result.laborCost)} />
                     <Stat label="Disposal estimate" value={money(result.disposalCost)} />
@@ -893,7 +947,7 @@ export default function EstimateBuilder() {
                   </div>
                 )}
 
-                {quoteReady && <div className="rounded-lg border border-border p-4 text-sm">
+                {quoteReady && !heavyMode && <div className="rounded-lg border border-border p-4 text-sm">
                   <div className="grid gap-2">
                     <div className="flex justify-between gap-4">
                       <span className="text-muted-foreground">Gross margin</span>
@@ -922,7 +976,7 @@ export default function EstimateBuilder() {
                   </div>
                 </div>}
 
-                {quoteReady && <WarningList warnings={uiWarnings} />}
+                {quoteReady && !heavyMode && <WarningList warnings={uiWarnings} />}
 
                 <div className="grid grid-cols-2 gap-2">
                   <Button onClick={handleSaveEstimate} disabled={!quoteReady}>
