@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import { ArrowLeft, CalendarClock, CopyPlus, Receipt, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { JobStatusBadge, JobWarningBadge, PaymentStatusBadge, jobStatusLabels, paymentStatusLabels } from "@/components/JobBadges";
+import { loadMapScript } from "@/components/Map";
 import { OperationsShell } from "@/components/OperationsShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,10 @@ import {
 } from "@/lib/jobIntelligence";
 import { deleteJob, duplicateJob, getActualFinancials, getJobs, saveJob, updateJob } from "@/lib/jobStorage";
 import { loadPricingSettings } from "@/utils/pricingStorage";
+import { getRouteEstimateToFacility } from "@/utils/distanceRouting";
+import { buildBestRecommendation, recommendationInputFromJob } from "@/utils/recommendations";
 import type { Job, JobStatus, PaymentStatus } from "@/types/jobs";
+import type { JobRouteEstimate } from "@/types/pricing";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const percent = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
@@ -34,6 +38,14 @@ const paymentStatuses: PaymentStatus[] = ["unpaid", "deposit_paid", "paid", "ref
 
 function money(value: number | undefined) {
   return currency.format(Number.isFinite(value) ? Number(value) : 0);
+}
+
+function miles(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? `${value.toFixed(1)} mi` : "Unavailable";
+}
+
+function minutes(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? `${Math.round(value)} min` : "Unavailable";
 }
 
 function formatDate(value?: string) {
@@ -51,6 +63,23 @@ function formatDate(value?: string) {
 function fieldNumber(value: string) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function routeEstimatesFromJob(job: Job | null): Record<string, JobRouteEstimate> {
+  if (!job?.facilityRouteComparisons?.length) return {};
+  return Object.fromEntries(
+    job.facilityRouteComparisons.map((comparison) => [
+      comparison.facilityId,
+      {
+        jobAddress: comparison.jobAddress,
+        facilityId: comparison.facilityId,
+        oneWayMiles: comparison.oneWayMiles,
+        roundTripMiles: comparison.roundTripMiles,
+        estimatedDriveMinutes: comparison.estimatedDriveMinutes,
+        source: "fallback" as const,
+      },
+    ]),
+  );
 }
 
 export function NewJob() {
@@ -88,6 +117,10 @@ export default function JobDetail() {
   const [, navigate] = useLocation();
   const [settings, setSettings] = useState(() => loadPricingSettings());
   const [job, setJob] = useState<Job | null>(() => getJobs().find((item) => item.id === params?.jobId) ?? null);
+  const [routeEstimates, setRouteEstimates] = useState<Record<string, JobRouteEstimate>>(() =>
+    routeEstimatesFromJob(getJobs().find((item) => item.id === params?.jobId) ?? null),
+  );
+  const savedSnapshotKey = useRef("");
 
   useEffect(() => {
     const refresh = () => setJob(getJobs().find((item) => item.id === params?.jobId) ?? null);
@@ -139,6 +172,86 @@ export default function JobDetail() {
     };
   }, [job]);
   const facilityCheck = useMemo(() => (job ? getFacilityCheck(job, settings) : null), [job, settings]);
+  const routeRecommendationInput = useMemo(() => {
+    if (!job) return null;
+    return {
+      ...recommendationInputFromJob(job, settings),
+      routeEstimates: { ...routeEstimatesFromJob(job), ...routeEstimates },
+    };
+  }, [job, routeEstimates, settings]);
+  const routeRecommendation = useMemo(
+    () => (routeRecommendationInput ? buildBestRecommendation(routeRecommendationInput, settings) : null),
+    [routeRecommendationInput, settings],
+  );
+  const selectedFacilityComparison = useMemo(
+    () => routeRecommendation?.facilityComparisons.find((comparison) => comparison.facilityId === job?.facilityId),
+    [job?.facilityId, routeRecommendation],
+  );
+  const selectedVehicleComparison = useMemo(
+    () => routeRecommendation?.vehicleComparisons.find((comparison) => comparison.vehicleId === job?.vehicleId),
+    [job?.vehicleId, routeRecommendation],
+  );
+  const recommendedVehicleComparison = routeRecommendation?.recommendation?.vehicleComparison;
+  const trailerAdvantage = useMemo(() => {
+    if (!selectedVehicleComparison || !recommendedVehicleComparison || recommendedVehicleComparison.vehicleType !== "dump_trailer") return null;
+    const profitGain = recommendedVehicleComparison.estimatedProfit - selectedVehicleComparison.estimatedProfit;
+    if (recommendedVehicleComparison.tripsRequired < selectedVehicleComparison.tripsRequired) {
+      return { reason: "Trailer reduces trip count.", profitGain };
+    }
+    if (selectedVehicleComparison.payloadWarning && !recommendedVehicleComparison.payloadWarning) {
+      return { reason: "Trailer improves payload safety.", profitGain };
+    }
+    if (recommendedVehicleComparison.disposalCost < selectedVehicleComparison.disposalCost) {
+      return { reason: "Trailer lowers disposal minimums across trips.", profitGain };
+    }
+    return null;
+  }, [recommendedVehicleComparison, selectedVehicleComparison]);
+
+  useEffect(() => {
+    if (!job) return;
+    const jobAddress = [job.address, job.city, job.state, job.zip].filter(Boolean).join(", ");
+    if (!jobAddress.trim()) {
+      setRouteEstimates(routeEstimatesFromJob(job));
+      return;
+    }
+
+    let canceled = false;
+    const facilities = settings.disposalFacilities.filter((facility) => facility.isActive);
+
+    loadMapScript()
+      .then(() => Promise.all(facilities.map((facility) => getRouteEstimateToFacility(jobAddress, facility))))
+      .then((routes) => {
+        if (canceled) return;
+        setRouteEstimates(Object.fromEntries(routes.map((route) => [route.facilityId, route])));
+      })
+      .catch(() => {
+        if (!canceled) setRouteEstimates(routeEstimatesFromJob(job));
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [job?.address, job?.city, job?.state, job?.zip, settings.disposalFacilities]);
+
+  useEffect(() => {
+    if (!job || !routeRecommendation?.recommendation) return;
+    const snapshot = {
+      recommendationSnapshot: routeRecommendation.recommendation,
+      facilityRouteComparisons: routeRecommendation.facilityComparisons,
+      vehicleJobComparisons: routeRecommendation.vehicleComparisons,
+    };
+    const nextKey = JSON.stringify(snapshot);
+    const currentKey = JSON.stringify({
+      recommendationSnapshot: job.recommendationSnapshot,
+      facilityRouteComparisons: job.facilityRouteComparisons,
+      vehicleJobComparisons: job.vehicleJobComparisons,
+    });
+    if (nextKey === currentKey || nextKey === savedSnapshotKey.current) return;
+
+    savedSnapshotKey.current = nextKey;
+    const updated = updateJob(job.id, snapshot);
+    if (updated) setJob(updated);
+  }, [job, routeRecommendation]);
 
   const applyUpdates = (updates: Partial<Job>) => {
     if (!job) return;
@@ -223,6 +336,13 @@ export default function JobDetail() {
                   {jobWarnings.map((warning) => (
                     <JobWarningBadge key={warning.code} warning={warning} />
                   ))}
+                  {routeRecommendation?.recommendation &&
+                    routeRecommendation.recommendation.facilityId !== job.facilityId &&
+                    routeRecommendation.recommendation.estimatedSavings > 0 && (
+                      <Badge className="bg-green-100 text-green-700">
+                        Better facility available: {money(routeRecommendation.recommendation.estimatedSavings)}
+                      </Badge>
+                    )}
                 </div>
               </div>
             </CardHeader>
@@ -344,29 +464,95 @@ export default function JobDetail() {
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
                     <CardTitle>Facility Check</CardTitle>
-                    <CardDescription>Rate and material compatibility comparison using saved pricing settings.</CardDescription>
+                    <CardDescription>Route-aware comparison using material compatibility, disposal, fuel, and drive cost.</CardDescription>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {facilityCheck.selectedRejectsMaterial && <Badge className="bg-destructive text-white">Facility Mismatch</Badge>}
                     {facilityCheck.selectedPricingStale && <Badge className="bg-amber-600 text-white">Pricing Stale</Badge>}
-                    {facilityCheck.savings > 0 && <Badge className="bg-green-100 text-green-700">Save {money(facilityCheck.savings)}</Badge>}
+                    {routeRecommendation?.recommendation &&
+                      routeRecommendation.recommendation.facilityId !== job.facilityId &&
+                      routeRecommendation.recommendation.estimatedSavings > 0 && (
+                        <Badge className="bg-green-100 text-green-700">Better facility available</Badge>
+                      )}
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <MiniStat label="Selected facility" value={facilityCheck.selectedFacility?.facilityName ?? job.facilityName ?? "Not selected"} />
-                  <MiniStat label="Recommended facility" value={facilityCheck.recommendedFacility?.facilityName ?? "No recommendation"} />
-                  <MiniStat label="Selected disposal" value={money(facilityCheck.selectedCost)} />
-                  <MiniStat label="Recommended disposal" value={money(facilityCheck.recommendedCost)} />
+                  <MiniStat label="Selected facility" value={selectedFacilityComparison?.facilityName ?? facilityCheck.selectedFacility?.facilityName ?? job.facilityName ?? "Not selected"} />
+                  <MiniStat label="Recommended facility" value={routeRecommendation?.recommendation?.facilityName ?? facilityCheck.recommendedFacility?.facilityName ?? "No recommendation"} />
+                  <MiniStat label="Selected total cost" value={money(routeRecommendation?.recommendation?.selectedTotalCost ?? facilityCheck.selectedCost)} />
+                  <MiniStat label="Recommended total cost" value={money(routeRecommendation?.recommendation?.recommendedTotalCost ?? facilityCheck.recommendedCost)} />
                 </div>
                 <div className="rounded-lg border border-border p-4 text-sm">
                   <div className="grid gap-2 md:grid-cols-2">
-                    <DetailRow label="Estimated savings / added cost" value={facilityCheck.savings >= 0 ? money(facilityCheck.savings) : `${money(Math.abs(facilityCheck.savings))} added`} />
+                    <DetailRow
+                      label="Estimated savings / added cost"
+                      value={(routeRecommendation?.recommendation?.estimatedSavings ?? facilityCheck.savings) >= 0 ? money(routeRecommendation?.recommendation?.estimatedSavings ?? facilityCheck.savings) : `${money(Math.abs(routeRecommendation?.recommendation?.estimatedSavings ?? facilityCheck.savings))} added`}
+                    />
+                    <DetailRow label="Distance difference" value={miles(routeRecommendation?.recommendation?.distanceDifferenceMiles)} />
+                    <DetailRow label="Drive time difference" value={minutes(routeRecommendation?.recommendation?.driveTimeDifferenceMinutes)} />
                     <DetailRow label="Selected accepts material" value={facilityCheck.selectedAcceptsMaterial ? "Yes" : "No"} />
                     <DetailRow label="Selected rejects material" value={facilityCheck.selectedRejectsMaterial ? "Yes" : "No"} />
                     <DetailRow label="Recommended accepts material" value={facilityCheck.recommendedAcceptsMaterial ? "Yes" : "No"} />
                   </div>
+                </div>
+                {routeRecommendation?.recommendation && (
+                  <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
+                    <div className="font-semibold">Reason</div>
+                    <p className="mt-1 text-muted-foreground">{routeRecommendation.recommendation.reason}</p>
+                  </div>
+                )}
+                <div className="grid gap-3 md:grid-cols-2">
+                  <RouteCostCard title="Selected" comparison={selectedFacilityComparison} fallbackName={job.facilityName ?? "Not selected"} />
+                  <RouteCostCard title="Recommended" comparison={routeRecommendation?.recommendation?.facilityComparison} fallbackName={routeRecommendation?.recommendation?.facilityName ?? "No recommendation"} />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {routeRecommendation && (
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <CardTitle>Vehicle Comparison</CardTitle>
+                    <CardDescription>Compares capacity, payload, trips, route cost, disposal cost, and estimated profit.</CardDescription>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedVehicleComparison?.payloadWarning && <Badge className="bg-amber-100 text-amber-800">{selectedVehicleComparison.payloadWarning}</Badge>}
+                    {trailerAdvantage && <Badge className="bg-blue-100 text-blue-700">Trailer advantage</Badge>}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <MiniStat label="Selected vehicle" value={selectedVehicleComparison?.vehicleName ?? job.vehicleName ?? "Not selected"} />
+                  <MiniStat label="Recommended vehicle" value={recommendedVehicleComparison?.vehicleName ?? "No recommendation"} />
+                  <MiniStat label="Selected trips" value={String(selectedVehicleComparison?.tripsRequired ?? "—")} />
+                  <MiniStat label="Recommended trips" value={String(recommendedVehicleComparison?.tripsRequired ?? "—")} />
+                  <MiniStat label="Selected profit" value={money(selectedVehicleComparison?.estimatedProfit)} />
+                  <MiniStat label="Recommended profit" value={money(recommendedVehicleComparison?.estimatedProfit)} />
+                  <VarianceStat
+                    label="Profit difference"
+                    value={(recommendedVehicleComparison?.estimatedProfit ?? 0) - (selectedVehicleComparison?.estimatedProfit ?? 0)}
+                    formatter={money}
+                  />
+                  <MiniStat label="Estimated tons" value={(selectedVehicleComparison?.estimatedTons ?? job.estimatedTons ?? 0).toFixed(2)} />
+                </div>
+
+                {trailerAdvantage && (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                    <div className="font-semibold">Trailer advantage</div>
+                    <p className="mt-1">
+                      {trailerAdvantage.reason} Estimated profit gain: {money(trailerAdvantage.profitGain)}.
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <VehicleCostCard title="Selected" comparison={selectedVehicleComparison} fallbackName={job.vehicleName ?? "Not selected"} />
+                  <VehicleCostCard title="Recommended" comparison={recommendedVehicleComparison} fallbackName="No recommendation" />
                 </div>
               </CardContent>
             </Card>
@@ -514,6 +700,68 @@ function MiniStat({ label, value, strong }: { label: string; value: string; stro
     <div className="rounded-lg border border-border bg-muted/40 p-3">
       <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className={`mt-1 break-words text-lg font-bold ${strong ? "text-primary" : ""}`}>{value}</div>
+    </div>
+  );
+}
+
+function RouteCostCard({
+  title,
+  comparison,
+  fallbackName,
+}: {
+  title: string;
+  comparison?: NonNullable<ReturnType<typeof buildBestRecommendation>["recommendation"]>["facilityComparison"];
+  fallbackName: string;
+}) {
+  return (
+    <div className="rounded-lg border border-border p-4 text-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</div>
+          <div className="font-semibold">{comparison?.facilityName ?? fallbackName}</div>
+        </div>
+        {comparison?.acceptedMaterial ? <Badge className="bg-green-100 text-green-700">Accepts</Badge> : <Badge className="bg-amber-100 text-amber-800">Check material</Badge>}
+      </div>
+      <div className="mt-3 grid gap-2">
+        <DetailRow label="Round trip" value={miles(comparison?.roundTripMiles)} />
+        <DetailRow label="Drive time" value={minutes(comparison?.estimatedDriveMinutes)} />
+        <DetailRow label="Disposal" value={money(comparison?.disposalCost)} />
+        <DetailRow label="Fuel" value={money(comparison?.fuelCost)} />
+        <DetailRow label="Vehicle miles" value={money(comparison?.vehicleCost)} />
+        <DetailRow label="Total" value={money(comparison?.totalOperationalCost)} />
+      </div>
+    </div>
+  );
+}
+
+function VehicleCostCard({
+  title,
+  comparison,
+  fallbackName,
+}: {
+  title: string;
+  comparison?: NonNullable<ReturnType<typeof buildBestRecommendation>["recommendation"]>["vehicleComparison"];
+  fallbackName: string;
+}) {
+  return (
+    <div className="rounded-lg border border-border p-4 text-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</div>
+          <div className="font-semibold">{comparison?.vehicleName ?? fallbackName}</div>
+        </div>
+        {comparison?.payloadWarning ? <Badge className="bg-amber-100 text-amber-800">{comparison.payloadWarning}</Badge> : <Badge className="bg-green-100 text-green-700">Payload ok</Badge>}
+      </div>
+      <div className="mt-3 grid gap-2">
+        <DetailRow label="Capacity" value={`${comparison?.cubicYardCapacity ?? 0} yd3 / ${(comparison?.payloadCapacityLbs ?? 0).toLocaleString()} lb`} />
+        <DetailRow label="Trips" value={String(comparison?.tripsRequired ?? "—")} />
+        <DetailRow label="MPG / mile cost" value={`${comparison?.mpg ?? 0} mpg / ${money(comparison?.operatingCostPerMile)}`} />
+        <DetailRow label="Fuel" value={money(comparison?.fuelCost)} />
+        <DetailRow label="Vehicle miles" value={money(comparison?.vehicleCost)} />
+        <DetailRow label="Disposal" value={money(comparison?.disposalCost)} />
+        <DetailRow label="Total cost" value={money(comparison?.totalOperationalCost)} />
+        <DetailRow label="Estimated profit" value={money(comparison?.estimatedProfit)} />
+      </div>
     </div>
   );
 }

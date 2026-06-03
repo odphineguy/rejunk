@@ -90,7 +90,7 @@ declare global {
 const MAPS_PROXY_URL = "/maps-proxy";
 const FRONTEND_GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 
-function loadMapScript() {
+export function loadMapScript() {
   if (window.google?.maps) {
     console.info("[Map] Google Maps already present on window.");
     return Promise.resolve();

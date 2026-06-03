@@ -219,6 +219,76 @@ export interface EstimateCalculationResult {
   warnings: EstimateWarning[];
 }
 
+export interface JobRouteEstimate {
+  jobAddress?: string;
+  facilityId: string;
+  oneWayMiles: number | null;
+  roundTripMiles: number | null;
+  estimatedDriveMinutes: number | null;
+  source: "google_maps" | "manual" | "fallback" | "unavailable";
+}
+
+export interface FacilityRouteComparison {
+  jobAddress?: string;
+  facilityId: string;
+  facilityName: string;
+  oneWayMiles: number | null;
+  roundTripMiles: number | null;
+  estimatedDriveMinutes: number | null;
+  fuelCost: number;
+  vehicleCost: number;
+  disposalCost: number;
+  totalOperationalCost: number;
+  acceptedMaterial: boolean;
+  pricingStale: boolean;
+  warnings: string[];
+}
+
+export interface VehicleJobComparison {
+  jobAddress?: string;
+  vehicleId: string;
+  vehicleName: string;
+  vehicleType: VehicleType;
+  cubicYardCapacity: number;
+  payloadCapacityLbs: number;
+  mpg: number;
+  operatingCostPerMile: number;
+  estimatedWeightLbs: number;
+  estimatedTons: number;
+  tripsRequired: number;
+  oneWayMiles: number | null;
+  roundTripMiles: number | null;
+  estimatedDriveMinutes: number | null;
+  fuelCost: number;
+  vehicleCost: number;
+  disposalCost: number;
+  totalOperationalCost: number;
+  estimatedProfit: number;
+  payloadWarning?: string;
+  acceptedMaterial: boolean;
+  pricingStale: boolean;
+  warnings: string[];
+}
+
+export interface BestFacilityRecommendation {
+  jobAddress?: string;
+  facilityId: string;
+  facilityName: string;
+  vehicleId?: string;
+  vehicleName?: string;
+  selectedFacilityId?: string;
+  selectedVehicleId?: string;
+  selectedTotalCost: number;
+  recommendedTotalCost: number;
+  estimatedSavings: number;
+  distanceDifferenceMiles: number | null;
+  driveTimeDifferenceMinutes: number | null;
+  reason: string;
+  facilityComparison?: FacilityRouteComparison;
+  vehicleComparison?: VehicleJobComparison;
+  warnings: string[];
+}
+
 export interface SavedEstimate {
   id: string;
   createdAt: string;
@@ -263,5 +333,6 @@ export interface SavedEstimate {
   fuelPricePerGallon?: number;
   targetMarginDecimal?: number;
   minimumProfitDollars?: number;
+  recommendationSnapshot?: BestFacilityRecommendation;
   notes?: string;
 }

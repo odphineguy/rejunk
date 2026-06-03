@@ -5,6 +5,7 @@ export type JobWarningCode =
   | "heavy_material"
   | "payload_exceeded"
   | "facility_mismatch"
+  | "better_facility_available"
   | "pricing_stale"
   | "missing_receipt"
   | "completed_unpaid"
@@ -79,6 +80,14 @@ export function getJobWarnings(job: Job): JobWarning[] {
   if (estimateCodes.has("facility_not_verified_recently")) {
     warnings.push({ code: "pricing_stale", label: "Pricing Stale", severity: "warning" });
   }
+  if (
+    job.recommendationSnapshot?.facilityId &&
+    job.facilityId &&
+    job.recommendationSnapshot.facilityId !== job.facilityId &&
+    job.recommendationSnapshot.estimatedSavings > 0
+  ) {
+    warnings.push({ code: "better_facility_available", label: "Better Facility Available", severity: "warning" });
+  }
   if (job.status === "completed" && !hasReceipt(job)) {
     warnings.push({ code: "missing_receipt", label: "Missing Receipt", severity: "warning" });
   }
@@ -116,6 +125,8 @@ function isPricingStale(facility: DisposalFacility | undefined) {
   return Date.now() - verifiedAt > ninetyDaysMs;
 }
 
+export const facilityPricingIsStale = isPricingStale;
+
 function facilityMatches(facility: DisposalFacility, job: Job) {
   return facility.id === job.facilityId || facility.facilityName === job.facilityName;
 }
@@ -125,24 +136,29 @@ function acceptsMaterial(facility: DisposalFacility | undefined, materialType: M
   return facility.acceptedMaterials.includes(materialType);
 }
 
+export const facilityAcceptsMaterial = acceptsMaterial;
+
 function rejectsMaterial(facility: DisposalFacility | undefined, materialType: MaterialCategory | undefined) {
   if (!facility || !materialType) return false;
   return facility.rejectedMaterials.includes(materialType);
 }
 
-export function estimateFacilityDisposalCost(facility: DisposalFacility | undefined, job: Job) {
+export const facilityRejectsMaterial = rejectsMaterial;
+
+export function estimateFacilityDisposalCost(facility: DisposalFacility | undefined, job: Job, tripsRequired = 1) {
   if (!facility) return 0;
 
   const tons = job.actuals?.netWeightTons ?? job.estimatedTons ?? (job.estimatedWeightLbs ?? 0) / 2000;
+  const trips = Math.max(1, Math.round(tripsRequired));
   let cost = 0;
 
   switch (facility.priceType) {
     case "per_ton":
-      cost = Math.max(facility.minimumCharge, tons * facility.defaultRate);
+      cost = Math.max(facility.minimumCharge, (tons / trips) * facility.defaultRate) * trips;
       break;
     case "flat_fee":
     case "per_item":
-      cost = Math.max(facility.minimumCharge, facility.defaultRate);
+      cost = Math.max(facility.minimumCharge, facility.defaultRate) * trips;
       break;
     case "free":
       cost = 0;

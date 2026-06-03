@@ -1,4 +1,4 @@
-import type { EstimateWarning, MaterialCategory } from "@/types/pricing";
+import type { BestFacilityRecommendation, EstimateWarning, FacilityRouteComparison, MaterialCategory, VehicleJobComparison } from "@/types/pricing";
 
 export type JobStatus = "open" | "scheduled" | "on_my_way" | "in_progress" | "completed" | "canceled";
 
@@ -63,6 +63,9 @@ export interface Job {
   estimatedProfit?: number;
   estimatedMarginDecimal?: number;
   warnings?: EstimateWarning[];
+  recommendationSnapshot?: BestFacilityRecommendation;
+  facilityRouteComparisons?: FacilityRouteComparison[];
+  vehicleJobComparisons?: VehicleJobComparison[];
   assignment?: JobAssignment;
   actuals?: JobCostActuals;
   notes?: string;

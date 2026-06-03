@@ -203,6 +203,9 @@ export function createJobFromEstimate(estimate: SavedEstimate): Job {
     estimatedProfit,
     estimatedMarginDecimal,
     warnings: estimate.warnings,
+    recommendationSnapshot: estimate.recommendationSnapshot,
+    facilityRouteComparisons: estimate.recommendationSnapshot?.facilityComparison ? [estimate.recommendationSnapshot.facilityComparison] : undefined,
+    vehicleJobComparisons: estimate.recommendationSnapshot?.vehicleComparison ? [estimate.recommendationSnapshot.vehicleComparison] : undefined,
     actuals: {
       chargedAmount: estimate.finalQuote,
     },

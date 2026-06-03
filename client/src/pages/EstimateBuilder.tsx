@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { AlertTriangle, Briefcase, Calculator, Copy, CopyPlus, Printer, RotateCcw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { loadMapScript } from "@/components/Map";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,9 +15,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { defaultPricingSettings } from "@/data/defaultPricing";
 import { calculateEstimate, findVolumeBenchmark } from "@/utils/pricingCalculator";
 import { deleteSavedEstimate, loadPricingSettings, loadSavedEstimates, saveEstimate } from "@/utils/pricingStorage";
+import { getRouteEstimateToFacility } from "@/utils/distanceRouting";
+import { buildBestRecommendation } from "@/utils/recommendations";
 import { materialIcon } from "@/lib/materialIcons";
 import { createJobFromEstimate, getJobByEstimateId } from "@/lib/jobStorage";
-import type { EstimateWarning, ExtraFee, SavedEstimate } from "@/types/pricing";
+import type { EstimateWarning, ExtraFee, JobRouteEstimate, SavedEstimate } from "@/types/pricing";
 
 const loadOptions = [
   { label: "Minimum", value: "0" },
@@ -54,6 +57,10 @@ const numberFormatter = new Intl.NumberFormat("en-US", {
 
 function money(value: number | undefined) {
   return currency.format(Number.isFinite(value) ? Number(value) : 0);
+}
+
+function miles(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? `${value.toFixed(1)} mi` : "Unavailable";
 }
 
 function numericValue(value: string) {
@@ -185,9 +192,9 @@ function mergeSavedExtraFees(savedFees: ExtraFee[]) {
 export default function EstimateBuilder() {
   const [, navigate] = useLocation();
   const [settings, setSettings] = useState(() => loadPricingSettings());
-  const activeFacilities = settings.disposalFacilities.filter((facility) => facility.isActive);
-  const activeVehicles = settings.vehicles.filter((vehicle) => vehicle.isActive);
-  const activeMaterials = settings.materialPricingRules.filter((material) => material.isActive !== false);
+  const activeFacilities = useMemo(() => settings.disposalFacilities.filter((facility) => facility.isActive), [settings.disposalFacilities]);
+  const activeVehicles = useMemo(() => settings.vehicles.filter((vehicle) => vehicle.isActive), [settings.vehicles]);
+  const activeMaterials = useMemo(() => settings.materialPricingRules.filter((material) => material.isActive !== false), [settings.materialPricingRules]);
   const defaultFacilityId = activeFacilities.find((facility) => facility.isDefault)?.id ?? activeFacilities[0]?.id ?? "";
 
   const [customerName, setCustomerName] = useState("");
@@ -210,6 +217,7 @@ export default function EstimateBuilder() {
   const [extraFees, setExtraFees] = useState<ExtraFee[]>(starterExtraFees);
   const [savedEstimates, setSavedEstimates] = useState<SavedEstimate[]>(() => loadSavedEstimates());
   const [selectedSavedId, setSelectedSavedId] = useState<string | null>(null);
+  const [routeEstimates, setRouteEstimates] = useState<Record<string, JobRouteEstimate>>({});
 
   useEffect(() => {
     const refreshSettings = () => {
@@ -275,6 +283,49 @@ export default function EstimateBuilder() {
       workers,
     ],
   );
+
+  useEffect(() => {
+    if (!jobAddress.trim()) {
+      setRouteEstimates({});
+      return;
+    }
+
+    let canceled = false;
+    loadMapScript()
+      .then(() => Promise.all(activeFacilities.map((item) => getRouteEstimateToFacility(jobAddress, item))))
+      .then((routes) => {
+        if (!canceled) setRouteEstimates(Object.fromEntries(routes.map((route) => [route.facilityId, route])));
+      })
+      .catch(() => {
+        if (!canceled) setRouteEstimates({});
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [jobAddress, activeFacilities]);
+
+  const recommendationBundle = useMemo(
+    () =>
+      buildBestRecommendation(
+        {
+          jobAddress,
+          selectedFacilityId: facility.id,
+          selectedVehicleId: vehicle.id,
+          materialType: materialRule.materialCategory,
+          cubicYards: result.cubicYards,
+          estimatedWeightLbs: result.estimatedWeightLbs,
+          estimatedTons: result.estimatedTons,
+          quotedAmount: result.finalRecommendedQuote,
+          fuelPricePerGallon: numericValue(fuelPrice),
+          manualRoundTripMiles: numericValue(roundTripMiles),
+          routeEstimates,
+        },
+        settings,
+      ),
+    [facility.id, fuelPrice, jobAddress, materialRule.materialCategory, result, routeEstimates, roundTripMiles, settings, vehicle.id],
+  );
+  const recommendation = recommendationBundle.recommendation;
 
   const uiWarnings = useMemo(() => {
     const warnings = [...result.warnings];
@@ -411,6 +462,7 @@ export default function EstimateBuilder() {
       fuelPricePerGallon: numericValue(fuelPrice),
       targetMarginDecimal: numericValue(targetMargin) / 100,
       minimumProfitDollars: numericValue(minimumProfit),
+      recommendationSnapshot: recommendation ?? undefined,
       notes: notes || undefined,
       ...overrides,
     };
@@ -722,6 +774,38 @@ export default function EstimateBuilder() {
                   <Stat label="Quote range" value={`${money(range.lower)}-${money(range.upper)}`} />
                   <Stat label="Base cost" value={money(result.baseCost)} />
                 </div>
+
+                <Separator />
+
+                {recommendation && (
+                  <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recommendation</div>
+                        <div className="font-semibold">{recommendation.facilityName}</div>
+                      </div>
+                      {recommendation.facilityId !== facility.id && recommendation.estimatedSavings > 0 && (
+                        <Badge className="bg-green-100 text-green-700">Save {money(recommendation.estimatedSavings)}</Badge>
+                      )}
+                    </div>
+                    <div className="grid gap-2">
+                      <DetailRow label="Vehicle" value={recommendation.vehicleName ?? "No recommendation"} />
+                      <DetailRow label="Round trip" value={miles(recommendation.facilityComparison?.roundTripMiles)} />
+                      <DetailRow label="Recommended cost" value={money(recommendation.recommendedTotalCost)} />
+                      <DetailRow label="Selected cost" value={money(recommendation.selectedTotalCost)} />
+                    </div>
+                    <p className="mt-3 text-muted-foreground">{recommendation.reason}</p>
+                    {recommendation.warnings.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {recommendation.warnings.slice(0, 3).map((warning) => (
+                          <Badge key={warning} variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+                            {warning}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <Separator />
 
