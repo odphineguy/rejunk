@@ -32,10 +32,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { clientName, getClients } from "@/lib/clientStorage";
+import { getInvoices } from "@/lib/invoiceStorage";
 import { getJobs } from "@/lib/jobStorage";
 import { cn } from "@/lib/utils";
 import { loadSavedEstimates } from "@/utils/pricingStorage";
 import type { ClientRecord } from "@/types/clients";
+import type { InvoiceRecord } from "@/types/invoices";
 import type { Job } from "@/types/jobs";
 
 const navGroups = [
@@ -69,7 +71,7 @@ const actionItems = [
   { href: "/clients/new", label: "Client or Lead", icon: UsersRound },
   { href: "/employees", label: "Employee", icon: UserPlus },
   { href: "/jobs/new", label: "Job", icon: Wrench },
-  { href: "/invoices", label: "Invoice", icon: FileText },
+  { href: "/invoices/new", label: "Invoice", icon: FileText },
   { href: "/estimate-builder", label: "Estimate", icon: Calculator },
   { href: "/events", label: "Event", icon: CalendarPlus },
 ];
@@ -237,6 +239,7 @@ function GlobalSearch() {
   const [query, setQuery] = useState("");
   const [jobs, setJobs] = useState<Job[]>(() => getJobs());
   const [clients, setClients] = useState<ClientRecord[]>(() => getClients());
+  const [invoices, setInvoices] = useState<InvoiceRecord[]>(() => getInvoices());
   const [estimates, setEstimates] = useState(() => loadSavedEstimates());
   const trimmedQuery = query.trim().toLowerCase();
 
@@ -244,14 +247,17 @@ function GlobalSearch() {
     const refresh = () => {
       setJobs(getJobs());
       setClients(getClients());
+      setInvoices(getInvoices());
       setEstimates(loadSavedEstimates());
     };
     window.addEventListener("jobs-updated", refresh);
     window.addEventListener("clients-updated", refresh);
+    window.addEventListener("invoices-updated", refresh);
     window.addEventListener("pricing-settings-updated", refresh);
     return () => {
       window.removeEventListener("jobs-updated", refresh);
       window.removeEventListener("clients-updated", refresh);
+      window.removeEventListener("invoices-updated", refresh);
       window.removeEventListener("pricing-settings-updated", refresh);
     };
   }, []);
@@ -279,14 +285,14 @@ function GlobalSearch() {
         href: `/jobs/${job.id}`,
       }));
 
-    const invoiceRows = jobs
-      .filter((job) => job.paymentStatus !== "unpaid" && matches([job.jobNumber, job.customerName, job.quotedAmount]))
+    const invoiceRows = invoices
+      .filter((invoice) => matches([invoice.invoiceNumber, invoice.jobId, invoice.clientName, invoice.total, invoice.status]))
       .slice(0, 3)
-      .map((job) => ({
-        id: `invoice-${job.id}`,
-        title: `Invoice ${job.jobNumber}`,
-        subtitle: `${job.customerName} - ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(job.actuals?.chargedAmount ?? job.quotedAmount)}`,
-        href: "/invoices",
+      .map((invoice) => ({
+        id: invoice.id,
+        title: `Invoice #${invoice.invoiceNumber}`,
+        subtitle: `${invoice.clientName} - ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(invoice.total)}`,
+        href: `/invoices/${invoice.id}`,
       }));
 
     const estimateRows = estimates
@@ -305,7 +311,7 @@ function GlobalSearch() {
       { label: "Invoices", href: "/invoices", icon: FileText, items: invoiceRows },
       { label: "Estimates", href: "/estimate-builder", icon: Calculator, items: estimateRows },
     ].filter((group) => group.items.length > 0);
-  }, [clients, estimates, jobs, trimmedQuery]);
+  }, [clients, estimates, invoices, jobs, trimmedQuery]);
 
   const resultCount = groups.reduce((sum, group) => sum + group.items.length, 0);
 
