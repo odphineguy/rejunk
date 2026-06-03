@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { AppShell } from "./components/OperationsShell";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import ClientsLeads from "./pages/ClientsLeads";
 import Dashboard from "./pages/Dashboard";
 import EstimateBuilder from "./pages/EstimateBuilder";
 import Home from "./pages/Home";
@@ -26,7 +27,9 @@ function Router() {
       <Route path={"/jobs"} component={Jobs} />
       <Route path={"/schedule"} component={Schedule} />
       <Route path={"/messages"}>{() => <PlaceholderPage title="Messages" />}</Route>
-      <Route path={"/clients"}>{() => <PlaceholderPage title="Clients & Leads" />}</Route>
+      <Route path={"/clients/new"} component={ClientsLeads} />
+      <Route path={"/clients/:clientId"} component={ClientsLeads} />
+      <Route path={"/clients"} component={ClientsLeads} />
       <Route path={"/employees"}>{() => <PlaceholderPage title="Employees" />}</Route>
       <Route path={"/invoices"}>{() => <PlaceholderPage title="Invoices" />}</Route>
       <Route path={"/events"}>{() => <PlaceholderPage title="Events" />}</Route>

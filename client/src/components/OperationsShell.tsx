@@ -31,9 +31,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { clientName, getClients } from "@/lib/clientStorage";
 import { getJobs } from "@/lib/jobStorage";
 import { cn } from "@/lib/utils";
 import { loadSavedEstimates } from "@/utils/pricingStorage";
+import type { ClientRecord } from "@/types/clients";
 import type { Job } from "@/types/jobs";
 
 const navGroups = [
@@ -64,7 +66,7 @@ const navGroups = [
 
 const actionItems = [
   { href: "/messages", label: "Message", icon: MessageSquare },
-  { href: "/clients", label: "Client or Lead", icon: UsersRound },
+  { href: "/clients/new", label: "Client or Lead", icon: UsersRound },
   { href: "/employees", label: "Employee", icon: UserPlus },
   { href: "/jobs/new", label: "Job", icon: Wrench },
   { href: "/invoices", label: "Invoice", icon: FileText },
@@ -94,19 +96,13 @@ function formatSearchDate(value?: string) {
   }).format(new Date(value));
 }
 
-function clientRows(jobs: Job[]) {
-  const clients = new Map<string, { id: string; title: string; subtitle?: string; href: string }>();
-  jobs.forEach((job) => {
-    const key = job.customerName.trim().toLowerCase();
-    if (!key || clients.has(key)) return;
-    clients.set(key, {
-      id: key,
-      title: job.customerName,
-      subtitle: [job.phone, job.email].filter(Boolean).join(", ") || [job.city, job.state].filter(Boolean).join(", "),
-      href: "/clients",
-    });
-  });
-  return Array.from(clients.values());
+function clientRows(clients: ClientRecord[]) {
+  return clients.map((client) => ({
+    id: client.id,
+    title: clientName(client),
+    subtitle: [client.phone, client.email].filter(Boolean).join(", ") || [client.company, client.city].filter(Boolean).join(", "),
+    href: `/clients/${client.id}`,
+  }));
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -240,18 +236,22 @@ export function AddNewMenu() {
 function GlobalSearch() {
   const [query, setQuery] = useState("");
   const [jobs, setJobs] = useState<Job[]>(() => getJobs());
+  const [clients, setClients] = useState<ClientRecord[]>(() => getClients());
   const [estimates, setEstimates] = useState(() => loadSavedEstimates());
   const trimmedQuery = query.trim().toLowerCase();
 
   useEffect(() => {
     const refresh = () => {
       setJobs(getJobs());
+      setClients(getClients());
       setEstimates(loadSavedEstimates());
     };
     window.addEventListener("jobs-updated", refresh);
+    window.addEventListener("clients-updated", refresh);
     window.addEventListener("pricing-settings-updated", refresh);
     return () => {
       window.removeEventListener("jobs-updated", refresh);
+      window.removeEventListener("clients-updated", refresh);
       window.removeEventListener("pricing-settings-updated", refresh);
     };
   }, []);
@@ -265,7 +265,7 @@ function GlobalSearch() {
         .toLowerCase()
         .includes(trimmedQuery);
 
-    const clients = clientRows(jobs)
+    const clientResults = clientRows(clients)
       .filter((client) => matches([client.title, client.subtitle]))
       .slice(0, 4);
 
@@ -300,12 +300,12 @@ function GlobalSearch() {
       }));
 
     return [
-      { label: "Clients", href: "/clients", icon: UsersRound, items: clients },
+      { label: "Clients", href: "/clients", icon: UsersRound, items: clientResults },
       { label: "Jobs", href: "/jobs", icon: ClipboardList, items: jobRows },
       { label: "Invoices", href: "/invoices", icon: FileText, items: invoiceRows },
       { label: "Estimates", href: "/estimate-builder", icon: Calculator, items: estimateRows },
     ].filter((group) => group.items.length > 0);
-  }, [estimates, jobs, trimmedQuery]);
+  }, [clients, estimates, jobs, trimmedQuery]);
 
   const resultCount = groups.reduce((sum, group) => sum + group.items.length, 0);
 
