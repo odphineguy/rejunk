@@ -12,6 +12,7 @@ import Home from "./pages/Home";
 import Invoices from "./pages/Invoices";
 import JobDetail, { NewJob } from "./pages/JobDetail";
 import Jobs from "./pages/Jobs";
+import Messages from "./pages/Messages";
 import PricingSettings from "./pages/PricingSettings";
 import Schedule from "./pages/Schedule";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
@@ -27,7 +28,7 @@ function Router() {
       <Route path={"/jobs/:jobId"} component={JobDetail} />
       <Route path={"/jobs"} component={Jobs} />
       <Route path={"/schedule"} component={Schedule} />
-      <Route path={"/messages"}>{() => <PlaceholderPage title="Messages" />}</Route>
+      <Route path={"/messages"} component={Messages} />
       <Route path={"/clients/new"} component={ClientsLeads} />
       <Route path={"/clients/:clientId"} component={ClientsLeads} />
       <Route path={"/clients"} component={ClientsLeads} />
