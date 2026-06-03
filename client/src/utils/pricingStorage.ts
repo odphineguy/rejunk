@@ -1,5 +1,5 @@
 import { defaultPricingSettings } from "@/data/defaultPricing";
-import type { PricingSettings, SavedEstimate } from "@/types/pricing";
+import type { MaterialHandlingClass, MaterialPricingRule, PricingSettings, SavedEstimate, Vehicle } from "@/types/pricing";
 import {
   deleteSavedEstimateRemote,
   loadAllSettings,
@@ -35,7 +35,74 @@ function writeJson<T>(key: string, value: T) {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
+function defaultHandlingClass(material: Partial<MaterialPricingRule>): MaterialHandlingClass {
+  if (
+    material.materialCategory &&
+    ["clean_concrete", "dirt", "rock", "brick", "clean_tile", "asphalt", "pavers", "heavy_clean_debris"].includes(material.materialCategory)
+  ) {
+    return "heavy_lowboy";
+  }
+  if (material.materialCategory === "green_waste") return "green_waste";
+  if (material.materialCategory === "mixed_c_and_d") return "mixed_demo";
+  if (material.materialCategory === "appliances" || material.materialCategory === "metal") return "metal_appliance";
+  return "standard_junk";
+}
+
+function normalizeVehicle(vehicle: Vehicle): Vehicle {
+  if (vehicle.vehicleType === "box_truck") {
+    return {
+      ...vehicle,
+      allowedHandlingClasses: vehicle.allowedHandlingClasses ?? ["standard_junk", "green_waste", "mixed_demo", "metal_appliance"],
+      bedHeightClass: vehicle.bedHeightClass ?? "high",
+      looseDebrisSuitable: vehicle.looseDebrisSuitable ?? false,
+      heavyMaterialSuitable: vehicle.heavyMaterialSuitable ?? false,
+    };
+  }
+  if (vehicle.vehicleType === "dump_trailer") {
+    return {
+      ...vehicle,
+      allowedHandlingClasses: vehicle.allowedHandlingClasses ?? ["standard_junk", "green_waste", "mixed_demo", "metal_appliance", "heavy_lowboy"],
+      bedHeightClass: vehicle.bedHeightClass ?? "low",
+      looseDebrisSuitable: vehicle.looseDebrisSuitable ?? true,
+      heavyMaterialSuitable: vehicle.heavyMaterialSuitable ?? true,
+    };
+  }
+  if (vehicle.vehicleType === "cargo_van") {
+    return {
+      ...vehicle,
+      allowedHandlingClasses: vehicle.allowedHandlingClasses ?? ["standard_junk", "green_waste", "mixed_demo", "metal_appliance", "heavy_lowboy"],
+      bedHeightClass: vehicle.bedHeightClass ?? "medium",
+      looseDebrisSuitable: vehicle.looseDebrisSuitable ?? true,
+      heavyMaterialSuitable: vehicle.heavyMaterialSuitable ?? "conditional",
+    };
+  }
+  return {
+    ...vehicle,
+    allowedHandlingClasses: vehicle.allowedHandlingClasses ?? ["standard_junk", "green_waste", "mixed_demo", "metal_appliance"],
+    bedHeightClass: vehicle.bedHeightClass ?? "medium",
+    looseDebrisSuitable: vehicle.looseDebrisSuitable ?? true,
+    heavyMaterialSuitable: vehicle.heavyMaterialSuitable ?? false,
+  };
+}
+
+function normalizeMaterial(material: MaterialPricingRule): MaterialPricingRule {
+  const handlingClass = material.handlingClass ?? defaultHandlingClass(material);
+  return {
+    ...material,
+    handlingClass,
+    includedTons:
+      material.includedTons ??
+      (handlingClass === "heavy_lowboy" ? (material.materialCategory === "heavy_clean_debris" ? 3 : 4) : undefined),
+    extraTonRate: material.extraTonRate ?? (handlingClass === "heavy_lowboy" ? 95 : undefined),
+  };
+}
+
 function mergeSettings(stored: Partial<PricingSettings>): PricingSettings {
+  const defaultMaterialById = new Map(defaultPricingSettings.materialPricingRules.map((material) => [material.id, material]));
+  const defaultVehicleById = new Map(defaultPricingSettings.vehicles.map((vehicle) => [vehicle.id, vehicle]));
+  const storedMaterials = stored.materialPricingRules ?? defaultPricingSettings.materialPricingRules;
+  const storedVehicles = stored.vehicles ?? defaultPricingSettings.vehicles;
+
   return {
     ...defaultPricingSettings,
     ...stored,
@@ -44,8 +111,10 @@ function mergeSettings(stored: Partial<PricingSettings>): PricingSettings {
       ...stored.defaults,
     },
     disposalFacilities: stored.disposalFacilities ?? defaultPricingSettings.disposalFacilities,
-    vehicles: stored.vehicles ?? defaultPricingSettings.vehicles,
-    materialPricingRules: stored.materialPricingRules ?? defaultPricingSettings.materialPricingRules,
+    vehicles: storedVehicles.map((vehicle) => normalizeVehicle({ ...defaultVehicleById.get(vehicle.id), ...vehicle } as Vehicle)),
+    materialPricingRules: storedMaterials.map((material) =>
+      normalizeMaterial({ ...defaultMaterialById.get(material.id), ...material } as MaterialPricingRule),
+    ),
     volumePricingBenchmarks: stored.volumePricingBenchmarks ?? defaultPricingSettings.volumePricingBenchmarks,
   };
 }

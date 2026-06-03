@@ -54,6 +54,7 @@ const currency = new Intl.NumberFormat("en-US", {
 const numberFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
 });
+const DEFAULT_TARGET_MARGIN_PERCENT = 70;
 
 function money(value: number | undefined) {
   return currency.format(Number.isFinite(value) ? Number(value) : 0);
@@ -78,12 +79,8 @@ function quoteRange(finalQuote: number) {
   return { lower, upper };
 }
 
-function initialFacilityId(fallbackId: string) {
-  if (typeof window === "undefined") {
-    return fallbackId;
-  }
-
-  return new URLSearchParams(window.location.search).get("facilityId") || fallbackId;
+function initialFacilityId() {
+  return "";
 }
 
 function warningStatus(warnings: EstimateWarning[]) {
@@ -195,14 +192,13 @@ export default function EstimateBuilder() {
   const activeFacilities = useMemo(() => settings.disposalFacilities.filter((facility) => facility.isActive), [settings.disposalFacilities]);
   const activeVehicles = useMemo(() => settings.vehicles.filter((vehicle) => vehicle.isActive), [settings.vehicles]);
   const activeMaterials = useMemo(() => settings.materialPricingRules.filter((material) => material.isActive !== false), [settings.materialPricingRules]);
-  const defaultFacilityId = activeFacilities.find((facility) => facility.isDefault)?.id ?? activeFacilities[0]?.id ?? "";
 
   const [customerName, setCustomerName] = useState("");
   const [jobAddress, setJobAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [materialId, setMaterialId] = useState(activeMaterials[0]?.id ?? "");
   const [vehicleId, setVehicleId] = useState(activeVehicles.find((vehicle) => vehicle.isDefault)?.id ?? activeVehicles[0]?.id ?? "");
-  const [facilityId, setFacilityId] = useState(initialFacilityId(defaultFacilityId));
+  const [facilityId, setFacilityId] = useState(initialFacilityId());
   const [loadFraction, setLoadFraction] = useState("0.5");
   const [manualCubicYards, setManualCubicYards] = useState("");
   const [manualWeightLbs, setManualWeightLbs] = useState("");
@@ -212,7 +208,7 @@ export default function EstimateBuilder() {
   const [roundTripMiles, setRoundTripMiles] = useState("20");
   const [mpg, setMpg] = useState("");
   const [fuelPrice, setFuelPrice] = useState(String(settings.defaults.fuelPricePerGallon));
-  const [targetMargin, setTargetMargin] = useState(String(settings.defaults.targetMarginDecimal * 100));
+  const [targetMargin, setTargetMargin] = useState(String(DEFAULT_TARGET_MARGIN_PERCENT));
   const [minimumProfit, setMinimumProfit] = useState(String(settings.defaults.minimumProfitDollars));
   const [extraFees, setExtraFees] = useState<ExtraFee[]>(starterExtraFees);
   const [savedEstimates, setSavedEstimates] = useState<SavedEstimate[]>(() => loadSavedEstimates());
@@ -236,7 +232,10 @@ export default function EstimateBuilder() {
 
   const materialRule = activeMaterials.find((material) => material.id === materialId) ?? activeMaterials[0] ?? defaultPricingSettings.materialPricingRules[0];
   const vehicle = activeVehicles.find((item) => item.id === vehicleId) ?? activeVehicles[0] ?? defaultPricingSettings.vehicles[0];
-  const facility = activeFacilities.find((item) => item.id === facilityId) ?? activeFacilities[0] ?? defaultPricingSettings.disposalFacilities[0];
+  const selectedFacility = activeFacilities.find((item) => item.id === facilityId);
+  const facility = selectedFacility ?? activeFacilities.find((item) => item.isDefault) ?? activeFacilities[0] ?? defaultPricingSettings.disposalFacilities[0];
+  const hasJobAddress = Boolean(jobAddress.trim());
+  const quoteReady = hasJobAddress && Boolean(selectedFacility);
 
   const selectedLoadFraction = numericValue(loadFraction);
   const volumeBenchmark = findVolumeBenchmark(settings.volumePricingBenchmarks, selectedLoadFraction);
@@ -287,6 +286,7 @@ export default function EstimateBuilder() {
   useEffect(() => {
     if (!jobAddress.trim()) {
       setRouteEstimates({});
+      setFacilityId("");
       return;
     }
 
@@ -310,8 +310,9 @@ export default function EstimateBuilder() {
       buildBestRecommendation(
         {
           jobAddress,
-          selectedFacilityId: facility.id,
+          selectedFacilityId: selectedFacility?.id,
           selectedVehicleId: vehicle.id,
+          materialRule,
           materialType: materialRule.materialCategory,
           cubicYards: result.cubicYards,
           estimatedWeightLbs: result.estimatedWeightLbs,
@@ -323,9 +324,11 @@ export default function EstimateBuilder() {
         },
         settings,
       ),
-    [facility.id, fuelPrice, jobAddress, materialRule.materialCategory, result, routeEstimates, roundTripMiles, settings, vehicle.id],
+    [fuelPrice, jobAddress, materialRule, result, routeEstimates, roundTripMiles, selectedFacility?.id, settings, vehicle.id],
   );
-  const recommendation = recommendationBundle.recommendation;
+  const recommendation = hasJobAddress ? recommendationBundle.recommendation : null;
+  const heavyMode = materialRule.handlingClass === "heavy_lowboy";
+  const heavyVehicle = recommendation?.vehicleComparison;
 
   const uiWarnings = useMemo(() => {
     const warnings = [...result.warnings];
@@ -350,19 +353,21 @@ export default function EstimateBuilder() {
     setNotes("");
     setMaterialId(activeMaterials[0]?.id ?? "");
     setVehicleId(activeVehicles.find((item) => item.isDefault)?.id ?? activeVehicles[0]?.id ?? "");
-    setFacilityId(activeFacilities.find((item) => item.isDefault)?.id ?? activeFacilities[0]?.id ?? "");
+    setFacilityId("");
     setLoadFraction("0.5");
     setManualCubicYards("");
     setManualWeightLbs("");
     setWorkers(String(settings.defaults.workers));
     setEstimatedHours(String(settings.defaults.estimatedHours));
     setHourlyLaborCost(String(settings.defaults.hourlyLaborCost));
-    setRoundTripMiles("20");
+    setRoundTripMiles("");
     setMpg("");
     setFuelPrice(String(settings.defaults.fuelPricePerGallon));
-    setTargetMargin(String(settings.defaults.targetMarginDecimal * 100));
+    setTargetMargin(String(DEFAULT_TARGET_MARGIN_PERCENT));
     setMinimumProfit(String(settings.defaults.minimumProfitDollars));
     setExtraFees(starterExtraFees);
+    setSelectedSavedId(null);
+    setRouteEstimates({});
   };
 
   const customerQuoteText = () =>
@@ -404,7 +409,7 @@ export default function EstimateBuilder() {
       `Estimated weight: ${Math.round(result.estimatedWeightLbs).toLocaleString()} lb`,
       `Estimated tons: ${result.estimatedTons.toFixed(2)}`,
       `Selected vehicle: ${vehicle.vehicleName}`,
-      `Selected facility: ${facility.facilityName}`,
+      `Selected facility: ${selectedFacility?.facilityName ?? "Not selected"}`,
       `Warnings: ${uiWarnings.length ? uiWarnings.map((warning) => warningLabel(warning)).join(", ") : "None"}`,
       notes ? `Notes: ${notes}` : "",
     ]
@@ -469,6 +474,10 @@ export default function EstimateBuilder() {
   };
 
   const handleSaveEstimate = () => {
+    if (!quoteReady) {
+      toast.error("Add a job address and choose a disposal facility before saving.");
+      return;
+    }
     const saved = saveEstimate(buildSavedEstimate());
     setSavedEstimates((current) => [saved, ...current.filter((estimate) => estimate.id !== saved.id)]);
     setSelectedSavedId(saved.id);
@@ -482,7 +491,7 @@ export default function EstimateBuilder() {
     setNotes(estimate.notes ?? "");
     setMaterialId(material?.id ?? activeMaterials[0]?.id ?? "");
     setVehicleId(estimate.vehicleId);
-    setFacilityId(estimate.facilityId);
+    setFacilityId(estimate.facilityId ?? "");
     setLoadFraction(String(estimate.loadFraction ?? 0.5));
     setManualCubicYards(String(estimate.manualCubicYards ?? estimate.cubicYards ?? ""));
     setManualWeightLbs(estimate.manualWeightLbs ? String(estimate.manualWeightLbs) : "");
@@ -526,6 +535,10 @@ export default function EstimateBuilder() {
   };
 
   const printQuote = () => {
+    if (!quoteReady) {
+      toast.error("Add a job address and choose a disposal facility before printing.");
+      return;
+    }
     const printWindow = window.open("", "_blank", "width=720,height=900");
     if (!printWindow) {
       toast.error("Pop-up blocked. Allow pop-ups to print the quote.");
@@ -681,9 +694,9 @@ export default function EstimateBuilder() {
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <Field label="Disposal facility">
-                  <Select value={facilityId} onValueChange={setFacilityId}>
+                  <Select value={facilityId} onValueChange={setFacilityId} disabled={!hasJobAddress}>
                     <SelectTrigger className="w-full">
-                      <SelectValue />
+                      <SelectValue placeholder={hasJobAddress ? "Select facility" : "Enter job address first"} />
                     </SelectTrigger>
                     <SelectContent>
                       {activeFacilities.map((item) => (
@@ -762,37 +775,60 @@ export default function EstimateBuilder() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <CardTitle>Quote Summary</CardTitle>
-                    <CardDescription>{materialRule.materialName} via {facility.facilityName}</CardDescription>
+                    <CardDescription>
+                      {quoteReady ? `${materialRule.materialName} via ${selectedFacility?.facilityName}` : "Add a job address and facility to calculate."}
+                    </CardDescription>
                   </div>
-                  <StatusBadge warnings={uiWarnings} />
+                  {quoteReady ? <StatusBadge warnings={uiWarnings} /> : <Badge variant="outline">Not ready</Badge>}
                 </div>
               </CardHeader>
               <CardContent className="space-y-5">
-                <div className="grid grid-cols-2 gap-3">
-                  <Stat label="Recommended" value={money(result.finalRecommendedQuote)} tone="strong" />
-                  <Stat label="Minimum quote" value={money(result.minimumQuote)} />
-                  <Stat label="Quote range" value={`${money(range.lower)}-${money(range.upper)}`} />
-                  <Stat label="Base cost" value={money(result.baseCost)} />
-                </div>
+                {!quoteReady ? (
+                  <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+                    The quote summary will stay clear until a job address is entered and a disposal facility is selected.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Stat label="Recommended" value={money(result.finalRecommendedQuote)} tone="strong" />
+                    <Stat label="Minimum quote" value={money(result.minimumQuote)} />
+                    <Stat label="Quote range" value={`${money(range.lower)}-${money(range.upper)}`} />
+                    <Stat label="Base cost" value={money(result.baseCost)} />
+                  </div>
+                )}
 
                 <Separator />
 
-                {recommendation && (
+                {quoteReady && recommendation && (
                   <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
                     <div className="mb-3 flex items-start justify-between gap-3">
                       <div>
-                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recommendation</div>
-                        <div className="font-semibold">{recommendation.facilityName}</div>
+                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          {heavyMode ? "Heavy Material Mode" : "Recommendation"}
+                        </div>
+                        <div className="font-semibold">{heavyMode ? "Lowboy-style heavy load" : recommendation.facilityName}</div>
                       </div>
                       {recommendation.facilityId !== facility.id && recommendation.estimatedSavings > 0 && (
                         <Badge className="bg-green-100 text-green-700">Save {money(recommendation.estimatedSavings)}</Badge>
                       )}
                     </div>
+                    {heavyMode && (
+                      <div className="mb-3 space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
+                        <div className="font-semibold">10 yd3 roll-off equivalent ≈ 2 van trips</div>
+                        <div>Dense material: volume may fit, but weight controls legality.</div>
+                      </div>
+                    )}
                     <div className="grid gap-2">
+                      {heavyMode && <DetailRow label="Cubic yards" value={numberFormatter.format(result.cubicYards)} />}
+                      {heavyMode && <DetailRow label="Estimated tons" value={result.estimatedTons.toFixed(2)} />}
+                      {heavyMode && <DetailRow label="Included tons" value={heavyVehicle?.includedTons?.toFixed(2) ?? "—"} />}
+                      {heavyMode && <DetailRow label="Extra tons" value={heavyVehicle?.extraTons?.toFixed(2) ?? "0.00"} />}
+                      {heavyMode && <DetailRow label="Trips required" value={String(heavyVehicle?.tripsRequired ?? "—")} />}
+                      {heavyMode && <DetailRow label="Recommended service" value={heavyVehicle?.recommendedService ?? "manual review"} />}
                       <DetailRow label="Vehicle" value={recommendation.vehicleName ?? "No recommendation"} />
                       <DetailRow label="Round trip" value={miles(recommendation.facilityComparison?.roundTripMiles)} />
                       <DetailRow label="Recommended cost" value={money(recommendation.recommendedTotalCost)} />
                       <DetailRow label="Selected cost" value={money(recommendation.selectedTotalCost)} />
+                      {heavyMode && heavyVehicle?.payloadWarning && <DetailRow label="Payload warning" value={heavyVehicle.payloadWarning} />}
                     </div>
                     <p className="mt-3 text-muted-foreground">{recommendation.reason}</p>
                     {recommendation.warnings.length > 0 && (
@@ -809,16 +845,18 @@ export default function EstimateBuilder() {
 
                 <Separator />
 
-                <div className="grid grid-cols-2 gap-3">
-                  <Stat label="Labor" value={money(result.laborCost)} />
-                  <Stat label="Disposal" value={money(result.disposalCost)} />
-                  <Stat label="Fuel" value={money(result.fuelCost)} />
-                  <Stat label="Vehicle" value={money(result.vehicleCost)} />
-                  <Stat label="Extra fees" value={money(result.extraFeesTotal)} />
-                  <Stat label="Gross profit" value={money(result.grossProfitDollars)} tone="strong" />
-                </div>
+                {quoteReady && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Stat label="Labor" value={money(result.laborCost)} />
+                    <Stat label="Disposal" value={money(result.disposalCost)} />
+                    <Stat label="Fuel" value={money(result.fuelCost)} />
+                    <Stat label="Vehicle" value={money(result.vehicleCost)} />
+                    <Stat label="Extra fees" value={money(result.extraFeesTotal)} />
+                    <Stat label="Gross profit" value={money(result.grossProfitDollars)} tone="strong" />
+                  </div>
+                )}
 
-                <div className="rounded-lg border border-border p-4 text-sm">
+                {quoteReady && <div className="rounded-lg border border-border p-4 text-sm">
                   <div className="grid gap-2">
                     <div className="flex justify-between gap-4">
                       <span className="text-muted-foreground">Gross margin</span>
@@ -845,24 +883,24 @@ export default function EstimateBuilder() {
                       <span className="text-right font-semibold">{facility.facilityName}</span>
                     </div>
                   </div>
-                </div>
+                </div>}
 
-                <WarningList warnings={uiWarnings} />
+                {quoteReady && <WarningList warnings={uiWarnings} />}
 
                 <div className="grid grid-cols-2 gap-2">
-                  <Button onClick={handleSaveEstimate}>
+                  <Button onClick={handleSaveEstimate} disabled={!quoteReady}>
                     <Save className="size-4" />
                     Save
                   </Button>
-                  <Button variant="outline" onClick={() => copyText(customerQuoteText(), "Customer quote")}>
+                  <Button variant="outline" onClick={() => copyText(customerQuoteText(), "Customer quote")} disabled={!quoteReady}>
                     <Copy className="size-4" />
                     Customer
                   </Button>
-                  <Button variant="outline" onClick={() => copyText(internalBreakdownText(), "Internal breakdown")}>
+                  <Button variant="outline" onClick={() => copyText(internalBreakdownText(), "Internal breakdown")} disabled={!quoteReady}>
                     <Copy className="size-4" />
                     Internal
                   </Button>
-                  <Button variant="outline" onClick={printQuote}>
+                  <Button variant="outline" onClick={printQuote} disabled={!quoteReady}>
                     <Printer className="size-4" />
                     Print
                   </Button>

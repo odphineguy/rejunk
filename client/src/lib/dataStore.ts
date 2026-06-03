@@ -4,6 +4,7 @@ import type {
   Facility,
   FacilityAcceptanceFlags,
   FacilityType,
+  MaterialHandlingClass,
   LegacyFacilityPricing,
   MaterialCategory,
   MaterialPricingMode,
@@ -64,6 +65,16 @@ function derivePricing(row: FacilityRow): LegacyFacilityPricing {
   };
 }
 
+function defaultHandlingClass(materialCategory: MaterialCategory): MaterialHandlingClass {
+  if (["clean_concrete", "dirt", "rock", "brick", "clean_tile", "asphalt", "pavers", "heavy_clean_debris"].includes(materialCategory)) {
+    return "heavy_lowboy";
+  }
+  if (materialCategory === "green_waste") return "green_waste";
+  if (materialCategory === "mixed_c_and_d") return "mixed_demo";
+  if (materialCategory === "appliances" || materialCategory === "metal") return "metal_appliance";
+  return "standard_junk";
+}
+
 function facilityFromRow(row: FacilityRow): Facility {
   const facilityType = row.facility_type as FacilityType;
   return {
@@ -106,10 +117,18 @@ function facilityFromRow(row: FacilityRow): Facility {
 }
 
 function vehicleFromRow(row: VehicleRow): Vehicle {
+  const vehicleType = row.vehicle_type as VehicleType;
+  const heavyMaterialSuitable = vehicleType === "dump_trailer" ? true : vehicleType === "cargo_van" ? "conditional" : false;
+  const bedHeightClass = vehicleType === "dump_trailer" ? "low" : vehicleType === "box_truck" ? "high" : "medium";
+  const allowedHandlingClasses =
+    vehicleType === "box_truck"
+      ? (["standard_junk", "green_waste", "mixed_demo", "metal_appliance"] as const)
+      : (["standard_junk", "green_waste", "mixed_demo", "metal_appliance", "heavy_lowboy"] as const);
+
   return {
     id: row.id,
     vehicleName: row.vehicle_name,
-    vehicleType: row.vehicle_type as VehicleType,
+    vehicleType,
     usableCubicYards: row.usable_cubic_yards,
     maxPayloadLbs: row.max_payload_lbs,
     emptyWeightLbs: row.empty_weight_lbs ?? undefined,
@@ -122,6 +141,10 @@ function vehicleFromRow(row: VehicleRow): Vehicle {
     hasLiftgate: row.has_liftgate,
     hasDumpCapability: row.has_dump_capability,
     requiresTowVehicle: row.requires_tow_vehicle,
+    allowedHandlingClasses: [...allowedHandlingClasses],
+    bedHeightClass,
+    looseDebrisSuitable: vehicleType !== "box_truck",
+    heavyMaterialSuitable,
     notes: row.notes ?? undefined,
     isDefault: row.is_default,
     isActive: row.is_active,
@@ -129,6 +152,8 @@ function vehicleFromRow(row: VehicleRow): Vehicle {
 }
 
 function materialFromRow(row: MaterialRow): MaterialPricingRule {
+  const materialCategory = row.material_category as MaterialCategory;
+  const handlingClass = defaultHandlingClass(materialCategory);
   const range: [number, number] | undefined =
     row.density_range_min != null && row.density_range_max != null
       ? [row.density_range_min, row.density_range_max]
@@ -136,12 +161,15 @@ function materialFromRow(row: MaterialRow): MaterialPricingRule {
   return {
     id: row.id,
     materialName: row.material_name,
-    materialCategory: row.material_category as MaterialCategory,
+    materialCategory,
     defaultDensityLbsPerYard: row.default_density_lbs_per_yard,
     densityRangeLbsPerYard: range,
     pricingMode: row.pricing_mode as MaterialPricingMode,
+    handlingClass,
     requiresWeightOverride: row.requires_weight_override,
     preferredFacilityTypes: row.preferred_facility_types as FacilityType[],
+    includedTons: handlingClass === "heavy_lowboy" ? (materialCategory === "heavy_clean_debris" ? 3 : 4) : undefined,
+    extraTonRate: handlingClass === "heavy_lowboy" ? 95 : undefined,
     warningText: row.warning_text ?? undefined,
     laborDifficultyMultiplier: row.labor_difficulty_multiplier,
     disposalDifficultyMultiplier: row.disposal_difficulty_multiplier,

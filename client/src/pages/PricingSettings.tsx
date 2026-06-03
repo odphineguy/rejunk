@@ -25,6 +25,7 @@ import type {
   FacilityPriceType,
   FacilityType,
   MaterialCategory,
+  MaterialHandlingClass,
   MaterialPricingMode,
   MaterialPricingRule,
   PricingSettings,
@@ -45,6 +46,7 @@ const facilityTypes: FacilityType[] = [
 const priceTypes: FacilityPriceType[] = ["per_ton", "flat_fee", "per_item", "free", "payout"];
 const vehicleTypes: VehicleType[] = ["cargo_van", "box_truck", "dump_trailer", "pickup_truck", "passenger_van", "other"];
 const pricingModes: MaterialPricingMode[] = ["volume_based", "weight_based", "item_based", "hybrid", "payout", "excluded"];
+const handlingClasses: MaterialHandlingClass[] = ["standard_junk", "heavy_lowboy", "green_waste", "mixed_demo", "metal_appliance"];
 
 const materialCategories: MaterialCategory[] = [
   "household_junk",
@@ -58,6 +60,9 @@ const materialCategories: MaterialCategory[] = [
   "brick",
   "dirt",
   "rock",
+  "asphalt",
+  "pavers",
+  "heavy_clean_debris",
   "green_waste",
   "metal",
   "cardboard",
@@ -203,6 +208,10 @@ function newVehicle(): Vehicle {
     hasLiftgate: false,
     hasDumpCapability: false,
     requiresTowVehicle: false,
+    allowedHandlingClasses: ["standard_junk", "green_waste", "mixed_demo", "metal_appliance", "heavy_lowboy"],
+    bedHeightClass: "medium",
+    looseDebrisSuitable: true,
+    heavyMaterialSuitable: "conditional",
     notes: "",
     isDefault: false,
     isActive: true,
@@ -216,6 +225,7 @@ function newMaterialRule(): MaterialPricingRule {
     materialCategory: "household_junk",
     defaultDensityLbsPerYard: 150,
     pricingMode: "hybrid",
+    handlingClass: "standard_junk",
     requiresWeightOverride: false,
     preferredFacilityTypes: ["transfer_station"],
     warningText: "",
@@ -753,8 +763,28 @@ function MaterialEditor({ material: initial, onSave, onDelete }: { material: Mat
               </SelectContent>
             </Select>
           </Field>
+          <Field label="Handling class">
+            <Select value={material.handlingClass} onValueChange={(value) => update({ handlingClass: value as MaterialHandlingClass })}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {handlingClasses.map((handlingClass) => (
+                  <SelectItem key={handlingClass} value={handlingClass}>
+                    {labelize(handlingClass)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
           <Field label="Density lbs / yd3">
             <Input type="number" min="0" step="25" value={material.defaultDensityLbsPerYard} onChange={(event) => update({ defaultDensityLbsPerYard: numeric(event.target.value) })} />
+          </Field>
+          <Field label="Included tons">
+            <Input type="number" min="0" step="0.25" value={material.includedTons ?? 0} onChange={(event) => update({ includedTons: numeric(event.target.value) || undefined })} />
+          </Field>
+          <Field label="Extra ton rate">
+            <Input type="number" min="0" step="5" value={material.extraTonRate ?? 0} onChange={(event) => update({ extraTonRate: numeric(event.target.value) || undefined })} />
           </Field>
           <Field label="Labor multiplier">
             <Input type="number" min="0" step="0.05" value={material.laborDifficultyMultiplier} onChange={(event) => update({ laborDifficultyMultiplier: numeric(event.target.value, 1) })} />

@@ -19,6 +19,9 @@ export type MaterialCategory =
   | "brick"
   | "dirt"
   | "rock"
+  | "asphalt"
+  | "pavers"
+  | "heavy_clean_debris"
   | "green_waste"
   | "metal"
   | "cardboard"
@@ -41,6 +44,10 @@ export type MaterialPricingMode =
   | "hybrid"
   | "payout"
   | "excluded";
+
+export type MaterialHandlingClass = "standard_junk" | "heavy_lowboy" | "green_waste" | "mixed_demo" | "metal_appliance";
+
+export type BedHeightClass = "low" | "medium" | "high";
 
 export interface DisposalFacility {
   id: string;
@@ -109,6 +116,10 @@ export interface Vehicle {
   hasLiftgate: boolean;
   hasDumpCapability: boolean;
   requiresTowVehicle: boolean;
+  allowedHandlingClasses: MaterialHandlingClass[];
+  bedHeightClass: BedHeightClass;
+  looseDebrisSuitable: boolean;
+  heavyMaterialSuitable: boolean | "conditional";
   notes?: string;
   isDefault: boolean;
   isActive: boolean;
@@ -121,8 +132,11 @@ export interface MaterialPricingRule {
   defaultDensityLbsPerYard: number;
   densityRangeLbsPerYard?: [number, number];
   pricingMode: MaterialPricingMode;
+  handlingClass: MaterialHandlingClass;
   requiresWeightOverride: boolean;
   preferredFacilityTypes: FacilityType[];
+  includedTons?: number;
+  extraTonRate?: number;
   warningText?: string;
   laborDifficultyMultiplier: number;
   disposalDifficultyMultiplier: number;
@@ -265,6 +279,12 @@ export interface VehicleJobComparison {
   totalOperationalCost: number;
   estimatedProfit: number;
   payloadWarning?: string;
+  handlingClass?: MaterialHandlingClass;
+  includedTons?: number;
+  extraTons?: number;
+  extraTonCost?: number;
+  recommendedService?: string;
+  excludedFromRecommendation?: boolean;
   acceptedMaterial: boolean;
   pricingStale: boolean;
   warnings: string[];

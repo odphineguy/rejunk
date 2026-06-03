@@ -11,6 +11,8 @@ import type {
   FacilityRouteComparison,
   JobRouteEstimate,
   MaterialCategory,
+  MaterialHandlingClass,
+  MaterialPricingRule,
   PricingSettings,
   Vehicle,
   VehicleJobComparison,
@@ -22,6 +24,7 @@ interface RecommendationInput {
   selectedFacilityId?: string;
   selectedVehicleId?: string;
   materialType?: MaterialCategory;
+  materialRule?: MaterialPricingRule;
   cubicYards?: number;
   estimatedWeightLbs?: number;
   estimatedTons?: number;
@@ -38,6 +41,18 @@ function roundMoney(value: number) {
 
 function positive(value: number | undefined, fallback = 0) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function materialRuleForInput(input: RecommendationInput, settings: PricingSettings) {
+  return (
+    input.materialRule ??
+    settings.materialPricingRules.find((rule) => rule.materialCategory === input.materialType) ??
+    settings.materialPricingRules[0]
+  );
+}
+
+function handlingClassForInput(input: RecommendationInput, settings: PricingSettings): MaterialHandlingClass {
+  return materialRuleForInput(input, settings)?.handlingClass ?? "standard_junk";
 }
 
 function fullAddress(job: Job) {
@@ -64,10 +79,51 @@ function vehicleFuelCost(vehicle: Vehicle, miles: number | null, trips: number, 
   return (miles * trips * fuelPrice) / mpg;
 }
 
-function tripsRequired(vehicle: Vehicle, cubicYards: number, estimatedWeightLbs: number) {
-  const volumeTrips = Math.ceil(positive(cubicYards, 0) / positive(vehicle.usableCubicYards, 1));
+function heavyPlanningCapacity(vehicle: Vehicle) {
+  return vehicle.vehicleType === "cargo_van" ? Math.min(vehicle.usableCubicYards, 5) : vehicle.usableCubicYards;
+}
+
+function tripsRequired(vehicle: Vehicle, cubicYards: number, estimatedWeightLbs: number, handlingClass: MaterialHandlingClass) {
+  const planningCapacity = handlingClass === "heavy_lowboy" ? heavyPlanningCapacity(vehicle) : vehicle.usableCubicYards;
+  const volumeTrips = Math.ceil(positive(cubicYards, 0) / positive(planningCapacity, 1));
   const payloadTrips = Math.ceil(positive(estimatedWeightLbs, 0) / positive(vehicle.maxPayloadLbs, 1));
   return Math.max(1, volumeTrips, payloadTrips);
+}
+
+function isHeavyLowboyEligible(vehicle: Vehicle) {
+  if (vehicle.vehicleType === "box_truck" || vehicle.bedHeightClass === "high") return false;
+  if (vehicle.heavyMaterialSuitable === false) return false;
+  if (!vehicle.allowedHandlingClasses.includes("heavy_lowboy")) return false;
+  return vehicle.vehicleType === "dump_trailer" || vehicle.vehicleType === "cargo_van" || vehicle.heavyMaterialSuitable === true;
+}
+
+function vehicleIsEligible(vehicle: Vehicle, handlingClass: MaterialHandlingClass) {
+  if (handlingClass === "heavy_lowboy") return isHeavyLowboyEligible(vehicle);
+  return vehicle.allowedHandlingClasses.includes(handlingClass);
+}
+
+function lowboyPackageYards(cubicYards: number) {
+  return Math.max(5, Math.ceil(positive(cubicYards, 0) / 5) * 5);
+}
+
+function includedTonDetails(materialRule: MaterialPricingRule | undefined, estimatedTons: number, cubicYards: number) {
+  if (materialRule?.handlingClass !== "heavy_lowboy") {
+    return { includedTons: undefined, extraTons: undefined, extraTonCost: undefined };
+  }
+
+  const packageMultiplier = lowboyPackageYards(cubicYards) / 5;
+  const includedTons = positive(materialRule.includedTons, materialRule.materialCategory === "heavy_clean_debris" ? 3 : 4) * packageMultiplier;
+  const extraTons = Math.max(0, estimatedTons - includedTons);
+  const extraTonCost = extraTons * positive(materialRule.extraTonRate, 95);
+  return { includedTons, extraTons, extraTonCost };
+}
+
+function recommendedService(vehicle: Vehicle, trips: number, handlingClass: MaterialHandlingClass) {
+  if (handlingClass !== "heavy_lowboy") return undefined;
+  if (vehicle.vehicleType === "dump_trailer") return "dump trailer";
+  if (trips <= 1) return "1-trip heavy pickup";
+  if (trips === 2) return "2-trip heavy pickup";
+  return "manual review";
 }
 
 function warningsForFacility(facility: DisposalFacility, materialType: MaterialCategory | undefined, route: JobRouteEstimate) {
@@ -84,6 +140,7 @@ export function buildFacilityRouteComparisons(input: RecommendationInput, settin
   const estimatedTons = positive(input.estimatedTons, positive(input.estimatedWeightLbs, 0) / 2000);
   const fuelPrice = positive(input.fuelPricePerGallon, settings.defaults.fuelPricePerGallon);
   const vehicle = selectedVehicle;
+  const handlingClass = handlingClassForInput(input, settings);
 
   return settings.disposalFacilities
     .filter((facility) => facility.isActive)
@@ -91,7 +148,7 @@ export function buildFacilityRouteComparisons(input: RecommendationInput, settin
       const route = routeForFacility(input, facility);
       const acceptedMaterial = facilityAcceptsMaterial(facility, input.materialType) && !facilityRejectsMaterial(facility, input.materialType);
       const pricingStale = facilityPricingIsStale(facility);
-      const trips = vehicle ? tripsRequired(vehicle, positive(input.cubicYards, 0), positive(input.estimatedWeightLbs, 0)) : 1;
+      const trips = vehicle ? tripsRequired(vehicle, positive(input.cubicYards, 0), positive(input.estimatedWeightLbs, 0), handlingClass) : 1;
       const disposalCost = estimateFacilityDisposalCost(facility, { estimatedTons } as Job, trips);
       const fuelCost = vehicle ? vehicleFuelCost(vehicle, route.roundTripMiles, trips, fuelPrice) : 0;
       const vehicleCost = vehicle ? vehicleMilesCost(vehicle, route.roundTripMiles, trips) : 0;
@@ -130,15 +187,19 @@ export function buildVehicleJobComparisons(
   const estimatedTons = positive(input.estimatedTons, estimatedWeightLbs / 2000);
   const cubicYards = positive(input.cubicYards, 0);
   const quotedAmount = positive(input.quotedAmount, 0);
+  const materialRule = materialRuleForInput(input, settings);
+  const handlingClass = materialRule?.handlingClass ?? "standard_junk";
+  const includedTons = includedTonDetails(materialRule, estimatedTons, cubicYards);
 
   return settings.vehicles
     .filter((vehicle) => vehicle.isActive)
     .map((vehicle) => {
-      const trips = tripsRequired(vehicle, cubicYards, estimatedWeightLbs);
+      const eligible = vehicleIsEligible(vehicle, handlingClass);
+      const trips = tripsRequired(vehicle, cubicYards, estimatedWeightLbs, handlingClass);
       const disposalCost = estimateFacilityDisposalCost(selectedFacility, { estimatedTons } as Job, trips);
       const fuelCost = vehicleFuelCost(vehicle, route.roundTripMiles, trips, fuelPrice);
       const vehicleCost = vehicleMilesCost(vehicle, route.roundTripMiles, trips);
-      const totalOperationalCost = disposalCost + fuelCost + vehicleCost;
+      const totalOperationalCost = disposalCost + fuelCost + vehicleCost + (includedTons.extraTonCost ?? 0);
       const payloadWarning =
         estimatedWeightLbs > vehicle.maxPayloadLbs
           ? "Payload exceeded"
@@ -146,6 +207,15 @@ export function buildVehicleJobComparisons(
             ? "Near payload limit"
             : undefined;
       const warnings = [
+        ...(handlingClass === "heavy_lowboy" && vehicle.vehicleType === "box_truck"
+          ? ["Box truck excluded: heavy loose debris should be handled with low-load equipment or split van/trailer trips."]
+          : []),
+        ...(handlingClass === "heavy_lowboy" && vehicle.bedHeightClass === "high" && vehicle.vehicleType !== "box_truck"
+          ? ["High-bed vehicle excluded for dense loose debris."]
+          : []),
+        ...(handlingClass === "heavy_lowboy" && vehicle.vehicleType === "cargo_van"
+          ? ["Van fallback uses 5 yd3 per trip for heavy material planning."]
+          : []),
         ...(payloadWarning ? [payloadWarning] : []),
         ...(trips > 1 ? [`${trips} trips required`] : []),
         ...(route.roundTripMiles == null ? ["Route distance unavailable"] : []),
@@ -172,6 +242,12 @@ export function buildVehicleJobComparisons(
         totalOperationalCost: roundMoney(totalOperationalCost),
         estimatedProfit: roundMoney(quotedAmount - totalOperationalCost),
         payloadWarning,
+        handlingClass,
+        includedTons: includedTons.includedTons,
+        extraTons: includedTons.extraTons,
+        extraTonCost: includedTons.extraTonCost ? roundMoney(includedTons.extraTonCost) : includedTons.extraTonCost,
+        recommendedService: recommendedService(vehicle, trips, handlingClass),
+        excludedFromRecommendation: !eligible,
         acceptedMaterial: facilityAcceptsMaterial(selectedFacility, input.materialType),
         pricingStale: facilityPricingIsStale(selectedFacility),
         warnings,
@@ -179,8 +255,19 @@ export function buildVehicleJobComparisons(
     });
 }
 
-function recommendationReason(selected?: FacilityRouteComparison, recommended?: FacilityRouteComparison) {
+function recommendationReason(
+  selected: FacilityRouteComparison | undefined,
+  recommended: FacilityRouteComparison | undefined,
+  handlingClass: MaterialHandlingClass,
+  recommendedVehicle?: VehicleJobComparison,
+) {
   if (!recommended) return "No active facility recommendation is available.";
+  if (handlingClass === "heavy_lowboy") {
+    if (recommendedVehicle?.vehicleType === "dump_trailer") {
+      return "Lowboy-style heavy load: dump trailer preferred for dense loose debris because it keeps loading height low and reduces overweight risk.";
+    }
+    return "Box truck excluded: heavy loose debris should be handled with low-load equipment or split van/trailer trips.";
+  }
   if (!selected) return `${recommended.facilityName} has the lowest available operational cost.`;
   if (!selected.acceptedMaterial && recommended.acceptedMaterial) return "Recommended facility accepts this material while the selected facility does not.";
   if (selected.pricingStale && !recommended.pricingStale) return "Recommended facility has fresher pricing and a lower operating cost.";
@@ -197,6 +284,7 @@ export function buildBestRecommendation(
   vehicleComparisons: VehicleJobComparison[];
 } {
   const facilityComparisons = buildFacilityRouteComparisons(input, settings);
+  const handlingClass = handlingClassForInput(input, settings);
   const compatible = facilityComparisons.filter((comparison) => comparison.acceptedMaterial);
   const rankedFacilities = (compatible.length ? compatible : facilityComparisons).slice().sort((a, b) => {
     if (a.acceptedMaterial !== b.acceptedMaterial) return a.acceptedMaterial ? -1 : 1;
@@ -207,13 +295,20 @@ export function buildBestRecommendation(
   const selectedFacility =
     facilityComparisons.find((comparison) => comparison.facilityId === input.selectedFacilityId) ?? recommendedFacility;
   const vehicleComparisons = buildVehicleJobComparisons(input, settings, recommendedFacility);
-  const recommendedVehicle = vehicleComparisons.slice().sort((a, b) => {
+  const eligibleVehicleComparisons = vehicleComparisons.filter((comparison) => !comparison.excludedFromRecommendation);
+  const rankedVehicles = (eligibleVehicleComparisons.length ? eligibleVehicleComparisons : vehicleComparisons).slice().sort((a, b) => {
+    if (handlingClass === "heavy_lowboy") {
+      const aDump = a.vehicleType === "dump_trailer" ? 0 : 1;
+      const bDump = b.vehicleType === "dump_trailer" ? 0 : 1;
+      if (aDump !== bDump) return aDump - bDump;
+    }
     const aSafe = a.payloadWarning === "Payload exceeded" ? 1 : 0;
     const bSafe = b.payloadWarning === "Payload exceeded" ? 1 : 0;
     if (aSafe !== bSafe) return aSafe - bSafe;
     if (a.tripsRequired !== b.tripsRequired) return a.tripsRequired - b.tripsRequired;
     return b.estimatedProfit - a.estimatedProfit;
-  })[0];
+  });
+  const recommendedVehicle = rankedVehicles[0];
   const selectedVehicle =
     vehicleComparisons.find((comparison) => comparison.vehicleId === input.selectedVehicleId) ?? recommendedVehicle;
 
@@ -248,7 +343,7 @@ export function buildBestRecommendation(
       estimatedSavings: roundMoney(selectedTotalCost - recommendedTotalCost),
       distanceDifferenceMiles,
       driveTimeDifferenceMinutes,
-      reason: recommendationReason(selectedFacility, recommendedFacility),
+      reason: recommendationReason(selectedFacility, recommendedFacility, handlingClass, recommendedVehicle),
       facilityComparison: recommendedFacility,
       vehicleComparison: recommendedVehicle,
       warnings: [...recommendedFacility.warnings, ...(recommendedVehicle?.warnings ?? [])],
@@ -262,6 +357,7 @@ export function recommendationInputFromJob(job: Job, settings: PricingSettings):
     selectedFacilityId: job.facilityId,
     selectedVehicleId: job.vehicleId,
     materialType: job.materialType,
+    materialRule: settings.materialPricingRules.find((rule) => rule.materialCategory === job.materialType),
     cubicYards: job.cubicYards,
     estimatedWeightLbs: job.estimatedWeightLbs,
     estimatedTons: job.estimatedTons,

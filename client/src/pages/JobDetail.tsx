@@ -192,6 +192,7 @@ export default function JobDetail() {
     [job?.vehicleId, routeRecommendation],
   );
   const recommendedVehicleComparison = routeRecommendation?.recommendation?.vehicleComparison;
+  const heavyMode = recommendedVehicleComparison?.handlingClass === "heavy_lowboy" || selectedVehicleComparison?.handlingClass === "heavy_lowboy";
   const trailerAdvantage = useMemo(() => {
     if (!selectedVehicleComparison || !recommendedVehicleComparison || recommendedVehicleComparison.vehicleType !== "dump_trailer") return null;
     const profitGain = recommendedVehicleComparison.estimatedProfit - selectedVehicleComparison.estimatedProfit;
@@ -550,6 +551,13 @@ export default function JobDetail() {
                   </div>
                 )}
 
+                {heavyMode && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <div className="font-semibold">Lowboy-style heavy load</div>
+                    <p className="mt-1">10 yd3 roll-off equivalent ≈ 2 van trips. Dense material: volume may fit, but weight controls legality.</p>
+                  </div>
+                )}
+
                 <div className="grid gap-3 md:grid-cols-2">
                   <VehicleCostCard title="Selected" comparison={selectedVehicleComparison} fallbackName={job.vehicleName ?? "Not selected"} />
                   <VehicleCostCard title="Recommended" comparison={recommendedVehicleComparison} fallbackName="No recommendation" />
@@ -755,6 +763,10 @@ function VehicleCostCard({
       <div className="mt-3 grid gap-2">
         <DetailRow label="Capacity" value={`${comparison?.cubicYardCapacity ?? 0} yd3 / ${(comparison?.payloadCapacityLbs ?? 0).toLocaleString()} lb`} />
         <DetailRow label="Trips" value={String(comparison?.tripsRequired ?? "—")} />
+        {comparison?.handlingClass === "heavy_lowboy" && <DetailRow label="Service" value={comparison.recommendedService ?? "manual review"} />}
+        {comparison?.includedTons != null && <DetailRow label="Included tons" value={comparison.includedTons.toFixed(2)} />}
+        {comparison?.extraTons != null && <DetailRow label="Extra tons" value={comparison.extraTons.toFixed(2)} />}
+        {comparison?.extraTonCost != null && <DetailRow label="Extra ton cost" value={money(comparison.extraTonCost)} />}
         <DetailRow label="MPG / mile cost" value={`${comparison?.mpg ?? 0} mpg / ${money(comparison?.operatingCostPerMile)}`} />
         <DetailRow label="Fuel" value={money(comparison?.fuelCost)} />
         <DetailRow label="Vehicle miles" value={money(comparison?.vehicleCost)} />
