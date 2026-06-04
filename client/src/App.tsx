@@ -15,6 +15,7 @@ import Invoices from "./pages/Invoices";
 import JobDetail, { NewJob } from "./pages/JobDetail";
 import Jobs from "./pages/Jobs";
 import Messages from "./pages/Messages";
+import Payments from "./pages/Payments";
 import PricingSettings from "./pages/PricingSettings";
 import Schedule from "./pages/Schedule";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
@@ -40,6 +41,7 @@ function Router() {
       <Route path={"/invoices/new"} component={Invoices} />
       <Route path={"/invoices/:invoiceId"} component={Invoices} />
       <Route path={"/invoices"} component={Invoices} />
+      <Route path={"/payments"} component={Payments} />
       <Route path={"/events/new"} component={Events} />
       <Route path={"/events/:eventId"} component={Events} />
       <Route path={"/events"} component={Events} />

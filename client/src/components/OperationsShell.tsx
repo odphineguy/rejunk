@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Bell,
+  Banknote,
   BriefcaseBusiness,
   Calculator,
   CalendarDays,
@@ -36,6 +37,7 @@ import { employeeName, getEmployees } from "@/lib/employeeStorage";
 import { eventAddress, getEvents } from "@/lib/eventStorage";
 import { getInvoices } from "@/lib/invoiceStorage";
 import { getJobs } from "@/lib/jobStorage";
+import { getPayments } from "@/lib/paymentStorage";
 import { cn } from "@/lib/utils";
 import { loadSavedEstimates } from "@/utils/pricingStorage";
 import type { ClientRecord } from "@/types/clients";
@@ -43,6 +45,7 @@ import type { EmployeeRecord } from "@/types/employees";
 import type { EventRecord } from "@/types/events";
 import type { InvoiceRecord } from "@/types/invoices";
 import type { Job } from "@/types/jobs";
+import type { PaymentRecord } from "@/types/payments";
 
 const navGroups = [
   {
@@ -62,6 +65,7 @@ const navGroups = [
       { href: "/schedule", label: "Schedule", icon: CalendarDays },
       { href: "/events", label: "Events", icon: CalendarPlus },
       { href: "/invoices", label: "Invoices", icon: FileText },
+      { href: "/payments", label: "Payments", icon: Banknote },
       { href: "/employees", label: "Employees", icon: BriefcaseBusiness },
     ],
   },
@@ -127,6 +131,16 @@ function eventRows(events: EventRecord[]) {
     title: event.title,
     subtitle: [formatSearchDate(event.startDate), eventAddress(event)].filter(Boolean).join(", "),
     href: `/events/${event.id}`,
+  }));
+}
+
+function paymentRows(payments: PaymentRecord[]) {
+  const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+  return payments.map((payment) => ({
+    id: payment.id,
+    title: payment.customerName,
+    subtitle: [payment.method, money.format(payment.baseAmount + payment.tip), payment.invoiceId ? `Invoice ${payment.invoiceId}` : undefined].filter(Boolean).join(", "),
+    href: "/payments",
   }));
 }
 
@@ -265,6 +279,7 @@ function GlobalSearch() {
   const [employees, setEmployees] = useState<EmployeeRecord[]>(() => getEmployees());
   const [events, setEvents] = useState<EventRecord[]>(() => getEvents());
   const [invoices, setInvoices] = useState<InvoiceRecord[]>(() => getInvoices());
+  const [payments, setPayments] = useState<PaymentRecord[]>(() => getPayments());
   const [estimates, setEstimates] = useState(() => loadSavedEstimates());
   const trimmedQuery = query.trim().toLowerCase();
 
@@ -275,6 +290,7 @@ function GlobalSearch() {
       setEmployees(getEmployees());
       setEvents(getEvents());
       setInvoices(getInvoices());
+      setPayments(getPayments());
       setEstimates(loadSavedEstimates());
     };
     window.addEventListener("jobs-updated", refresh);
@@ -282,6 +298,7 @@ function GlobalSearch() {
     window.addEventListener("employees-updated", refresh);
     window.addEventListener("events-updated", refresh);
     window.addEventListener("invoices-updated", refresh);
+    window.addEventListener("payments-updated", refresh);
     window.addEventListener("pricing-settings-updated", refresh);
     return () => {
       window.removeEventListener("jobs-updated", refresh);
@@ -289,6 +306,7 @@ function GlobalSearch() {
       window.removeEventListener("employees-updated", refresh);
       window.removeEventListener("events-updated", refresh);
       window.removeEventListener("invoices-updated", refresh);
+      window.removeEventListener("payments-updated", refresh);
       window.removeEventListener("pricing-settings-updated", refresh);
     };
   }, []);
@@ -334,6 +352,10 @@ function GlobalSearch() {
         href: `/invoices/${invoice.id}`,
       }));
 
+    const paymentResults = paymentRows(payments)
+      .filter((payment) => matches([payment.title, payment.subtitle]))
+      .slice(0, 3);
+
     const estimateRows = estimates
       .filter((estimate) => matches([estimate.customerName, estimate.loadLabel, estimate.jobAddress, estimate.finalQuote]))
       .slice(0, 3)
@@ -350,9 +372,10 @@ function GlobalSearch() {
       { label: "Events", href: "/events", icon: CalendarPlus, items: eventResults },
       { label: "Jobs", href: "/jobs", icon: ClipboardList, items: jobRows },
       { label: "Invoices", href: "/invoices", icon: FileText, items: invoiceRows },
+      { label: "Payments", href: "/payments", icon: Banknote, items: paymentResults },
       { label: "Estimates", href: "/estimate-builder", icon: Calculator, items: estimateRows },
     ].filter((group) => group.items.length > 0);
-  }, [clients, employees, events, estimates, invoices, jobs, trimmedQuery]);
+  }, [clients, employees, events, estimates, invoices, jobs, payments, trimmedQuery]);
 
   const resultCount = groups.reduce((sum, group) => sum + group.items.length, 0);
 
