@@ -8,6 +8,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import ClientsLeads from "./pages/ClientsLeads";
 import Dashboard from "./pages/Dashboard";
 import EstimateBuilder from "./pages/EstimateBuilder";
+import Employees from "./pages/Employees";
 import Home from "./pages/Home";
 import Invoices from "./pages/Invoices";
 import JobDetail, { NewJob } from "./pages/JobDetail";
@@ -32,7 +33,9 @@ function Router() {
       <Route path={"/clients/new"} component={ClientsLeads} />
       <Route path={"/clients/:clientId"} component={ClientsLeads} />
       <Route path={"/clients"} component={ClientsLeads} />
-      <Route path={"/employees"}>{() => <PlaceholderPage title="Employees" />}</Route>
+      <Route path={"/employees/new"} component={Employees} />
+      <Route path={"/employees/:employeeId"} component={Employees} />
+      <Route path={"/employees"} component={Employees} />
       <Route path={"/invoices/new"} component={Invoices} />
       <Route path={"/invoices/:invoiceId"} component={Invoices} />
       <Route path={"/invoices"} component={Invoices} />

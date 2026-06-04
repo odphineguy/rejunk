@@ -32,11 +32,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { clientName, getClients } from "@/lib/clientStorage";
+import { employeeName, getEmployees } from "@/lib/employeeStorage";
 import { getInvoices } from "@/lib/invoiceStorage";
 import { getJobs } from "@/lib/jobStorage";
 import { cn } from "@/lib/utils";
 import { loadSavedEstimates } from "@/utils/pricingStorage";
 import type { ClientRecord } from "@/types/clients";
+import type { EmployeeRecord } from "@/types/employees";
 import type { InvoiceRecord } from "@/types/invoices";
 import type { Job } from "@/types/jobs";
 
@@ -69,7 +71,7 @@ const navGroups = [
 const actionItems = [
   { href: "/messages", label: "Message", icon: MessageSquare },
   { href: "/clients/new", label: "Client or Lead", icon: UsersRound },
-  { href: "/employees", label: "Employee", icon: UserPlus },
+  { href: "/employees/new", label: "Employee", icon: UserPlus },
   { href: "/jobs/new", label: "Job", icon: Wrench },
   { href: "/invoices/new", label: "Invoice", icon: FileText },
   { href: "/estimate-builder", label: "Estimate", icon: Calculator },
@@ -104,6 +106,15 @@ function clientRows(clients: ClientRecord[]) {
     title: clientName(client),
     subtitle: [client.phone, client.email].filter(Boolean).join(", ") || [client.company, client.city].filter(Boolean).join(", "),
     href: `/clients/${client.id}`,
+  }));
+}
+
+function employeeRows(employees: EmployeeRecord[]) {
+  return employees.map((employee) => ({
+    id: employee.id,
+    title: employeeName(employee),
+    subtitle: [employee.email, employee.phone, employee.role].filter(Boolean).join(", "),
+    href: `/employees/${employee.id}`,
   }));
 }
 
@@ -239,6 +250,7 @@ function GlobalSearch() {
   const [query, setQuery] = useState("");
   const [jobs, setJobs] = useState<Job[]>(() => getJobs());
   const [clients, setClients] = useState<ClientRecord[]>(() => getClients());
+  const [employees, setEmployees] = useState<EmployeeRecord[]>(() => getEmployees());
   const [invoices, setInvoices] = useState<InvoiceRecord[]>(() => getInvoices());
   const [estimates, setEstimates] = useState(() => loadSavedEstimates());
   const trimmedQuery = query.trim().toLowerCase();
@@ -247,16 +259,19 @@ function GlobalSearch() {
     const refresh = () => {
       setJobs(getJobs());
       setClients(getClients());
+      setEmployees(getEmployees());
       setInvoices(getInvoices());
       setEstimates(loadSavedEstimates());
     };
     window.addEventListener("jobs-updated", refresh);
     window.addEventListener("clients-updated", refresh);
+    window.addEventListener("employees-updated", refresh);
     window.addEventListener("invoices-updated", refresh);
     window.addEventListener("pricing-settings-updated", refresh);
     return () => {
       window.removeEventListener("jobs-updated", refresh);
       window.removeEventListener("clients-updated", refresh);
+      window.removeEventListener("employees-updated", refresh);
       window.removeEventListener("invoices-updated", refresh);
       window.removeEventListener("pricing-settings-updated", refresh);
     };
@@ -273,6 +288,10 @@ function GlobalSearch() {
 
     const clientResults = clientRows(clients)
       .filter((client) => matches([client.title, client.subtitle]))
+      .slice(0, 4);
+
+    const employeeResults = employeeRows(employees)
+      .filter((employee) => matches([employee.title, employee.subtitle]))
       .slice(0, 4);
 
     const jobRows = jobs
@@ -307,11 +326,12 @@ function GlobalSearch() {
 
     return [
       { label: "Clients", href: "/clients", icon: UsersRound, items: clientResults },
+      { label: "Employees", href: "/employees", icon: BriefcaseBusiness, items: employeeResults },
       { label: "Jobs", href: "/jobs", icon: ClipboardList, items: jobRows },
       { label: "Invoices", href: "/invoices", icon: FileText, items: invoiceRows },
       { label: "Estimates", href: "/estimate-builder", icon: Calculator, items: estimateRows },
     ].filter((group) => group.items.length > 0);
-  }, [clients, estimates, invoices, jobs, trimmedQuery]);
+  }, [clients, employees, estimates, invoices, jobs, trimmedQuery]);
 
   const resultCount = groups.reduce((sum, group) => sum + group.items.length, 0);
 
@@ -371,7 +391,7 @@ function GlobalSearch() {
               <div className="border-t border-border pt-3 text-xs text-[#7180a8]">{resultCount} total results</div>
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">No clients, jobs, invoices, or estimates match that search.</div>
+            <div className="text-sm text-muted-foreground">No clients, employees, jobs, invoices, or estimates match that search.</div>
           )}
         </div>
       )}
