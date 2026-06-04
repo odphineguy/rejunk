@@ -9,6 +9,7 @@ import ClientsLeads from "./pages/ClientsLeads";
 import Dashboard from "./pages/Dashboard";
 import EstimateBuilder from "./pages/EstimateBuilder";
 import Employees from "./pages/Employees";
+import Events from "./pages/Events";
 import Home from "./pages/Home";
 import Invoices from "./pages/Invoices";
 import JobDetail, { NewJob } from "./pages/JobDetail";
@@ -39,7 +40,9 @@ function Router() {
       <Route path={"/invoices/new"} component={Invoices} />
       <Route path={"/invoices/:invoiceId"} component={Invoices} />
       <Route path={"/invoices"} component={Invoices} />
-      <Route path={"/events"}>{() => <PlaceholderPage title="Events" />}</Route>
+      <Route path={"/events/new"} component={Events} />
+      <Route path={"/events/:eventId"} component={Events} />
+      <Route path={"/events"} component={Events} />
       <Route path={"/settings"} component={PricingSettings} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}

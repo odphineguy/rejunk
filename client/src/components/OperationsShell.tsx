@@ -33,12 +33,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { clientName, getClients } from "@/lib/clientStorage";
 import { employeeName, getEmployees } from "@/lib/employeeStorage";
+import { eventAddress, getEvents } from "@/lib/eventStorage";
 import { getInvoices } from "@/lib/invoiceStorage";
 import { getJobs } from "@/lib/jobStorage";
 import { cn } from "@/lib/utils";
 import { loadSavedEstimates } from "@/utils/pricingStorage";
 import type { ClientRecord } from "@/types/clients";
 import type { EmployeeRecord } from "@/types/employees";
+import type { EventRecord } from "@/types/events";
 import type { InvoiceRecord } from "@/types/invoices";
 import type { Job } from "@/types/jobs";
 
@@ -58,6 +60,7 @@ const navGroups = [
       { href: "/map", label: "Map Facility", icon: MapIcon },
       { href: "/estimate-builder", label: "Estimates", icon: Calculator },
       { href: "/schedule", label: "Schedule", icon: CalendarDays },
+      { href: "/events", label: "Events", icon: CalendarPlus },
       { href: "/invoices", label: "Invoices", icon: FileText },
       { href: "/employees", label: "Employees", icon: BriefcaseBusiness },
     ],
@@ -75,7 +78,7 @@ const actionItems = [
   { href: "/jobs/new", label: "Job", icon: Wrench },
   { href: "/invoices/new", label: "Invoice", icon: FileText },
   { href: "/estimate-builder", label: "Estimate", icon: Calculator },
-  { href: "/events", label: "Event", icon: CalendarPlus },
+  { href: "/events/new", label: "Event", icon: CalendarPlus },
 ];
 
 type SearchGroup = {
@@ -115,6 +118,15 @@ function employeeRows(employees: EmployeeRecord[]) {
     title: employeeName(employee),
     subtitle: [employee.email, employee.phone, employee.role].filter(Boolean).join(", "),
     href: `/employees/${employee.id}`,
+  }));
+}
+
+function eventRows(events: EventRecord[]) {
+  return events.map((event) => ({
+    id: event.id,
+    title: event.title,
+    subtitle: [formatSearchDate(event.startDate), eventAddress(event)].filter(Boolean).join(", "),
+    href: `/events/${event.id}`,
   }));
 }
 
@@ -251,6 +263,7 @@ function GlobalSearch() {
   const [jobs, setJobs] = useState<Job[]>(() => getJobs());
   const [clients, setClients] = useState<ClientRecord[]>(() => getClients());
   const [employees, setEmployees] = useState<EmployeeRecord[]>(() => getEmployees());
+  const [events, setEvents] = useState<EventRecord[]>(() => getEvents());
   const [invoices, setInvoices] = useState<InvoiceRecord[]>(() => getInvoices());
   const [estimates, setEstimates] = useState(() => loadSavedEstimates());
   const trimmedQuery = query.trim().toLowerCase();
@@ -260,18 +273,21 @@ function GlobalSearch() {
       setJobs(getJobs());
       setClients(getClients());
       setEmployees(getEmployees());
+      setEvents(getEvents());
       setInvoices(getInvoices());
       setEstimates(loadSavedEstimates());
     };
     window.addEventListener("jobs-updated", refresh);
     window.addEventListener("clients-updated", refresh);
     window.addEventListener("employees-updated", refresh);
+    window.addEventListener("events-updated", refresh);
     window.addEventListener("invoices-updated", refresh);
     window.addEventListener("pricing-settings-updated", refresh);
     return () => {
       window.removeEventListener("jobs-updated", refresh);
       window.removeEventListener("clients-updated", refresh);
       window.removeEventListener("employees-updated", refresh);
+      window.removeEventListener("events-updated", refresh);
       window.removeEventListener("invoices-updated", refresh);
       window.removeEventListener("pricing-settings-updated", refresh);
     };
@@ -292,6 +308,10 @@ function GlobalSearch() {
 
     const employeeResults = employeeRows(employees)
       .filter((employee) => matches([employee.title, employee.subtitle]))
+      .slice(0, 4);
+
+    const eventResults = eventRows(events)
+      .filter((event) => matches([event.title, event.subtitle]))
       .slice(0, 4);
 
     const jobRows = jobs
@@ -327,11 +347,12 @@ function GlobalSearch() {
     return [
       { label: "Clients", href: "/clients", icon: UsersRound, items: clientResults },
       { label: "Employees", href: "/employees", icon: BriefcaseBusiness, items: employeeResults },
+      { label: "Events", href: "/events", icon: CalendarPlus, items: eventResults },
       { label: "Jobs", href: "/jobs", icon: ClipboardList, items: jobRows },
       { label: "Invoices", href: "/invoices", icon: FileText, items: invoiceRows },
       { label: "Estimates", href: "/estimate-builder", icon: Calculator, items: estimateRows },
     ].filter((group) => group.items.length > 0);
-  }, [clients, employees, estimates, invoices, jobs, trimmedQuery]);
+  }, [clients, employees, events, estimates, invoices, jobs, trimmedQuery]);
 
   const resultCount = groups.reduce((sum, group) => sum + group.items.length, 0);
 
@@ -391,7 +412,7 @@ function GlobalSearch() {
               <div className="border-t border-border pt-3 text-xs text-[#7180a8]">{resultCount} total results</div>
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">No clients, employees, jobs, invoices, or estimates match that search.</div>
+            <div className="text-sm text-muted-foreground">No clients, employees, events, jobs, invoices, or estimates match that search.</div>
           )}
         </div>
       )}
