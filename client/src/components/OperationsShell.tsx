@@ -73,7 +73,7 @@ const navGroups = [
   },
   {
     label: "Admin",
-    items: [{ href: "/settings", label: "Pricing Settings", icon: Settings }],
+    items: [{ href: "/settings", label: "Settings", icon: Settings }],
   },
 ];
 

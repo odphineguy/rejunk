@@ -17,8 +17,8 @@ import Jobs from "./pages/Jobs";
 import Messages from "./pages/Messages";
 import Payments from "./pages/Payments";
 import Pricebook from "./pages/Pricebook";
-import PricingSettings from "./pages/PricingSettings";
 import Schedule from "./pages/Schedule";
+import Settings from "./pages/Settings";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 
 
@@ -47,7 +47,7 @@ function Router() {
       <Route path={"/events/new"} component={Events} />
       <Route path={"/events/:eventId"} component={Events} />
       <Route path={"/events"} component={Events} />
-      <Route path={"/settings"} component={PricingSettings} />
+      <Route path={"/settings"} component={Settings} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />
