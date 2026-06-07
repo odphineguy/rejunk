@@ -9,6 +9,8 @@ import type {
   DriverProfile,
   DriverTodayData,
   JobActivity,
+  JobDisposalEvent,
+  JobDisposalEventStatus,
   JobIssue,
   JobIssueSeverity,
   JobIssueType,
@@ -31,6 +33,7 @@ type OperationalCache = {
   items: JobItem[];
   activity: JobActivity[];
   photos: JobPhoto[];
+  disposalEvents?: JobDisposalEvent[];
   messages: JobMessage[];
   issues: JobIssue[];
 };
@@ -40,6 +43,7 @@ const emptyOperationalCache = (): OperationalCache => ({
   items: [],
   activity: [],
   photos: [],
+  disposalEvents: [],
   messages: [],
   issues: [],
 });
@@ -119,16 +123,22 @@ function defaultStopForJob(job: Job): JobStop {
 }
 
 function defaultDisposalStopForJob(job: Job): JobStop | null {
-  if (!job.facilityName) return null;
+  return null;
+}
+
+function defaultDisposalEventForJob(job: Job): JobDisposalEvent | null {
+  if (!job.facilityName && !job.facilityId) return null;
   const now = new Date().toISOString();
   return {
-    id: `stop-${job.id}-disposal`,
+    id: `disposal-${job.id}-1`,
     jobId: job.id,
-    stopOrder: 2,
-    stopType: "disposal",
-    name: job.facilityName,
-    status: "pending",
-    instructions: "Use dispatch-approved disposal facility. Upload receipt photo if available.",
+    facilityId: job.facilityId,
+    facilityName: job.facilityName,
+    materialType: job.materialName ?? job.materialType,
+    sequenceNumber: 1,
+    status: "planned",
+    planned: true,
+    notes: "Dispatch-planned disposal trip. Facility may be reassigned by dispatch.",
     createdAt: job.createdAt ?? now,
     updatedAt: job.updatedAt ?? now,
   };
@@ -149,7 +159,6 @@ function defaultItemForJob(job: Job, stopId: string): JobItem {
     heavy: (job.estimatedWeightLbs ?? 0) >= 700,
     disassemblyRequired: false,
     reassemblyRequired: false,
-    destinationStopId: job.facilityName ? `stop-${job.id}-disposal` : undefined,
     instructions: job.notes,
     status: toDriverStatus(job.status) === "completed" ? "completed" : "pending",
     createdAt: job.createdAt ?? now,
@@ -162,11 +171,15 @@ function ensureOperationalRows(job: Job, cache: OperationalCache) {
   const stops = existingStops.length > 0 ? existingStops : [defaultStopForJob(job), defaultDisposalStopForJob(job)].filter(Boolean) as JobStop[];
   const existingItems = cache.items.filter((item) => item.jobId === job.id);
   const items = existingItems.length > 0 ? existingItems : [defaultItemForJob(job, stops[0].id)];
+  const existingDisposalEvents = (cache.disposalEvents ?? []).filter((event) => event.jobId === job.id);
+  const defaultDisposal = defaultDisposalEventForJob(job);
+  const disposalEvents = existingDisposalEvents.length > 0 ? existingDisposalEvents : defaultDisposal ? [defaultDisposal] : [];
   return {
     stops: stops.sort((a, b) => a.stopOrder - b.stopOrder),
     items,
     activity: cache.activity.filter((activity) => activity.jobId === job.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     photos: cache.photos.filter((photo) => photo.jobId === job.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    disposalEvents: disposalEvents.sort((a, b) => a.sequenceNumber - b.sequenceNumber),
     messages: cache.messages.filter((message) => message.jobId === job.id).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
     issues: cache.issues.filter((issue) => issue.jobId === job.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
   };
@@ -233,12 +246,13 @@ export async function loadDriverToday(): Promise<DriverTodayData> {
   if (supabase && await ensureSession()) {
     const { data, error } = await (supabase as any).rpc("get_driver_today");
     if (!error && Array.isArray(data)) {
-      const remoteJobs = data.map((row: { job: Job; stops?: JobStop[]; items?: JobItem[]; activity?: JobActivity[]; photos?: JobPhoto[]; messages?: JobMessage[]; issues?: JobIssue[] }) => {
+      const remoteJobs = data.map((row: { job: Job; stops?: JobStop[]; items?: JobItem[]; activity?: JobActivity[]; photos?: JobPhoto[]; disposalEvents?: JobDisposalEvent[]; messages?: JobMessage[]; issues?: JobIssue[] }) => {
         const mergedCache: OperationalCache = {
           stops: row.stops ?? [],
           items: row.items ?? [],
           activity: row.activity ?? [],
           photos: row.photos ?? [],
+          disposalEvents: row.disposalEvents ?? [],
           messages: row.messages ?? [],
           issues: row.issues ?? [],
         };
@@ -267,7 +281,7 @@ export async function getDriverJob(jobId: string): Promise<DriverJob | null> {
   return toDriverJob(job, readJson(OPERATIONAL_CACHE_KEY, emptyOperationalCache()), driver);
 }
 
-function upsertOperational<K extends keyof OperationalCache>(key: K, row: OperationalCache[K][number]) {
+function upsertOperational<K extends keyof OperationalCache>(key: K, row: any) {
   const cache = readJson(OPERATIONAL_CACHE_KEY, emptyOperationalCache());
   const list = cache[key] as Array<{ id: string }>;
   const next = { ...cache, [key]: [row, ...list.filter((item) => item.id !== row.id)] };
@@ -549,6 +563,45 @@ export async function uploadJobPhoto(input: {
     });
   }
   return row;
+}
+
+export async function updateDisposalEventStatus(event: JobDisposalEvent, status: JobDisposalEventStatus) {
+  if (status === "canceled") throw new Error("Only dispatch can cancel a disposal event.");
+  const now = new Date().toISOString();
+  const updated: JobDisposalEvent = {
+    ...event,
+    status,
+    arrivedAt: status === "arrived" ? now : event.arrivedAt,
+    unloadingStartedAt: status === "unloading" ? now : event.unloadingStartedAt,
+    unloadingCompletedAt: status === "completed" ? now : event.unloadingCompletedAt,
+    departedAt: ["completed", "rejected"].includes(status) ? now : event.departedAt,
+    updatedAt: now,
+  };
+  const cache = readJson(OPERATIONAL_CACHE_KEY, emptyOperationalCache());
+  writeJson(OPERATIONAL_CACHE_KEY, {
+    ...cache,
+    disposalEvents: [updated, ...(cache.disposalEvents ?? []).filter((item) => item.id !== event.id)],
+    activity: [
+      {
+        id: id("activity"),
+        jobId: event.jobId,
+        eventType: "status_change",
+        message: `Disposal event ${event.sequenceNumber} marked ${status.replaceAll("_", " ")}.`,
+        metadata: { disposalEventId: event.id, disposalStatus: status },
+        createdAt: now,
+      },
+      ...cache.activity,
+    ],
+  });
+  window.dispatchEvent(new Event("driver-data-updated"));
+
+  if (supabase && await ensureSession()) {
+    await (supabase as any).rpc("driver_update_disposal_event_status", {
+      target_event_id: event.id,
+      next_status: status,
+      note: `Disposal event ${event.sequenceNumber} marked ${status.replaceAll("_", " ")}.`,
+    });
+  }
 }
 
 export function formatDriverAddress(job: DriverJob) {

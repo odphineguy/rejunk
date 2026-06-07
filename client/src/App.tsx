@@ -7,6 +7,7 @@ import { AppShell } from "./components/OperationsShell";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ClientsLeads from "./pages/ClientsLeads";
 import Dashboard from "./pages/Dashboard";
+import DispatchCenter from "./pages/DispatchCenter";
 import EstimateBuilder from "./pages/EstimateBuilder";
 import Employees from "./pages/Employees";
 import Events from "./pages/Events";
@@ -34,6 +35,7 @@ function Router() {
       <Route path={"/jobs/new"} component={NewJob} />
       <Route path={"/jobs/:jobId"} component={JobDetail} />
       <Route path={"/jobs"} component={Jobs} />
+      <Route path={"/dispatch"} component={DispatchCenter} />
       <Route path={"/schedule"} component={Schedule} />
       <Route path={"/messages"} component={Messages} />
       <Route path={"/clients/new"} component={ClientsLeads} />

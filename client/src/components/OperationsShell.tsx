@@ -61,6 +61,7 @@ const navGroups = [
     label: "Operations",
     items: [
       { href: "/jobs", label: "Jobs", icon: Truck },
+      { href: "/dispatch", label: "Dispatch Center", icon: MapIcon },
       { href: "/map", label: "Map Facility", icon: MapIcon },
       { href: "/estimate-builder", label: "Estimates", icon: Calculator },
       { href: "/schedule", label: "Schedule", icon: CalendarDays },

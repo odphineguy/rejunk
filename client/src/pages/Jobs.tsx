@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "wouter";
-import { AlertTriangle, Briefcase, CalendarCheck, CheckCircle2, Clock, MessageSquare, Search, Trash2, Truck, XCircle } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { AlertTriangle, Briefcase, CalendarCheck, CheckCircle2, Clock, Map, Search, Trash2, Truck, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { JobStatusBadge, JobWarningSummary, PaymentStatusBadge, jobStatusLabels } from "@/components/JobBadges";
@@ -14,8 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getJobWarningsWithFacilityCheck } from "@/lib/jobIntelligence";
-import { toDriverJob } from "@/lib/driverStorage";
-import { dispatchResolveIssue, getDispatchOperationalCache } from "@/lib/dispatchOperations";
+import { getDispatchOperationalCache } from "@/lib/dispatchOperations";
 import { deleteJob, getActualFinancials, getJobs } from "@/lib/jobStorage";
 import { loadPricingSettings } from "@/utils/pricingStorage";
 import type { Job, JobStatus } from "@/types/jobs";
@@ -60,7 +59,6 @@ export default function Jobs() {
   const [settings, setSettings] = useState(() => loadPricingSettings());
   const [query, setQuery] = useState("");
   const [activeStatus, setActiveStatus] = useState<"all" | JobStatus>("all");
-  const [boardFilter, setBoardFilter] = useState("active");
 
   useEffect(() => {
     const refresh = () => setJobs(getJobs());
@@ -105,30 +103,6 @@ export default function Jobs() {
     [jobs],
   );
 
-  const operationsBoard = useMemo(() => {
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-    const isSameDay = (value: string | undefined, date: Date) => {
-      if (!value) return false;
-      const parsed = new Date(value);
-      return parsed.getFullYear() === date.getFullYear() && parsed.getMonth() === date.getMonth() && parsed.getDate() === date.getDate();
-    };
-    return filteredJobs
-      .map((job) => ({ job, driverJob: toDriverJob(job) }))
-      .filter(({ job, driverJob }) => {
-        if (boardFilter === "today") return isSameDay(job.scheduledStart, today);
-        if (boardFilter === "tomorrow") return isSameDay(job.scheduledStart, tomorrow);
-        if (boardFilter === "unassigned") return driverJob.assignedCrew.length === 0 || !job.assignment?.crewLead;
-        if (boardFilter === "completed") return job.status === "completed";
-        if (boardFilter === "issues") return driverJob.issues.some((issue) => issue.issueStatus !== "resolved") || job.status === "issue";
-        if (boardFilter === "active") return !["completed", "canceled"].includes(job.status);
-        return true;
-      })
-      .sort((a, b) => new Date(a.job.scheduledStart ?? a.job.updatedAt).getTime() - new Date(b.job.scheduledStart ?? b.job.updatedAt).getTime())
-      .slice(0, 12);
-  }, [boardFilter, filteredJobs]);
-
   const exceptionQueue = useMemo(() => {
     const cache = getDispatchOperationalCache();
     return cache.issues
@@ -145,7 +119,18 @@ export default function Jobs() {
   };
 
   return (
-    <OperationsShell title="Jobs" eyebrow="Operations dashboard">
+    <OperationsShell
+      title="Jobs"
+      eyebrow="Operations dashboard"
+      actions={
+        <Button asChild variant="outline">
+          <Link href="/dispatch">
+            <Map className="size-4" />
+            Open Dispatch Center
+          </Link>
+        </Button>
+      }
+    >
       <div className="space-y-6">
         <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-7">
           <StatCard label="Open" value={counts.open} icon={Briefcase} />
@@ -255,58 +240,6 @@ export default function Jobs() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="space-y-4 p-4 md:p-6">
-            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-lg font-bold">Dispatch Board</h2>
-                <p className="text-sm text-muted-foreground">Operational status, crew, vehicle, and driver-submitted alerts.</p>
-              </div>
-              <Badge variant="secondary">{operationsBoard.length} visible</Badge>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {["today", "tomorrow", "unassigned", "active", "completed", "issues", "all"].map((filter) => (
-                <Button key={filter} variant={boardFilter === filter ? "default" : "outline"} size="sm" onClick={() => setBoardFilter(filter)}>
-                  {filter}
-                </Button>
-              ))}
-            </div>
-            <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
-              {operationsBoard.map(({ job, driverJob }) => (
-                <button key={job.id} onClick={() => navigate(`/jobs/${job.id}`)} className="rounded-lg border border-border bg-background p-4 text-left transition-colors hover:bg-muted/40">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold">{formatDate(job.scheduledStart)}</div>
-                      <div className="mt-1 truncate text-lg font-bold">{job.customerName}</div>
-                      <div className="truncate text-sm text-muted-foreground">{job.materialName || job.jobLabel || "Service"}</div>
-                    </div>
-                    <JobStatusBadge status={job.status} />
-                  </div>
-                  <div className="mt-3 space-y-1 text-sm text-muted-foreground">
-                    <div className="truncate">{driverJob.assignedCrew.map((crew) => crew.displayName).join(", ") || "Unassigned crew"}</div>
-                    <div className="truncate">{job.vehicleName || job.assignment?.vehicleName || "Vehicle TBD"}</div>
-                    <div className="truncate">Current stop {driverJob.stops.find((stop) => stop.status !== "completed")?.name || "Complete"}</div>
-                    <div>Last update {formatDate(job.updatedAt)}</div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Button asChild size="sm" variant="outline" onClick={(event) => event.stopPropagation()}>
-                      <a href={`/jobs/${job.id}`}>Open</a>
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); navigate(`/jobs/${job.id}`); }}>Assign</Button>
-                    <Button size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); navigate(`/jobs/${job.id}`); }}>
-                      <MessageSquare className="size-3" />
-                      Crew
-                    </Button>
-                  </div>
-                  {(driverJob.issues.length > 0 || job.status === "issue") && (
-                    <Badge className="mt-3 bg-red-100 text-red-700">{driverJob.issues.length || 1} issue</Badge>
-                  )}
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
         <Card className="border-red-200">
           <CardContent className="space-y-4 p-4 md:p-6">
             <div className="flex items-center justify-between gap-3">
@@ -333,13 +266,6 @@ export default function Jobs() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     {issue.driverCalledDispatchAt ? <Badge className="bg-green-100 text-green-700">driver called</Badge> : <Badge className="bg-amber-100 text-amber-800">call pending</Badge>}
                     <Button size="sm" onClick={() => job && navigate(`/jobs/${job.id}`)}>Resolve</Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => void dispatchResolveIssue(issue, { issueStatus: "instructions_sent", resolutionType: "wait", dispatchInstructions: "Wait on site while dispatch reviews.", releaseDriver: false }).then(() => setJobs(getJobs()))}
-                    >
-                      Send wait
-                    </Button>
                   </div>
                 </div>
               ))}

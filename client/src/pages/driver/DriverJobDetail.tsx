@@ -18,12 +18,14 @@ import {
   getDriverJob,
   reportJobIssue,
   sendJobMessage,
+  updateDisposalEventStatus,
   updateDriverJobStatus,
   updateItemStatus,
   updateStopStatus,
   uploadJobPhoto,
 } from "@/lib/driverStorage";
 import { nextDriverStatuses, operationalStatusLabels, toDriverStatus } from "@/lib/jobStatus";
+import { customerStops, disposalEvents } from "@/lib/operationalMetrics";
 import type { DriverJob, JobIssueSeverity, JobIssueType, JobPhotoType, JobPhotoVisibility } from "@/types/driver";
 import type { DriverJobStatus } from "@/types/jobs";
 
@@ -276,14 +278,14 @@ export default function DriverJobDetail() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Stops</CardTitle>
+              <CardTitle className="text-base">Customer Stops</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 p-4 pt-0">
-            {job.stops.map((stop) => (
+            {customerStops(job.stops).map((stop) => (
               <div key={stop.id} className="rounded-lg border border-border bg-background p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-xs font-semibold uppercase text-muted-foreground">Stop {stop.stopOrder} · {label(stop.stopType)}</div>
+                    <div className="text-xs font-semibold uppercase text-muted-foreground">Customer stop {stop.stopOrder} · {label(stop.stopType)}</div>
                     <div className="mt-1 font-semibold">{stop.name}</div>
                     <div className="text-sm text-muted-foreground">{[stop.address, stop.city, stop.zip].filter(Boolean).join(", ")}</div>
                     {stop.instructions && <div className="mt-2 text-sm">{stop.instructions}</div>}
@@ -298,6 +300,36 @@ export default function DriverJobDetail() {
             ))}
           </CardContent>
         </Card>
+
+        {job.disposalEvents.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Disposal</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 p-4 pt-0">
+              {disposalEvents(job.disposalEvents).map((event) => (
+                <div key={event.id} className="rounded-lg border border-border bg-background p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-xs font-semibold uppercase text-muted-foreground">Disposal trip {event.sequenceNumber}</div>
+                      <div className="mt-1 font-semibold">{event.facilityName || "Facility TBD"}</div>
+                      {event.facilityAddress && <div className="text-sm text-muted-foreground">{event.facilityAddress}</div>}
+                      {event.notes && <div className="mt-2 text-sm">{event.notes}</div>}
+                    </div>
+                    <Badge variant="outline">{label(event.status)}</Badge>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <Button variant="outline" className="h-11" onClick={() => void updateDisposalEventStatus(event, "en_route").then(refresh)}>Route to Facility</Button>
+                    <Button variant="outline" className="h-11" onClick={() => void updateDisposalEventStatus(event, "arrived").then(refresh)}>Arrived</Button>
+                    <Button variant="outline" className="h-11" onClick={() => void updateDisposalEventStatus(event, "unloading").then(refresh)}>Begin Unloading</Button>
+                    <Button className="h-11" onClick={() => void updateDisposalEventStatus(event, "completed").then(refresh)}>Complete Disposal</Button>
+                    <Button variant="destructive" className="col-span-2 h-11" onClick={() => void updateDisposalEventStatus(event, "rejected").then(refresh)}>Report Facility Rejection</Button>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>

@@ -384,6 +384,90 @@ export type Database = {
         }
         Relationships: []
       }
+      job_disposal_events: {
+        Row: {
+          arrived_at: string | null
+          created_at: string
+          created_by: string | null
+          departed_at: string | null
+          disposal_cost: number | null
+          facility_address: string | null
+          facility_id: string | null
+          facility_name: string | null
+          gross_weight_lbs: number | null
+          id: string
+          job_id: string
+          material_type: string | null
+          net_weight_lbs: number | null
+          net_weight_tons: number | null
+          notes: string | null
+          planned: boolean
+          receipt_number: string | null
+          receipt_photo_id: string | null
+          scale_ticket_number: string | null
+          sequence_number: number
+          status: string
+          tare_weight_lbs: number | null
+          unloading_completed_at: string | null
+          unloading_started_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          arrived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          departed_at?: string | null
+          disposal_cost?: number | null
+          facility_address?: string | null
+          facility_id?: string | null
+          facility_name?: string | null
+          gross_weight_lbs?: number | null
+          id?: string
+          job_id: string
+          material_type?: string | null
+          net_weight_lbs?: number | null
+          net_weight_tons?: number | null
+          notes?: string | null
+          planned?: boolean
+          receipt_number?: string | null
+          receipt_photo_id?: string | null
+          scale_ticket_number?: string | null
+          sequence_number?: number
+          status?: string
+          tare_weight_lbs?: number | null
+          unloading_completed_at?: string | null
+          unloading_started_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          arrived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          departed_at?: string | null
+          disposal_cost?: number | null
+          facility_address?: string | null
+          facility_id?: string | null
+          facility_name?: string | null
+          gross_weight_lbs?: number | null
+          id?: string
+          job_id?: string
+          material_type?: string | null
+          net_weight_lbs?: number | null
+          net_weight_tons?: number | null
+          notes?: string | null
+          planned?: boolean
+          receipt_number?: string | null
+          receipt_photo_id?: string | null
+          scale_ticket_number?: string | null
+          sequence_number?: number
+          status?: string
+          tare_weight_lbs?: number | null
+          unloading_completed_at?: string | null
+          unloading_started_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       job_issues: {
         Row: {
           added_scope_status: string | null
@@ -967,6 +1051,10 @@ export type Database = {
           response: string | null
           release_driver?: boolean
         }
+        Returns: undefined
+      }
+      driver_update_disposal_event_status: {
+        Args: { target_event_id: string; next_status: string; note?: string | null }
         Returns: undefined
       }
       is_manager: { Args: never; Returns: boolean }

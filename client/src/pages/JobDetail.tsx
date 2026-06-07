@@ -35,11 +35,12 @@ import {
   type DispatchAssignmentInput,
 } from "@/lib/dispatchOperations";
 import { deleteJob, duplicateJob, getActualFinancials, getJobs, saveJob, updateJob } from "@/lib/jobStorage";
+import { customerStops, disposalEvents, jobOperationalMetrics } from "@/lib/operationalMetrics";
 import { loadPricingSettings } from "@/utils/pricingStorage";
 import { getRouteEstimateToFacility } from "@/utils/distanceRouting";
 import { buildBestRecommendation, recommendationInputFromJob } from "@/utils/recommendations";
 import type { Job, JobStatus, PaymentStatus } from "@/types/jobs";
-import type { JobIssue, JobIssueResolutionType, JobIssueStatus, JobItem, JobPhotoVisibility, JobStop } from "@/types/driver";
+import type { JobDisposalEvent, JobIssue, JobIssueResolutionType, JobIssueStatus, JobItem, JobPhotoVisibility, JobStop } from "@/types/driver";
 import type { JobRouteEstimate } from "@/types/pricing";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -158,6 +159,7 @@ export default function JobDetail() {
     () => driverJob?.photos.filter((photo) => photoVisibilityFilter === "all" || photo.visibility === photoVisibilityFilter) ?? [],
     [driverJob?.photos, photoVisibilityFilter],
   );
+  const operationalMetrics = useMemo(() => (driverJob ? jobOperationalMetrics(driverJob) : null), [driverJob]);
   const actualMargin = margin(actualFinancials.profit, actualFinancials.charged);
   const jobWarnings = useMemo(() => (job ? getJobWarningsWithFacilityCheck(job, settings) : []), [job, settings]);
   const comparison = useMemo(() => {
@@ -437,16 +439,17 @@ export default function JobDetail() {
               <CardContent className="space-y-5">
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                   <MiniStat label="Assigned crew" value={driverJob.assignedCrew.map((crew) => crew.displayName).join(", ") || "Unassigned"} />
-                  <MiniStat label="Stops" value={String(driverJob.stops.length)} />
-                  <MiniStat label="Items" value={`${driverJob.items.filter((item) => item.status !== "pending").length}/${driverJob.items.length} touched`} />
-                  <MiniStat label="Issues" value={String(driverJob.issues.length)} />
+                  <MiniStat label="Customer stops" value={String(operationalMetrics?.customerStopCount ?? 0)} />
+                  <MiniStat label="Items touched" value={`${operationalMetrics?.itemsTouched ?? 0}/${driverJob.items.length}`} />
+                  <MiniStat label="Disposal trips" value={String(operationalMetrics?.disposalEventCount ?? 0)} />
+                  <MiniStat label="Open issues" value={String(operationalMetrics?.openIssueCount ?? 0)} />
                 </div>
 
                 <div className="grid gap-4 xl:grid-cols-2">
                   <div className="rounded-lg border border-border p-4">
-                    <div className="mb-3 font-semibold">Stops</div>
+                    <div className="mb-3 font-semibold">Customer/service stops</div>
                     <div className="space-y-3">
-                      {driverJob.stops.map((stop) => (
+                      {customerStops(driverJob.stops).map((stop) => (
                         <DetailRow key={stop.id} label={`${stop.stopOrder}. ${stop.name}`} value={stop.status.replaceAll("_", " ")} />
                       ))}
                     </div>
@@ -460,6 +463,8 @@ export default function JobDetail() {
                     </div>
                   </div>
                 </div>
+
+                <DisposalEventsPanel jobId={job.id} events={disposalEvents(driverJob.disposalEvents)} onSaved={() => setJob(getJobs().find((item) => item.id === job.id) ?? job)} />
 
                 <div className="rounded-lg border border-border p-4">
                   <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -559,7 +564,7 @@ export default function JobDetail() {
                   </div>
                 </div>
 
-                <StopsItemsEditor jobId={job.id} stops={driverJob.stops} items={driverJob.items} onSaved={() => setJob(getJobs().find((item) => item.id === job.id) ?? job)} />
+                <StopsItemsEditor jobId={job.id} stops={customerStops(driverJob.stops)} items={driverJob.items} disposalEvents={driverJob.disposalEvents} onSaved={() => setJob(getJobs().find((item) => item.id === job.id) ?? job)} />
 
                 <div className="rounded-lg border border-border p-4">
                   <div className="mb-3 flex items-center gap-2 font-semibold">
@@ -950,7 +955,55 @@ function AssignmentEditor({ job, onSaved }: { job: Job; onSaved: () => void }) {
   );
 }
 
-function StopsItemsEditor({ jobId, stops, items, onSaved }: { jobId: string; stops: JobStop[]; items: JobItem[]; onSaved: () => void }) {
+function DisposalEventsPanel({ jobId, events, onSaved }: { jobId: string; events: JobDisposalEvent[]; onSaved: () => void }) {
+  const [draftEvents, setDraftEvents] = useState(events);
+
+  useEffect(() => setDraftEvents(events), [events]);
+
+  const save = async () => {
+    await saveDispatchOperationalPlan(jobId, { disposalEvents: draftEvents, activityMessage: "Dispatch updated disposal and dumping plan." });
+    toast.success("Disposal plan updated");
+    onSaved();
+  };
+
+  return (
+    <div className="rounded-lg border border-border p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="font-semibold">Disposal & dumping</div>
+        <Button variant="outline" size="sm" onClick={() => {
+          const now = new Date().toISOString();
+          setDraftEvents((current) => [...current, { id: `disposal-${Date.now()}`, jobId, sequenceNumber: current.length + 1, status: "planned", planned: true, createdAt: now, updatedAt: now }]);
+        }}>Add disposal event</Button>
+      </div>
+      <div className="space-y-3">
+        {draftEvents.map((event, index) => (
+          <div key={event.id} className="rounded-md bg-muted/40 p-3">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <span className="font-semibold">Trip {index + 1}</span>
+              <Button variant="outline" size="sm" onClick={() => setDraftEvents((current) => current.filter((item) => item.id !== event.id))}>Remove</Button>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <EditableField label="Facility" value={event.facilityName ?? ""} onChange={(value) => setDraftEvents((current) => current.map((item) => item.id === event.id ? { ...item, facilityName: value } : item))} />
+              <EditableField label="Material" value={event.materialType ?? ""} onChange={(value) => setDraftEvents((current) => current.map((item) => item.id === event.id ? { ...item, materialType: value } : item))} />
+              <SelectLite label="Status" value={event.status} onChange={(value) => setDraftEvents((current) => current.map((item) => item.id === event.id ? { ...item, status: value as JobDisposalEvent["status"] } : item))} options={["planned", "en_route", "arrived", "unloading", "completed", "rejected", "canceled"].map((value) => ({ value, label: value.replaceAll("_", " ") }))} />
+              <EditableField label="Net weight lbs" type="number" value={String(event.netWeightLbs ?? "")} onChange={(value) => setDraftEvents((current) => current.map((item) => item.id === event.id ? { ...item, netWeightLbs: fieldNumber(value), netWeightTons: fieldNumber(value) / 2000 } : item))} />
+              <EditableField label="Disposal cost" type="number" value={String(event.disposalCost ?? "")} onChange={(value) => setDraftEvents((current) => current.map((item) => item.id === event.id ? { ...item, disposalCost: fieldNumber(value) } : item))} />
+              <EditableField label="Receipt number" value={event.receiptNumber ?? ""} onChange={(value) => setDraftEvents((current) => current.map((item) => item.id === event.id ? { ...item, receiptNumber: value } : item))} />
+              <EditableField label="Scale ticket" value={event.scaleTicketNumber ?? ""} onChange={(value) => setDraftEvents((current) => current.map((item) => item.id === event.id ? { ...item, scaleTicketNumber: value } : item))} />
+              <div className="md:col-span-2">
+                <TextAreaField label="Notes" value={event.notes ?? ""} onChange={(value) => setDraftEvents((current) => current.map((item) => item.id === event.id ? { ...item, notes: value } : item))} />
+              </div>
+            </div>
+          </div>
+        ))}
+        {draftEvents.length === 0 && <p className="text-sm text-muted-foreground">No disposal trips planned.</p>}
+      </div>
+      <Button className="mt-4" onClick={() => void save()}>Save Disposal Plan</Button>
+    </div>
+  );
+}
+
+function StopsItemsEditor({ jobId, stops, items, disposalEvents: currentDisposalEvents, onSaved }: { jobId: string; stops: JobStop[]; items: JobItem[]; disposalEvents: JobDisposalEvent[]; onSaved: () => void }) {
   const [draftStops, setDraftStops] = useState(stops);
   const [draftItems, setDraftItems] = useState(items);
 
@@ -958,19 +1011,19 @@ function StopsItemsEditor({ jobId, stops, items, onSaved }: { jobId: string; sto
   useEffect(() => setDraftItems(items), [items]);
 
   const save = async () => {
-    await saveDispatchOperationalPlan(jobId, { stops: draftStops, items: draftItems, activityMessage: "Dispatch updated stops and item checklist." });
-    toast.success("Stops and items updated");
+    await saveDispatchOperationalPlan(jobId, { stops: draftStops, items: draftItems, disposalEvents: currentDisposalEvents, activityMessage: "Dispatch updated customer stops and item checklist." });
+    toast.success("Customer stops and items updated");
     onSaved();
   };
 
   return (
     <div className="rounded-lg border border-border p-4">
-      <div className="mb-3 font-semibold">Stops and items</div>
+      <div className="mb-3 font-semibold">Customer stops and items</div>
       <div className="space-y-3">
         {draftStops.map((stop, index) => (
           <div key={stop.id} className="rounded-md bg-muted/40 p-3">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <span className="text-sm font-semibold">Stop {index + 1}</span>
+              <span className="text-sm font-semibold">Customer stop {index + 1}</span>
               <Button variant="outline" size="sm" disabled={draftStops.length === 1} onClick={() => setDraftStops((current) => current.filter((item) => item.id !== stop.id))}>Remove</Button>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
@@ -1005,7 +1058,7 @@ function StopsItemsEditor({ jobId, stops, items, onSaved }: { jobId: string; sto
           Add Item
         </Button>
       </div>
-      <Button className="mt-4" onClick={() => void save()}>Save Stops and Items</Button>
+      <Button className="mt-4" onClick={() => void save()}>Save Customer Stops and Items</Button>
     </div>
   );
 }

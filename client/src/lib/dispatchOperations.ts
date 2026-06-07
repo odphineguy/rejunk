@@ -7,6 +7,7 @@ import type {
   AddedScopeReviewStatus,
   JobActivity,
   JobAssignmentRecord,
+  JobDisposalEvent,
   JobIssue,
   JobIssueResolutionType,
   JobIssueStatus,
@@ -26,6 +27,7 @@ type OperationalCache = {
   items: JobItem[];
   activity: JobActivity[];
   photos: JobPhoto[];
+  disposalEvents?: JobDisposalEvent[];
   messages: JobMessage[];
   issues: JobIssue[];
 };
@@ -67,6 +69,7 @@ const emptyOperationalCache = (): OperationalCache => ({
   items: [],
   activity: [],
   photos: [],
+  disposalEvents: [],
   messages: [],
   issues: [],
 });
@@ -132,6 +135,7 @@ export function getDispatchJobView(job: Job) {
     items: current.items.filter((item) => item.jobId === job.id),
     activity: current.activity.filter((entry) => entry.jobId === job.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     photos: current.photos.filter((photo) => photo.jobId === job.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    disposalEvents: (current.disposalEvents ?? []).filter((event) => event.jobId === job.id).sort((a, b) => a.sequenceNumber - b.sequenceNumber),
     messages: current.messages.filter((message) => message.jobId === job.id).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
     issues: current.issues.filter((issue) => issue.jobId === job.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
   };
@@ -199,6 +203,7 @@ export async function createDispatchJob(input: DispatchJobInput, mode: "draft" |
   await saveDispatchOperationalPlan(job.id, {
     stops: input.stops,
     items: input.items,
+    disposalEvents: plannedDisposalEvents(job),
     assignment: input.assignment,
     activityMessage: mode === "draft" ? "Dispatch saved job draft." : "Dispatch created and assigned job.",
   });
@@ -211,6 +216,7 @@ export async function saveDispatchOperationalPlan(
   input: {
     stops?: JobStop[];
     items?: JobItem[];
+    disposalEvents?: JobDisposalEvent[];
     assignment?: DispatchAssignmentInput;
     activityMessage?: string;
     instructionUpdate?: string;
@@ -230,6 +236,13 @@ export async function saveDispatchOperationalPlan(
     next.items = [
       ...input.items.map((item) => ({ ...item, id: item.id || id("item"), jobId, updatedAt: now, createdAt: item.createdAt || now })),
       ...next.items.filter((item) => item.jobId !== jobId),
+    ];
+  }
+
+  if (input.disposalEvents) {
+    next.disposalEvents = [
+      ...input.disposalEvents.map((event, index) => ({ ...event, id: event.id || id("disposal"), jobId, sequenceNumber: index + 1, updatedAt: now, createdAt: event.createdAt || now })),
+      ...(next.disposalEvents ?? []).filter((event) => event.jobId !== jobId),
     ];
   }
 
@@ -300,7 +313,48 @@ export async function saveDispatchOperationalPlan(
         status: item.status,
       })));
     }
+    if (input.disposalEvents?.length) {
+      await (supabase as any).from("job_disposal_events").upsert(input.disposalEvents.map((event, index) => ({
+        id: event.id,
+        job_id: jobId,
+        facility_id: event.facilityId ?? null,
+        facility_name: event.facilityName ?? null,
+        facility_address: event.facilityAddress ?? null,
+        material_type: event.materialType ?? null,
+        sequence_number: index + 1,
+        status: event.status,
+        planned: event.planned,
+        gross_weight_lbs: event.grossWeightLbs ?? null,
+        tare_weight_lbs: event.tareWeightLbs ?? null,
+        net_weight_lbs: event.netWeightLbs ?? null,
+        net_weight_tons: event.netWeightTons ?? null,
+        disposal_cost: event.disposalCost ?? null,
+        receipt_number: event.receiptNumber ?? null,
+        scale_ticket_number: event.scaleTicketNumber ?? null,
+        notes: event.notes ?? null,
+      })));
+    }
   }
+}
+
+function plannedDisposalEvents(job: Job): JobDisposalEvent[] {
+  if (!job.facilityId && !job.facilityName) return [];
+  const now = new Date().toISOString();
+  return [
+    {
+      id: id("disposal"),
+      jobId: job.id,
+      facilityId: job.facilityId,
+      facilityName: job.facilityName,
+      materialType: job.materialName ?? job.materialType,
+      sequenceNumber: 1,
+      status: "planned",
+      planned: true,
+      notes: "Planned disposal trip. Dispatch may update facility, cost, weights, and receipts.",
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
 }
 
 export async function sendDispatchJobMessage(jobId: string, message: string) {

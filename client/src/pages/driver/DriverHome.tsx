@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { loadDriverToday, formatDriverAddress } from "@/lib/driverStorage";
 import { toDriverStatus } from "@/lib/jobStatus";
+import { jobOperationalMetrics } from "@/lib/operationalMetrics";
 import type { DriverJob, DriverTodayData } from "@/types/driver";
 
 function formatWindow(start?: string, end?: string) {
@@ -27,6 +28,7 @@ function navigationUrl(job: DriverJob) {
 }
 
 function DriverJobCard({ job, active }: { job: DriverJob; active?: boolean }) {
+  const metrics = jobOperationalMetrics(job);
   return (
     <Card className={active ? "border-primary shadow-sm" : "border-border/80"}>
       <CardContent className="space-y-4 p-4">
@@ -48,7 +50,8 @@ function DriverJobCard({ job, active }: { job: DriverJob; active?: boolean }) {
             <span>{formatDriverAddress(job)}</span>
           </div>
           <div className="grid grid-cols-2 gap-2 text-muted-foreground">
-            <span>{job.stops.length} stop{job.stops.length === 1 ? "" : "s"}</span>
+            <span>{metrics.customerStopCount} customer stop{metrics.customerStopCount === 1 ? "" : "s"}</span>
+            <span>{metrics.disposalEventCount} disposal trip{metrics.disposalEventCount === 1 ? "" : "s"}</span>
             <span>{job.vehicleName || "Vehicle TBD"}</span>
             <span className="col-span-2 truncate">{job.assignedCrew.map((crew) => crew.displayName).join(", ") || "Crew TBD"}</span>
           </div>

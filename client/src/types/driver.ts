@@ -3,6 +3,8 @@ import type { Job, DriverJobStatus } from "@/types/jobs";
 export type EmployeeAppRole = "admin" | "dispatcher" | "driver";
 
 export type JobStopType = "pickup" | "delivery" | "service" | "disposal" | "material_pickup" | "other";
+export type CustomerJobStopType = Exclude<JobStopType, "disposal">;
+export type JobDisposalEventStatus = "planned" | "en_route" | "arrived" | "unloading" | "completed" | "rejected" | "canceled";
 export type JobStopStatus = "pending" | "en_route" | "arrived" | "in_progress" | "completed" | "skipped";
 export type JobItemStatus = "pending" | "loaded" | "delivered" | "completed" | "missing" | "damaged" | "skipped";
 export type JobActivityEventType =
@@ -139,6 +141,34 @@ export interface JobPhoto {
   createdAt: string;
 }
 
+export interface JobDisposalEvent {
+  id: string;
+  jobId: string;
+  facilityId?: string;
+  facilityName?: string;
+  facilityAddress?: string;
+  materialType?: string;
+  sequenceNumber: number;
+  status: JobDisposalEventStatus;
+  planned: boolean;
+  arrivedAt?: string;
+  unloadingStartedAt?: string;
+  unloadingCompletedAt?: string;
+  departedAt?: string;
+  grossWeightLbs?: number;
+  tareWeightLbs?: number;
+  netWeightLbs?: number;
+  netWeightTons?: number;
+  disposalCost?: number;
+  receiptNumber?: string;
+  scaleTicketNumber?: string;
+  receiptPhotoId?: string;
+  notes?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface JobMessage {
   id: string;
   jobId: string;
@@ -210,6 +240,7 @@ export type DriverJob = Pick<
   items: JobItem[];
   activity: JobActivity[];
   photos: JobPhoto[];
+  disposalEvents: JobDisposalEvent[];
   messages: JobMessage[];
   issues: JobIssue[];
   instructionAcknowledgements?: JobInstructionAcknowledgement[];

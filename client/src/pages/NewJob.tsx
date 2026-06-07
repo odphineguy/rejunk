@@ -21,10 +21,10 @@ import {
   type DispatchAssignmentInput,
 } from "@/lib/dispatchOperations";
 import { loadPricingSettings } from "@/utils/pricingStorage";
-import type { JobItem, JobStop, JobStopType } from "@/types/driver";
+import type { CustomerJobStopType, JobItem, JobStop } from "@/types/driver";
 import type { JobLeadSource, JobPriority, JobServiceType } from "@/types/jobs";
 
-const stopTypes: JobStopType[] = ["pickup", "delivery", "service", "disposal", "material_pickup", "other"];
+const stopTypes: CustomerJobStopType[] = ["pickup", "delivery", "service", "material_pickup", "other"];
 const priorities: JobPriority[] = ["low", "normal", "high", "urgent"];
 
 function uid(prefix: string) {
@@ -183,8 +183,8 @@ export default function NewJob() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Stops</CardTitle>
-              <CardDescription>Add ordered stops. Use Move Up/Down for sequencing.</CardDescription>
+              <CardTitle>Customer / Service Stops</CardTitle>
+              <CardDescription>Add ordered customer or service locations. Disposal trips are tracked separately.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {stops.map((stop, index) => (
@@ -192,7 +192,7 @@ export default function NewJob() {
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 font-semibold">
                       <GripVertical className="size-4 text-muted-foreground" />
-                      Stop {index + 1}
+                      Customer stop {index + 1}
                     </div>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" disabled={index === 0} onClick={() => setStops((current) => reorder(current, index, index - 1))}>Up</Button>
@@ -206,7 +206,7 @@ export default function NewJob() {
                     </div>
                   </div>
                   <div className="grid gap-4 md:grid-cols-2">
-                    <SelectField label="Stop type" value={stop.stopType} onValueChange={(value) => patchStop(stop.id, { stopType: value as JobStopType })} options={stopTypes.map((value) => ({ value, label: value.replaceAll("_", " ") }))} />
+                    <SelectField label="Stop type" value={stop.stopType === "disposal" ? "service" : stop.stopType} onValueChange={(value) => patchStop(stop.id, { stopType: value as CustomerJobStopType })} options={stopTypes.map((value) => ({ value, label: value.replaceAll("_", " ") }))} />
                     <Field label="Stop name" value={stop.name} onChange={(value) => patchStop(stop.id, { name: value })} />
                     <Field label="Address" value={stop.address ?? ""} onChange={(value) => patchStop(stop.id, { address: value })} />
                     <Field label="City" value={stop.city ?? ""} onChange={(value) => patchStop(stop.id, { city: value })} />
