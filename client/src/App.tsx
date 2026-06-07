@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { AppShell } from "./components/OperationsShell";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -20,6 +20,8 @@ import Pricebook from "./pages/Pricebook";
 import Schedule from "./pages/Schedule";
 import Settings from "./pages/Settings";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
+import DriverHome from "./pages/driver/DriverHome";
+import DriverJobDetail from "./pages/driver/DriverJobDetail";
 
 
 function Router() {
@@ -55,12 +57,27 @@ function Router() {
   );
 }
 
+function DriverRouter() {
+  return (
+    <Switch>
+      <Route path={"/driver"} component={DriverHome} />
+      <Route path={"/driver/jobs/:jobId"} component={DriverJobDetail} />
+      <Route path={"/driver/messages"} component={() => <PlaceholderPage title="Driver Messages" />} />
+      <Route path={"/driver/profile"} component={() => <PlaceholderPage title="Driver Profile" />} />
+      <Route component={NotFound} />
+    </Switch>
+  );
+}
+
 // NOTE: About Theme
 // - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
 //   to keep consistent foreground/background color across components
 // - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
 
 function App() {
+  const [location] = useLocation();
+  const isDriverRoute = location === "/driver" || location.startsWith("/driver/");
+
   return (
     <ErrorBoundary>
       <ThemeProvider
@@ -69,9 +86,13 @@ function App() {
       >
         <TooltipProvider>
           <Toaster />
-          <AppShell>
-            <Router />
-          </AppShell>
+          {isDriverRoute ? (
+            <DriverRouter />
+          ) : (
+            <AppShell>
+              <Router />
+            </AppShell>
+          )}
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

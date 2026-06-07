@@ -1,6 +1,22 @@
 import type { BestFacilityRecommendation, EstimateWarning, FacilityRouteComparison, MaterialCategory, VehicleJobComparison } from "@/types/pricing";
 
-export type JobStatus = "open" | "scheduled" | "on_my_way" | "in_progress" | "completed" | "canceled";
+export type DriverJobStatus =
+  | "assigned"
+  | "en_route"
+  | "arrived"
+  | "in_progress"
+  | "loaded"
+  | "en_route_to_next_stop"
+  | "en_route_to_disposal"
+  | "dumping"
+  | "completed"
+  | "delayed"
+  | "issue"
+  | "canceled";
+
+export type LegacyJobStatus = "open" | "scheduled" | "on_my_way";
+
+export type JobStatus = LegacyJobStatus | DriverJobStatus;
 
 export type PaymentStatus = "unpaid" | "deposit_paid" | "paid" | "refunded";
 

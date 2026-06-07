@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useRoute } from "wouter";
-import { ArrowLeft, CalendarClock, CopyPlus, Receipt, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarClock, CopyPlus, Download, Receipt, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { JobStatusBadge, JobWarningBadge, PaymentStatusBadge, jobStatusLabels, paymentStatusLabels } from "@/components/JobBadges";
@@ -24,11 +24,13 @@ import {
   getJobWarningsWithFacilityCheck,
   margin,
 } from "@/lib/jobIntelligence";
+import { toDriverJob } from "@/lib/driverStorage";
 import { deleteJob, duplicateJob, getActualFinancials, getJobs, saveJob, updateJob } from "@/lib/jobStorage";
 import { loadPricingSettings } from "@/utils/pricingStorage";
 import { getRouteEstimateToFacility } from "@/utils/distanceRouting";
 import { buildBestRecommendation, recommendationInputFromJob } from "@/utils/recommendations";
 import type { Job, JobStatus, PaymentStatus } from "@/types/jobs";
+import type { JobPhotoVisibility } from "@/types/driver";
 import type { JobRouteEstimate } from "@/types/pricing";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -117,6 +119,7 @@ export default function JobDetail() {
   const [, navigate] = useLocation();
   const [settings, setSettings] = useState(() => loadPricingSettings());
   const [job, setJob] = useState<Job | null>(() => getJobs().find((item) => item.id === params?.jobId) ?? null);
+  const [photoVisibilityFilter, setPhotoVisibilityFilter] = useState<"all" | JobPhotoVisibility>("all");
   const [routeEstimates, setRouteEstimates] = useState<Record<string, JobRouteEstimate>>(() =>
     routeEstimatesFromJob(getJobs().find((item) => item.id === params?.jobId) ?? null),
   );
@@ -135,6 +138,11 @@ export default function JobDetail() {
   }, []);
 
   const actualFinancials = useMemo(() => (job ? getActualFinancials(job) : { charged: 0, cost: 0, profit: 0 }), [job]);
+  const driverJob = useMemo(() => (job ? toDriverJob(job) : null), [job]);
+  const filteredDriverPhotos = useMemo(
+    () => driverJob?.photos.filter((photo) => photoVisibilityFilter === "all" || photo.visibility === photoVisibilityFilter) ?? [],
+    [driverJob?.photos, photoVisibilityFilter],
+  );
   const actualMargin = margin(actualFinancials.profit, actualFinancials.charged);
   const jobWarnings = useMemo(() => (job ? getJobWarningsWithFacilityCheck(job, settings) : []), [job, settings]);
   const comparison = useMemo(() => {
@@ -384,6 +392,110 @@ export default function JobDetail() {
               <EditableField label="Cubic yards" type="number" value={String(job.cubicYards ?? "")} onChange={(value) => applyUpdates({ cubicYards: fieldNumber(value) })} />
             </CardContent>
           </Card>
+
+          {driverJob && (
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <CardTitle>Driver Operations</CardTitle>
+                    <CardDescription>Field submissions, stops, items, photos, issues, and job activity.</CardDescription>
+                  </div>
+                  <Badge variant="outline">{driverJob.activity.length} activity events</Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <MiniStat label="Assigned crew" value={driverJob.assignedCrew.map((crew) => crew.displayName).join(", ") || "Unassigned"} />
+                  <MiniStat label="Stops" value={String(driverJob.stops.length)} />
+                  <MiniStat label="Items" value={`${driverJob.items.filter((item) => item.status !== "pending").length}/${driverJob.items.length} touched`} />
+                  <MiniStat label="Issues" value={String(driverJob.issues.length)} />
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className="rounded-lg border border-border p-4">
+                    <div className="mb-3 font-semibold">Stops</div>
+                    <div className="space-y-3">
+                      {driverJob.stops.map((stop) => (
+                        <DetailRow key={stop.id} label={`${stop.stopOrder}. ${stop.name}`} value={stop.status.replaceAll("_", " ")} />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-border p-4">
+                    <div className="mb-3 font-semibold">Items</div>
+                    <div className="space-y-3">
+                      {driverJob.items.map((item) => (
+                        <DetailRow key={item.id} label={`${item.quantity}x ${item.name}`} value={item.status.replaceAll("_", " ")} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border p-4">
+                  <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div className="font-semibold">Photos</div>
+                    <div className="flex flex-wrap gap-2">
+                      <Select value={photoVisibilityFilter} onValueChange={(value) => setPhotoVisibilityFilter(value as "all" | JobPhotoVisibility)}>
+                        <SelectTrigger className="h-9 w-44">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All visibility</SelectItem>
+                          <SelectItem value="internal">Internal</SelectItem>
+                          <SelectItem value="customer_ready">Customer ready</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {filteredDriverPhotos.filter((photo) => photo.visibility === "customer_ready").map((photo) => (
+                        <Button key={photo.id} asChild variant="outline" size="sm">
+                          <a href={photo.publicUrl || photo.storagePath} download>
+                            <Download className="size-4" />
+                            Photo
+                          </a>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    {filteredDriverPhotos.map((photo) => (
+                      <a key={photo.id} href={photo.publicUrl || photo.storagePath} className="rounded-lg border border-border p-3 text-sm" target="_blank" rel="noreferrer">
+                        <div className="font-semibold">{photo.photoType.replaceAll("_", " ")}</div>
+                        <div className="text-muted-foreground">{photo.visibility.replaceAll("_", " ")}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">{formatDate(photo.createdAt)}</div>
+                      </a>
+                    ))}
+                    {filteredDriverPhotos.length === 0 && <p className="text-sm text-muted-foreground">No photos match this filter.</p>}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className="rounded-lg border border-border p-4">
+                    <div className="mb-3 font-semibold">Issues</div>
+                    <div className="space-y-3">
+                      {driverJob.issues.map((issue) => (
+                        <div key={issue.id} className="rounded-md bg-muted/50 p-3 text-sm">
+                          <div className="font-semibold">{issue.issueType.replaceAll("_", " ")} · {issue.severity}</div>
+                          <p className="mt-1 text-muted-foreground">{issue.description}</p>
+                        </div>
+                      ))}
+                      {driverJob.issues.length === 0 && <p className="text-sm text-muted-foreground">No driver issues submitted.</p>}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-border p-4">
+                    <div className="mb-3 font-semibold">Activity & Messages</div>
+                    <div className="max-h-72 space-y-3 overflow-y-auto">
+                      {[...driverJob.activity].slice(0, 10).map((entry) => (
+                        <div key={entry.id} className="rounded-md bg-muted/50 p-3 text-sm">
+                          <div className="font-semibold">{entry.eventType.replaceAll("_", " ")}</div>
+                          <p className="mt-1 text-muted-foreground">{entry.message}</p>
+                        </div>
+                      ))}
+                      {driverJob.activity.length === 0 && <p className="text-sm text-muted-foreground">No driver activity yet.</p>}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>

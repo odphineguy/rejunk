@@ -58,6 +58,78 @@ export type Database = {
           },
         ]
       }
+      driver_location_snapshots: {
+        Row: {
+          accuracy_meters: number | null
+          captured_at: string
+          created_at: string
+          employee_profile_id: string | null
+          id: string
+          job_id: string | null
+          latitude: number
+          longitude: number
+        }
+        Insert: {
+          accuracy_meters?: number | null
+          captured_at?: string
+          created_at?: string
+          employee_profile_id?: string | null
+          id?: string
+          job_id?: string | null
+          latitude: number
+          longitude: number
+        }
+        Update: {
+          accuracy_meters?: number | null
+          captured_at?: string
+          created_at?: string
+          employee_profile_id?: string | null
+          id?: string
+          job_id?: string | null
+          latitude?: number
+          longitude?: number
+        }
+        Relationships: []
+      }
+      employee_profiles: {
+        Row: {
+          auth_user_id: string | null
+          created_at: string
+          display_name: string
+          email: string | null
+          employee_id: string | null
+          id: string
+          phone: string | null
+          role: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          auth_user_id?: string | null
+          created_at?: string
+          display_name: string
+          email?: string | null
+          employee_id?: string | null
+          id?: string
+          phone?: string | null
+          role?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          auth_user_id?: string | null
+          created_at?: string
+          display_name?: string
+          email?: string | null
+          employee_id?: string | null
+          id?: string
+          phone?: string | null
+          role?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       facilities: {
         Row: {
           accepted_materials: string[]
@@ -206,6 +278,312 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      job_activity: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          job_id: string
+          message: string | null
+          metadata: Json
+          new_status: string | null
+          previous_status: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          job_id: string
+          message?: string | null
+          metadata?: Json
+          new_status?: string | null
+          previous_status?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          job_id?: string
+          message?: string | null
+          metadata?: Json
+          new_status?: string | null
+          previous_status?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      job_assignments: {
+        Row: {
+          assigned_by: string | null
+          created_at: string
+          employee_profile_id: string
+          id: string
+          job_id: string
+          role: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          created_at?: string
+          employee_profile_id: string
+          id?: string
+          job_id: string
+          role?: string
+        }
+        Update: {
+          assigned_by?: string | null
+          created_at?: string
+          employee_profile_id?: string
+          id?: string
+          job_id?: string
+          role?: string
+        }
+        Relationships: []
+      }
+      job_issues: {
+        Row: {
+          added_scope_status: string | null
+          created_at: string
+          description: string
+          id: string
+          issue_type: string
+          job_id: string
+          reported_by: string | null
+          requires_dispatch_response: boolean
+          severity: string
+          stop_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          added_scope_status?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          issue_type: string
+          job_id: string
+          reported_by?: string | null
+          requires_dispatch_response?: boolean
+          severity?: string
+          stop_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          added_scope_status?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          issue_type?: string
+          job_id?: string
+          reported_by?: string | null
+          requires_dispatch_response?: boolean
+          severity?: string
+          stop_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      job_items: {
+        Row: {
+          category: string | null
+          created_at: string
+          destination_stop_id: string | null
+          disassembly_required: boolean
+          estimated_weight_lbs: number | null
+          fragile: boolean
+          heavy: boolean
+          id: string
+          instructions: string | null
+          job_id: string
+          name: string
+          oversized: boolean
+          quantity: number
+          reassembly_required: boolean
+          status: string
+          stop_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          destination_stop_id?: string | null
+          disassembly_required?: boolean
+          estimated_weight_lbs?: number | null
+          fragile?: boolean
+          heavy?: boolean
+          id?: string
+          instructions?: string | null
+          job_id: string
+          name: string
+          oversized?: boolean
+          quantity?: number
+          reassembly_required?: boolean
+          status?: string
+          stop_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          destination_stop_id?: string | null
+          disassembly_required?: boolean
+          estimated_weight_lbs?: number | null
+          fragile?: boolean
+          heavy?: boolean
+          id?: string
+          instructions?: string | null
+          job_id?: string
+          name?: string
+          oversized?: boolean
+          quantity?: number
+          reassembly_required?: boolean
+          status?: string
+          stop_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      job_messages: {
+        Row: {
+          attachment_url: string | null
+          created_at: string
+          id: string
+          job_id: string
+          message: string
+          read_at: string | null
+          recipient_scope: string
+          sender_id: string | null
+        }
+        Insert: {
+          attachment_url?: string | null
+          created_at?: string
+          id?: string
+          job_id: string
+          message: string
+          read_at?: string | null
+          recipient_scope?: string
+          sender_id?: string | null
+        }
+        Update: {
+          attachment_url?: string | null
+          created_at?: string
+          id?: string
+          job_id?: string
+          message?: string
+          read_at?: string | null
+          recipient_scope?: string
+          sender_id?: string | null
+        }
+        Relationships: []
+      }
+      job_photos: {
+        Row: {
+          caption: string | null
+          created_at: string
+          id: string
+          job_id: string
+          photo_type: string
+          stop_id: string | null
+          storage_path: string
+          uploaded_by: string | null
+          visibility: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          job_id: string
+          photo_type?: string
+          stop_id?: string | null
+          storage_path: string
+          uploaded_by?: string | null
+          visibility?: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          job_id?: string
+          photo_type?: string
+          stop_id?: string | null
+          storage_path?: string
+          uploaded_by?: string | null
+          visibility?: string
+        }
+        Relationships: []
+      }
+      job_stops: {
+        Row: {
+          address: string | null
+          arrival_window_end: string | null
+          arrival_window_start: string | null
+          arrived_at: string | null
+          city: string | null
+          completed_at: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string
+          id: string
+          instructions: string | null
+          job_id: string
+          latitude: number | null
+          longitude: number | null
+          name: string
+          state: string | null
+          status: string
+          stop_order: number
+          stop_type: string
+          updated_at: string
+          zip: string | null
+        }
+        Insert: {
+          address?: string | null
+          arrival_window_end?: string | null
+          arrival_window_start?: string | null
+          arrived_at?: string | null
+          city?: string | null
+          completed_at?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          instructions?: string | null
+          job_id: string
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          state?: string | null
+          status?: string
+          stop_order: number
+          stop_type?: string
+          updated_at?: string
+          zip?: string | null
+        }
+        Update: {
+          address?: string | null
+          arrival_window_end?: string | null
+          arrival_window_start?: string | null
+          arrived_at?: string | null
+          city?: string | null
+          completed_at?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          instructions?: string | null
+          job_id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          state?: string | null
+          status?: string
+          stop_order?: number
+          stop_type?: string
+          updated_at?: string
+          zip?: string | null
+        }
+        Relationships: []
       }
       material_pricing_rules: {
         Row: {
@@ -491,7 +869,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      current_employee_profile_id: { Args: never; Returns: string }
+      current_user_is_assigned_to_job: {
+        Args: { target_job_id: string }
+        Returns: boolean
+      }
+      get_driver_today: { Args: never; Returns: Json }
+      driver_update_job_status: {
+        Args: { target_job_id: string; next_status: string; note?: string | null }
+        Returns: undefined
+      }
       is_manager: { Args: never; Returns: boolean }
+      is_dispatch_user: { Args: never; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
