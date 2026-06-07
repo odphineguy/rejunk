@@ -40,19 +40,21 @@ export const legacyToDriverStatus: Record<string, DriverJobStatus> = {
 };
 
 const allowedTransitions: Record<DriverJobStatus, DriverJobStatus[]> = {
-  assigned: ["en_route", "delayed", "issue", "canceled"],
-  en_route: ["arrived", "delayed", "issue", "canceled"],
-  arrived: ["in_progress", "delayed", "issue", "canceled"],
-  in_progress: ["loaded", "completed", "delayed", "issue", "canceled"],
-  loaded: ["en_route_to_next_stop", "en_route_to_disposal", "completed", "delayed", "issue", "canceled"],
-  en_route_to_next_stop: ["arrived", "delayed", "issue", "canceled"],
-  en_route_to_disposal: ["dumping", "delayed", "issue", "canceled"],
-  dumping: ["completed", "delayed", "issue", "canceled"],
+  assigned: ["en_route", "delayed", "issue"],
+  en_route: ["arrived", "delayed", "issue"],
+  arrived: ["in_progress", "delayed", "issue"],
+  in_progress: ["loaded", "completed", "delayed", "issue"],
+  loaded: ["en_route_to_next_stop", "en_route_to_disposal", "completed", "delayed", "issue"],
+  en_route_to_next_stop: ["arrived", "delayed", "issue"],
+  en_route_to_disposal: ["dumping", "delayed", "issue"],
+  dumping: ["completed", "delayed", "issue"],
   completed: [],
-  delayed: ["en_route", "arrived", "in_progress", "loaded", "issue", "canceled"],
-  issue: ["assigned", "en_route", "arrived", "in_progress", "loaded", "delayed", "canceled"],
+  delayed: ["en_route", "arrived", "in_progress", "loaded", "issue"],
+  issue: [],
   canceled: [],
 };
+
+export const dispatchOnlyStatuses: DriverJobStatus[] = ["canceled"];
 
 export function toDriverStatus(status: JobStatus | string | undefined): DriverJobStatus {
   if (status && driverJobStatuses.includes(status as DriverJobStatus)) return status as DriverJobStatus;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useRoute } from "wouter";
-import { ArrowLeft, Camera, CheckCircle2, FileWarning, MessageSquare, Navigation, Phone, Send, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Camera, CheckCircle2, FileWarning, MessageSquare, Navigation, Phone, Send, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { JobStatusBadge } from "@/components/JobBadges";
@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import {
   formatDriverAddress,
+  confirmDispatchCalled,
   getDriverJob,
   reportJobIssue,
   sendJobMessage,
@@ -28,6 +29,14 @@ import type { DriverJobStatus } from "@/types/jobs";
 
 const issueTypes: JobIssueType[] = [
   "customer_not_home",
+  "gate_locked",
+  "access_blocked",
+  "unable_to_locate",
+  "customer_not_ready",
+  "unsafe_to_service",
+  "scope_dispute",
+  "disposal_access_problem",
+  "other_service_blocker",
   "access_problem",
   "additional_items",
   "item_not_listed",
@@ -91,6 +100,27 @@ export default function DriverJobDetail() {
   }, [params?.jobId]);
 
   const availableStatuses = useMemo(() => nextDriverStatuses(job?.status), [job?.status]);
+  const blockingIssue = useMemo(
+    () => job?.issues.find((issue) => issue.requiresDispatchResponse && issue.issueStatus !== "resolved" && !issue.driverReleasedAt),
+    [job?.issues],
+  );
+  const primaryAction = useMemo(() => {
+    if (!job || blockingIssue) return null;
+    const status = toDriverStatus(job.status);
+    const next = availableStatuses[0];
+    if (!next) return null;
+    const labels: Partial<Record<DriverJobStatus, string>> = {
+      en_route: "Start Trip",
+      arrived: "Arrived",
+      in_progress: "Start Work",
+      loaded: "Mark Loaded",
+      en_route_to_next_stop: "Go to Next Stop",
+      en_route_to_disposal: "Go to Disposal",
+      dumping: "Begin Dumping",
+      completed: status === "dumping" ? "Complete Disposal" : "Complete Job",
+    };
+    return { status: next, label: labels[next] ?? operationalStatusLabels[next] };
+  }, [availableStatuses, blockingIssue, job]);
 
   const changeStatus = async (status: DriverJobStatus) => {
     if (!job) return;
@@ -204,15 +234,43 @@ export default function DriverJobDetail() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Update status</CardTitle>
+            <CardTitle className="text-base">Next action</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-2 p-4 pt-0">
-            {availableStatuses.map((status) => (
-              <Button key={status} variant={status === "issue" ? "destructive" : "outline"} className="h-12 justify-start" onClick={() => void changeStatus(status)}>
-                {operationalStatusLabels[status]}
+          <CardContent className="space-y-3 p-4 pt-0">
+            {blockingIssue && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-950">
+                <div className="flex gap-2 font-bold">
+                  <AlertTriangle className="size-5 shrink-0" />
+                  Do not leave this location until dispatch releases you.
+                </div>
+                <p className="mt-2">{blockingIssue.dispatchInstructions || blockingIssue.dispatchResponse || "Awaiting dispatch instructions."}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button asChild variant="outline">
+                    <a href="tel:">
+                      <Phone className="size-4" />
+                      Call Dispatch
+                    </a>
+                  </Button>
+                  <Button onClick={() => void confirmDispatchCalled(blockingIssue).then(refresh)}>Called Dispatch</Button>
+                </div>
+              </div>
+            )}
+            {primaryAction ? (
+              <Button className="h-14 w-full text-base" onClick={() => void changeStatus(primaryAction.status)}>
+                {primaryAction.label}
               </Button>
-            ))}
-            {availableStatuses.length === 0 && <p className="col-span-2 text-sm text-muted-foreground">No further driver status updates are available.</p>}
+            ) : (
+              <p className="text-sm text-muted-foreground">{toDriverStatus(job.status) === "completed" ? "This job is complete." : "Waiting for dispatch resolution."}</p>
+            )}
+            {!blockingIssue && (
+              <div className="flex flex-wrap gap-2">
+                {availableStatuses.filter((status) => status !== primaryAction?.status && status !== "canceled").map((status) => (
+                  <Button key={status} variant={status === "issue" ? "destructive" : "outline"} className="h-11" onClick={() => void changeStatus(status)}>
+                    {status === "issue" ? "Report Problem" : operationalStatusLabels[status]}
+                  </Button>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -234,7 +292,7 @@ export default function DriverJobDetail() {
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <Button variant="outline" className="h-11" onClick={() => void updateStopStatus(stop, "arrived").then(refresh)}>Arrived</Button>
-                  <Button className="h-11" onClick={() => void updateStopStatus(stop, "completed").then(refresh)}>Complete</Button>
+                  <Button className="h-11" disabled={Boolean(blockingIssue)} onClick={() => void updateStopStatus(stop, "completed").then(refresh).catch((error) => toast.error(error instanceof Error ? error.message : "Stop update failed"))}>Complete</Button>
                 </div>
               </div>
             ))}

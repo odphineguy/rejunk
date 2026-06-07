@@ -22,6 +22,22 @@ export type PaymentStatus = "unpaid" | "deposit_paid" | "paid" | "refunded";
 
 export type JobSource = "manual" | "estimate" | "demo";
 
+export type JobLeadSource = "thumbtack" | "phone" | "repeat_customer" | "referral" | "website" | "housecall_pro" | "other";
+
+export type JobServiceType =
+  | "junk_removal"
+  | "moving"
+  | "labor_only"
+  | "furniture_assembly"
+  | "appliance_moving"
+  | "heavy_material_hauling"
+  | "delivery"
+  | "demolition"
+  | "specialty_moving"
+  | "other";
+
+export type JobPriority = "low" | "normal" | "high" | "urgent";
+
 export interface JobAssignment {
   crewLead?: string;
   crewMembers?: string[];
@@ -55,6 +71,11 @@ export interface Job {
   updatedAt: string;
   customerName: string;
   jobLabel?: string;
+  leadSource?: JobLeadSource;
+  serviceType?: JobServiceType;
+  priority?: JobPriority;
+  estimatedDurationMinutes?: number;
+  crewSequence?: number;
   phone?: string;
   email?: string;
   address?: string;

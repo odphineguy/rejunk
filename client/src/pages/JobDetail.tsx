@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useRoute } from "wouter";
-import { ArrowLeft, CalendarClock, CopyPlus, Download, Receipt, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarClock, CopyPlus, Download, MessageSquare, Receipt, Save, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { JobStatusBadge, JobWarningBadge, PaymentStatusBadge, jobStatusLabels, paymentStatusLabels } from "@/components/JobBadges";
@@ -25,12 +25,21 @@ import {
   margin,
 } from "@/lib/jobIntelligence";
 import { toDriverJob } from "@/lib/driverStorage";
+import {
+  dispatchResolveIssue,
+  employeeLabel,
+  employeeOptions,
+  saveDispatchOperationalPlan,
+  sendDispatchJobMessage,
+  updatePhotoVisibility,
+  type DispatchAssignmentInput,
+} from "@/lib/dispatchOperations";
 import { deleteJob, duplicateJob, getActualFinancials, getJobs, saveJob, updateJob } from "@/lib/jobStorage";
 import { loadPricingSettings } from "@/utils/pricingStorage";
 import { getRouteEstimateToFacility } from "@/utils/distanceRouting";
 import { buildBestRecommendation, recommendationInputFromJob } from "@/utils/recommendations";
 import type { Job, JobStatus, PaymentStatus } from "@/types/jobs";
-import type { JobPhotoVisibility } from "@/types/driver";
+import type { JobIssue, JobIssueResolutionType, JobIssueStatus, JobItem, JobPhotoVisibility, JobStop } from "@/types/driver";
 import type { JobRouteEstimate } from "@/types/pricing";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -120,6 +129,8 @@ export default function JobDetail() {
   const [settings, setSettings] = useState(() => loadPricingSettings());
   const [job, setJob] = useState<Job | null>(() => getJobs().find((item) => item.id === params?.jobId) ?? null);
   const [photoVisibilityFilter, setPhotoVisibilityFilter] = useState<"all" | JobPhotoVisibility>("all");
+  const [dispatchMessage, setDispatchMessage] = useState("");
+  const [instructionUpdate, setInstructionUpdate] = useState("");
   const [routeEstimates, setRouteEstimates] = useState<Record<string, JobRouteEstimate>>(() =>
     routeEstimatesFromJob(getJobs().find((item) => item.id === params?.jobId) ?? null),
   );
@@ -128,7 +139,11 @@ export default function JobDetail() {
   useEffect(() => {
     const refresh = () => setJob(getJobs().find((item) => item.id === params?.jobId) ?? null);
     window.addEventListener("jobs-updated", refresh);
-    return () => window.removeEventListener("jobs-updated", refresh);
+    window.addEventListener("driver-data-updated", refresh);
+    return () => {
+      window.removeEventListener("jobs-updated", refresh);
+      window.removeEventListener("driver-data-updated", refresh);
+    };
   }, [params?.jobId]);
 
   useEffect(() => {
@@ -266,6 +281,21 @@ export default function JobDetail() {
     if (!job) return;
     const updated = updateJob(job.id, updates);
     if (updated) setJob(updated);
+  };
+
+  const saveInstructionUpdate = async () => {
+    if (!job || !instructionUpdate.trim()) return;
+    applyUpdates({ internalNotes: [job.internalNotes, instructionUpdate.trim()].filter(Boolean).join("\n\n") });
+    await saveDispatchOperationalPlan(job.id, { instructionUpdate: `Instructions updated: ${instructionUpdate.trim()}` });
+    setInstructionUpdate("");
+    toast.success("Instruction update published");
+  };
+
+  const sendCrewMessage = async () => {
+    if (!job || !dispatchMessage.trim()) return;
+    await sendDispatchJobMessage(job.id, dispatchMessage);
+    setDispatchMessage("");
+    toast.success("Message sent to assigned crew");
   };
 
   const updateActual = (field: keyof NonNullable<Job["actuals"]>, value: string) => {
@@ -461,6 +491,18 @@ export default function JobDetail() {
                         <div className="font-semibold">{photo.photoType.replaceAll("_", " ")}</div>
                         <div className="text-muted-foreground">{photo.visibility.replaceAll("_", " ")}</div>
                         <div className="mt-1 text-xs text-muted-foreground">{formatDate(photo.createdAt)}</div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="mt-3"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            void updatePhotoVisibility(photo, photo.visibility === "customer_ready" ? "internal" : "customer_ready").then(() => setJob(getJobs().find((item) => item.id === job.id) ?? job));
+                          }}
+                        >
+                          Mark {photo.visibility === "customer_ready" ? "internal" : "customer-ready"}
+                        </Button>
                       </a>
                     ))}
                     {filteredDriverPhotos.length === 0 && <p className="text-sm text-muted-foreground">No photos match this filter.</p>}
@@ -493,6 +535,47 @@ export default function JobDetail() {
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {driverJob && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Dispatch Control</CardTitle>
+                <CardDescription>Assignments, instructions, stop/item edits, crew messaging, and exception resolution.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <AssignmentEditor job={job} onSaved={() => setJob(getJobs().find((item) => item.id === job.id) ?? job)} />
+
+                <div className="rounded-lg border border-border p-4">
+                  <div className="mb-3 font-semibold">Publish instruction update</div>
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                    <Textarea value={instructionUpdate} onChange={(event) => setInstructionUpdate(event.target.value)} placeholder="What changed for the crew?" rows={3} />
+                    <Button className="h-11 md:self-end" onClick={() => void saveInstructionUpdate()}>
+                      <Send className="size-4" />
+                      Publish
+                    </Button>
+                  </div>
+                </div>
+
+                <StopsItemsEditor jobId={job.id} stops={driverJob.stops} items={driverJob.items} onSaved={() => setJob(getJobs().find((item) => item.id === job.id) ?? job)} />
+
+                <div className="rounded-lg border border-border p-4">
+                  <div className="mb-3 flex items-center gap-2 font-semibold">
+                    <MessageSquare className="size-4" />
+                    Message assigned crew
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                    <Input value={dispatchMessage} onChange={(event) => setDispatchMessage(event.target.value)} placeholder="Job-specific message" />
+                    <Button onClick={() => void sendCrewMessage()}>
+                      <Send className="size-4" />
+                      Send
+                    </Button>
+                  </div>
+                </div>
+
+                <ExceptionResolutionPanel issues={driverJob.issues} onResolved={() => setJob(getJobs().find((item) => item.id === job.id) ?? job)} />
               </CardContent>
             </Card>
           )}
@@ -811,6 +894,209 @@ function TextAreaField({ label, value, onChange }: { label: string; value: strin
     <div className="space-y-2">
       <Label>{label}</Label>
       <Textarea value={value} onChange={(event) => onChange(event.target.value)} rows={6} />
+    </div>
+  );
+}
+
+function AssignmentEditor({ job, onSaved }: { job: Job; onSaved: () => void }) {
+  const employees = employeeOptions();
+  const [crewLeadId, setCrewLeadId] = useState("none");
+  const [driverId, setDriverId] = useState("none");
+  const [helperIds, setHelperIds] = useState<string[]>([]);
+  const [vehicleName, setVehicleName] = useState(job.vehicleName ?? job.assignment?.vehicleName ?? "");
+  const [crewSequence, setCrewSequence] = useState(String(job.crewSequence ?? 1));
+
+  const save = async () => {
+    const assignment: DispatchAssignmentInput = {
+      crewLeadId: crewLeadId === "none" ? undefined : crewLeadId,
+      driverId: driverId === "none" ? undefined : driverId,
+      helperIds,
+      vehicleName,
+      crewSequence: Number(crewSequence || 1),
+    };
+    await saveDispatchOperationalPlan(job.id, { assignment, activityMessage: "Dispatch updated crew assignment." });
+    toast.success("Assignment updated");
+    onSaved();
+  };
+
+  return (
+    <div className="rounded-lg border border-border p-4">
+      <div className="mb-3 font-semibold">Assignment</div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <SelectLite label="Crew lead" value={crewLeadId} onChange={setCrewLeadId} options={[{ value: "none", label: "Unassigned" }, ...employees.map((employee) => ({ value: employee.id, label: employeeLabel(employee) }))]} />
+        <SelectLite label="Driver" value={driverId} onChange={setDriverId} options={[{ value: "none", label: "Unassigned" }, ...employees.map((employee) => ({ value: employee.id, label: employeeLabel(employee) }))]} />
+        <EditableField label="Vehicle" value={vehicleName} onChange={setVehicleName} />
+        <EditableField label="Crew sequence" type="number" value={crewSequence} onChange={setCrewSequence} />
+        <div className="space-y-2 md:col-span-2">
+          <Label>Helpers</Label>
+          <div className="grid gap-2 rounded-md border border-border p-3 md:grid-cols-2">
+            {employees.map((employee) => (
+              <label key={employee.id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={helperIds.includes(employee.id)}
+                  onChange={(event) => setHelperIds((current) => event.target.checked ? [...current, employee.id] : current.filter((id) => id !== employee.id))}
+                />
+                {employeeLabel(employee)}
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+      <Button className="mt-4" onClick={() => void save()}>
+        Save Assignment
+      </Button>
+    </div>
+  );
+}
+
+function StopsItemsEditor({ jobId, stops, items, onSaved }: { jobId: string; stops: JobStop[]; items: JobItem[]; onSaved: () => void }) {
+  const [draftStops, setDraftStops] = useState(stops);
+  const [draftItems, setDraftItems] = useState(items);
+
+  useEffect(() => setDraftStops(stops), [stops]);
+  useEffect(() => setDraftItems(items), [items]);
+
+  const save = async () => {
+    await saveDispatchOperationalPlan(jobId, { stops: draftStops, items: draftItems, activityMessage: "Dispatch updated stops and item checklist." });
+    toast.success("Stops and items updated");
+    onSaved();
+  };
+
+  return (
+    <div className="rounded-lg border border-border p-4">
+      <div className="mb-3 font-semibold">Stops and items</div>
+      <div className="space-y-3">
+        {draftStops.map((stop, index) => (
+          <div key={stop.id} className="rounded-md bg-muted/40 p-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="text-sm font-semibold">Stop {index + 1}</span>
+              <Button variant="outline" size="sm" disabled={draftStops.length === 1} onClick={() => setDraftStops((current) => current.filter((item) => item.id !== stop.id))}>Remove</Button>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <EditableField label="Name" value={stop.name} onChange={(value) => setDraftStops((current) => current.map((item) => item.id === stop.id ? { ...item, name: value } : item))} />
+              <EditableField label="Address" value={stop.address ?? ""} onChange={(value) => setDraftStops((current) => current.map((item) => item.id === stop.id ? { ...item, address: value } : item))} />
+              <div className="md:col-span-2">
+                <TextAreaField label="Instructions" value={stop.instructions ?? ""} onChange={(value) => setDraftStops((current) => current.map((item) => item.id === stop.id ? { ...item, instructions: value } : item))} />
+              </div>
+            </div>
+          </div>
+        ))}
+        <Button variant="outline" onClick={() => {
+          const now = new Date().toISOString();
+          setDraftStops((current) => [...current, { id: `stop-${Date.now()}`, jobId, stopOrder: current.length + 1, stopType: "service", name: `Stop ${current.length + 1}`, state: "AZ", status: "pending", createdAt: now, updatedAt: now }]);
+        }}>
+          Add Stop
+        </Button>
+      </div>
+
+      <div className="mt-5 space-y-3">
+        {draftItems.map((item) => (
+          <div key={item.id} className="grid gap-3 rounded-md bg-muted/40 p-3 md:grid-cols-[1fr_100px_auto]">
+            <EditableField label="Item" value={item.name} onChange={(value) => setDraftItems((current) => current.map((draft) => draft.id === item.id ? { ...draft, name: value } : draft))} />
+            <EditableField label="Qty" type="number" value={String(item.quantity)} onChange={(value) => setDraftItems((current) => current.map((draft) => draft.id === item.id ? { ...draft, quantity: Number(value || 1) } : draft))} />
+            <Button variant="outline" className="self-end" onClick={() => setDraftItems((current) => current.filter((draft) => draft.id !== item.id))}>Remove</Button>
+          </div>
+        ))}
+        <Button variant="outline" onClick={() => {
+          const now = new Date().toISOString();
+          setDraftItems((current) => [...current, { id: `item-${Date.now()}`, jobId, stopId: draftStops[0]?.id, name: "New item", quantity: 1, oversized: false, fragile: false, heavy: false, disassemblyRequired: false, reassemblyRequired: false, status: "pending", createdAt: now, updatedAt: now }]);
+        }}>
+          Add Item
+        </Button>
+      </div>
+      <Button className="mt-4" onClick={() => void save()}>Save Stops and Items</Button>
+    </div>
+  );
+}
+
+function ExceptionResolutionPanel({ issues, onResolved }: { issues: JobIssue[]; onResolved: () => void }) {
+  const unresolved = issues.filter((issue) => issue.issueStatus !== "resolved" || !issue.resolvedAt);
+  if (issues.length === 0) {
+    return <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No driver exceptions submitted.</div>;
+  }
+
+  return (
+    <div className="rounded-lg border border-border p-4">
+      <div className="mb-3 font-semibold">Exception queue</div>
+      <div className="space-y-3">
+        {unresolved.map((issue) => (
+          <IssueResolutionRow key={issue.id} issue={issue} onResolved={onResolved} />
+        ))}
+        {unresolved.length === 0 && <p className="text-sm text-muted-foreground">All issues resolved.</p>}
+      </div>
+    </div>
+  );
+}
+
+function IssueResolutionRow({ issue, onResolved }: { issue: JobIssue; onResolved: () => void }) {
+  const [issueStatus, setIssueStatus] = useState<JobIssueStatus>(issue.issueStatus ?? "dispatch_reviewing");
+  const [resolutionType, setResolutionType] = useState<JobIssueResolutionType>("proceed");
+  const [dispatchInstructions, setDispatchInstructions] = useState(issue.dispatchInstructions ?? "");
+  const [releaseDriver, setReleaseDriver] = useState(false);
+
+  const resolve = async () => {
+    if (["skip_stop", "reschedule", "cancel_job", "unable_to_service"].includes(resolutionType) && !dispatchInstructions.trim()) {
+      toast.error("A resolution note is required for this action");
+      return;
+    }
+    await dispatchResolveIssue(issue, { issueStatus, resolutionType, dispatchInstructions, dispatchResponse: dispatchInstructions, releaseDriver });
+    toast.success("Dispatch resolution recorded");
+    onResolved();
+  };
+
+  return (
+    <div className="rounded-md bg-muted/40 p-3 text-sm">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <div className="font-semibold">{issue.issueType.replaceAll("_", " ")} · {issue.severity}</div>
+          <p className="mt-1 text-muted-foreground">{issue.description}</p>
+          {issue.driverCalledDispatchAt && <Badge className="mt-2 bg-green-100 text-green-700">Driver called dispatch</Badge>}
+        </div>
+        <Badge variant="outline">{(issue.issueStatus ?? "awaiting_dispatch").replaceAll("_", " ")}</Badge>
+      </div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <SelectLite
+          label="Issue status"
+          value={issueStatus}
+          onChange={(value) => setIssueStatus(value as JobIssueStatus)}
+          options={["dispatch_reviewing", "contacting_customer", "waiting_on_customer", "instructions_sent", "resolved"].map((value) => ({ value, label: value.replaceAll("_", " ") }))}
+        />
+        <SelectLite
+          label="Resolution"
+          value={resolutionType}
+          onChange={(value) => setResolutionType(value as JobIssueResolutionType)}
+          options={["proceed", "wait", "return_later", "reschedule", "skip_stop", "cancel_job", "unable_to_service", "other"].map((value) => ({ value, label: value.replaceAll("_", " ") }))}
+        />
+        <div className="md:col-span-2">
+          <TextAreaField label="Dispatch instructions / resolution note" value={dispatchInstructions} onChange={setDispatchInstructions} />
+        </div>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={releaseDriver} onChange={(event) => setReleaseDriver(event.target.checked)} />
+          Release driver from location
+        </label>
+      </div>
+      <Button className="mt-3" onClick={() => void resolve()}>Record Resolution</Button>
+    </div>
+  );
+}
+
+function SelectLite({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string }> }) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

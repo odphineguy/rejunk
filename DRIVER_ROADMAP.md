@@ -1,16 +1,20 @@
 # Driver Roadmap
 
-## Phase 2
+## Phase 2 Completed
 
-- Real driver login and profile management.
-- Dispatcher assignment UI backed by `employee_profiles` and `job_assignments`.
-- Realtime Supabase subscriptions for driver status, messages, issues, and photos.
-- Photo retry queue for offline uploads.
-- Dispatch issue response workflow for added-scope approvals.
-- Customer-ready photo packaging and ZIP download.
+- Structured dispatch job creation.
+- Assignment, stops, items, instruction updates, photos, issue resolution, and job-specific messaging.
+- Operations board and exception queue.
+- Dynamic driver status actions.
+- Haul or Call blocker workflow with dispatch release control.
+- Driver cancellation and stop-skipping restrictions.
 
 ## Phase 3
 
+- Real driver login/profile onboarding UI tied to `employee_profiles`.
+- Supabase Realtime subscriptions for status, assignments, messages, issues, photos, and instruction changes.
+- Photo retry queue for offline uploads.
+- Customer-ready photo packaging and ZIP download.
 - Continuous background GPS with consent, retention rules, and dispatch map visibility.
 - Customer live tracking page.
 - Push notifications for urgent dispatch messages and issue responses.

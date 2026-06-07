@@ -91,6 +91,27 @@ export type Database = {
         }
         Relationships: []
       }
+      job_instruction_acknowledgements: {
+        Row: {
+          acknowledged_at: string
+          acknowledged_by: string
+          id: string
+          job_id: string
+        }
+        Insert: {
+          acknowledged_at?: string
+          acknowledged_by: string
+          id?: string
+          job_id: string
+        }
+        Update: {
+          acknowledged_at?: string
+          acknowledged_by?: string
+          id?: string
+          job_id?: string
+        }
+        Relationships: []
+      }
       employee_profiles: {
         Row: {
           auth_user_id: string | null
@@ -231,40 +252,55 @@ export type Database = {
           data: Json
           estimate_id: string | null
           id: string
+          lead_source: string | null
           job_number: string | null
           payment_status: string | null
+          priority: string
           quoted_amount: number | null
           scheduled_start: string | null
+          service_type: string | null
           source: string | null
           status: string | null
+          estimated_duration_minutes: number | null
+          crew_sequence: number | null
           updated_at: string
         }
         Insert: {
+          crew_sequence?: number | null
           created_at?: string
           created_by?: string | null
           customer_name?: string | null
           data: Json
           estimate_id?: string | null
+          estimated_duration_minutes?: number | null
           id: string
+          lead_source?: string | null
           job_number?: string | null
           payment_status?: string | null
+          priority?: string
           quoted_amount?: number | null
           scheduled_start?: string | null
+          service_type?: string | null
           source?: string | null
           status?: string | null
           updated_at?: string
         }
         Update: {
+          crew_sequence?: number | null
           created_at?: string
           created_by?: string | null
           customer_name?: string | null
           data?: Json
           estimate_id?: string | null
+          estimated_duration_minutes?: number | null
           id?: string
+          lead_source?: string | null
           job_number?: string | null
           payment_status?: string | null
+          priority?: string
           quoted_amount?: number | null
           scheduled_start?: string | null
+          service_type?: string | null
           source?: string | null
           status?: string | null
           updated_at?: string
@@ -319,65 +355,104 @@ export type Database = {
         Row: {
           assigned_by: string | null
           created_at: string
+          crew_sequence: number | null
           employee_profile_id: string
           id: string
           job_id: string
           role: string
+          updated_at: string
         }
         Insert: {
           assigned_by?: string | null
           created_at?: string
+          crew_sequence?: number | null
           employee_profile_id: string
           id?: string
           job_id: string
           role?: string
+          updated_at?: string
         }
         Update: {
           assigned_by?: string | null
           created_at?: string
+          crew_sequence?: number | null
           employee_profile_id?: string
           id?: string
           job_id?: string
           role?: string
+          updated_at?: string
         }
         Relationships: []
       }
       job_issues: {
         Row: {
           added_scope_status: string | null
+          customer_contact_attempted_at: string | null
+          customer_contact_result: string | null
           created_at: string
           description: string
+          dispatch_instructions: string | null
+          dispatch_response: string | null
+          driver_called_dispatch_at: string | null
+          driver_released_at: string | null
+          driver_released_by: string | null
           id: string
+          issue_status: string
           issue_type: string
           job_id: string
           reported_by: string | null
           requires_dispatch_response: boolean
+          resolution_type: string | null
+          resolved_at: string | null
+          resolved_by: string | null
           severity: string
           stop_id: string | null
           updated_at: string
         }
         Insert: {
           added_scope_status?: string | null
+          customer_contact_attempted_at?: string | null
+          customer_contact_result?: string | null
           created_at?: string
           description: string
+          dispatch_instructions?: string | null
+          dispatch_response?: string | null
+          driver_called_dispatch_at?: string | null
+          driver_released_at?: string | null
+          driver_released_by?: string | null
           id?: string
+          issue_status?: string
           issue_type: string
           job_id: string
           reported_by?: string | null
           requires_dispatch_response?: boolean
+          resolution_type?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
           severity?: string
           stop_id?: string | null
           updated_at?: string
         }
         Update: {
           added_scope_status?: string | null
+          customer_contact_attempted_at?: string | null
+          customer_contact_result?: string | null
           created_at?: string
           description?: string
+          dispatch_instructions?: string | null
+          dispatch_response?: string | null
+          driver_called_dispatch_at?: string | null
+          driver_released_at?: string | null
+          driver_released_by?: string | null
           id?: string
+          issue_status?: string
           issue_type?: string
           job_id?: string
           reported_by?: string | null
           requires_dispatch_response?: boolean
+          resolution_type?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
           severity?: string
           stop_id?: string | null
           updated_at?: string
@@ -877,6 +952,21 @@ export type Database = {
       get_driver_today: { Args: never; Returns: Json }
       driver_update_job_status: {
         Args: { target_job_id: string; next_status: string; note?: string | null }
+        Returns: undefined
+      }
+      driver_confirm_dispatch_called: {
+        Args: { target_issue_id: string }
+        Returns: undefined
+      }
+      dispatch_resolve_job_issue: {
+        Args: {
+          target_issue_id: string
+          next_issue_status: string
+          resolution: string | null
+          instructions: string | null
+          response: string | null
+          release_driver?: boolean
+        }
         Returns: undefined
       }
       is_manager: { Args: never; Returns: boolean }

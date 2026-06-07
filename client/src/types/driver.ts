@@ -13,17 +13,32 @@ export type JobActivityEventType =
   | "message"
   | "issue_reported"
   | "scope_change"
-  | "assignment_changed";
+  | "assignment_changed"
+  | "instruction_acknowledged"
+  | "dispatch_resolution"
+  | "customer_contact"
+  | "driver_release";
 export type JobPhotoType = "before" | "progress" | "after" | "damage" | "issue" | "receipt" | "equipment" | "other";
 export type JobPhotoVisibility = "internal" | "customer_ready";
 export type JobMessageRecipientScope = "dispatch" | "assigned_crew" | "all_job_participants";
 export type JobIssueType =
   | "customer_not_home"
   | "access_problem"
+  | "gate_locked"
+  | "access_blocked"
+  | "unable_to_locate"
+  | "customer_not_ready"
+  | "unsafe_to_service"
+  | "scope_dispute"
+  | "disposal_access_problem"
+  | "other_service_blocker"
   | "additional_items"
   | "item_not_listed"
   | "heavy_item"
   | "oversized_item"
+  | "unexpected_stairs_access"
+  | "extra_stop_requested"
+  | "different_service_requested"
   | "damage"
   | "vehicle_problem"
   | "running_late"
@@ -31,7 +46,9 @@ export type JobIssueType =
   | "unsafe_condition"
   | "other";
 export type JobIssueSeverity = "low" | "medium" | "high" | "urgent";
-export type AddedScopeReviewStatus = "awaiting_review" | "approved_continue" | "declined" | "call_dispatch";
+export type AddedScopeReviewStatus = "awaiting_review" | "approved_continue" | "declined" | "call_dispatch" | "awaiting_customer_approval" | "rescope_requote";
+export type JobIssueStatus = "awaiting_dispatch" | "dispatch_reviewing" | "contacting_customer" | "waiting_on_customer" | "instructions_sent" | "resolved";
+export type JobIssueResolutionType = "proceed" | "wait" | "return_later" | "reschedule" | "skip_stop" | "cancel_job" | "unable_to_service" | "other";
 
 export interface DriverProfile {
   id: string;
@@ -143,8 +160,26 @@ export interface JobIssue {
   severity: JobIssueSeverity;
   requiresDispatchResponse: boolean;
   addedScopeStatus?: AddedScopeReviewStatus;
+  issueStatus?: JobIssueStatus;
+  dispatchResponse?: string;
+  dispatchInstructions?: string;
+  resolvedBy?: string;
+  resolvedAt?: string;
+  customerContactAttemptedAt?: string;
+  customerContactResult?: string;
+  driverCalledDispatchAt?: string;
+  driverReleasedAt?: string;
+  driverReleasedBy?: string;
+  resolutionType?: JobIssueResolutionType;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface JobInstructionAcknowledgement {
+  id: string;
+  jobId: string;
+  acknowledgedBy: string;
+  acknowledgedAt: string;
 }
 
 export type DriverJob = Pick<
@@ -177,6 +212,7 @@ export type DriverJob = Pick<
   photos: JobPhoto[];
   messages: JobMessage[];
   issues: JobIssue[];
+  instructionAcknowledgements?: JobInstructionAcknowledgement[];
   assignedCrew: DriverProfile[];
   instructionsChanged?: boolean;
 };

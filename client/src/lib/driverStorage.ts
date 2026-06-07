@@ -304,6 +304,9 @@ export async function updateDriverJobStatus(jobId: string, nextStatus: DriverJob
 }
 
 export async function updateStopStatus(stop: JobStop, status: JobStopStatus) {
+  if (status === "skipped") throw new Error("Only dispatch can skip a stop.");
+  const blocking = readJson(OPERATIONAL_CACHE_KEY, emptyOperationalCache()).issues.some((issue) => issue.jobId === stop.jobId && issue.requiresDispatchResponse && issue.issueStatus !== "resolved" && !issue.driverReleasedAt);
+  if (blocking && status === "completed") throw new Error("A blocking issue requires dispatch resolution before completing this stop.");
   const now = new Date().toISOString();
   const updated = { ...stop, status, arrivedAt: status === "arrived" ? now : stop.arrivedAt, completedAt: status === "completed" ? now : stop.completedAt, updatedAt: now };
   upsertOperational("stops", updated);
@@ -421,10 +424,12 @@ export async function reportJobIssue(input: {
     severity: input.severity,
     description: input.description.trim(),
     requiresDispatchResponse: input.requiresDispatchResponse,
+    issueStatus: input.requiresDispatchResponse ? "awaiting_dispatch" : undefined,
     addedScopeStatus: ["additional_items", "item_not_listed", "heavy_item", "oversized_item"].includes(input.issueType) ? "awaiting_review" : undefined,
     createdAt: now,
     updatedAt: now,
   };
+  if (input.requiresDispatchResponse) updateJob(input.jobId, { status: "issue" });
   upsertOperational("issues", row);
   upsertOperational("activity", {
     id: id("activity"),
@@ -445,7 +450,34 @@ export async function reportJobIssue(input: {
       severity: row.severity,
       requires_dispatch_response: row.requiresDispatchResponse,
       added_scope_status: row.addedScopeStatus ?? null,
+      issue_status: row.issueStatus ?? "awaiting_dispatch",
     });
+  }
+}
+
+export async function confirmDispatchCalled(issue: JobIssue) {
+  const now = new Date().toISOString();
+  const cache = readJson(OPERATIONAL_CACHE_KEY, emptyOperationalCache());
+  const updated = { ...issue, driverCalledDispatchAt: now, updatedAt: now };
+  writeJson(OPERATIONAL_CACHE_KEY, {
+    ...cache,
+    issues: [updated, ...cache.issues.filter((item) => item.id !== issue.id)],
+    activity: [
+      {
+        id: id("activity"),
+        jobId: issue.jobId,
+        eventType: "customer_contact",
+        message: "Driver confirmed dispatch was called.",
+        metadata: { issueId: issue.id },
+        createdAt: now,
+      },
+      ...cache.activity,
+    ],
+  });
+  window.dispatchEvent(new Event("driver-data-updated"));
+
+  if (supabase && await ensureSession()) {
+    await (supabase as any).rpc("driver_confirm_dispatch_called", { target_issue_id: issue.id });
   }
 }
 
