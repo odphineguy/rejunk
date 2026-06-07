@@ -30,12 +30,14 @@ import {
   employeeLabel,
   employeeOptions,
   saveDispatchOperationalPlan,
+  saveServiceStopCoordinates,
   sendDispatchJobMessage,
   updatePhotoVisibility,
   type DispatchAssignmentInput,
 } from "@/lib/dispatchOperations";
 import { deleteJob, duplicateJob, getActualFinancials, getJobs, saveJob, updateJob } from "@/lib/jobStorage";
 import { customerStops, disposalEvents, jobOperationalMetrics } from "@/lib/operationalMetrics";
+import { geocodeStatusToReason, primaryServiceLocationStatus, reasonLabel, writeLocationCache, readLocationCache } from "@/lib/locationValidation";
 import { loadPricingSettings } from "@/utils/pricingStorage";
 import { getRouteEstimateToFacility } from "@/utils/distanceRouting";
 import { buildBestRecommendation, recommendationInputFromJob } from "@/utils/recommendations";
@@ -160,6 +162,7 @@ export default function JobDetail() {
     [driverJob?.photos, photoVisibilityFilter],
   );
   const operationalMetrics = useMemo(() => (driverJob ? jobOperationalMetrics(driverJob) : null), [driverJob]);
+  const locationStatus = useMemo(() => (job && driverJob ? primaryServiceLocationStatus(job, driverJob) : null), [job, driverJob]);
   const actualMargin = margin(actualFinancials.profit, actualFinancials.charged);
   const jobWarnings = useMemo(() => (job ? getJobWarningsWithFacilityCheck(job, settings) : []), [job, settings]);
   const comparison = useMemo(() => {
@@ -439,7 +442,7 @@ export default function JobDetail() {
               <CardContent className="space-y-5">
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                   <MiniStat label="Assigned crew" value={driverJob.assignedCrew.map((crew) => crew.displayName).join(", ") || "Unassigned"} />
-                  <MiniStat label="Customer stops" value={String(operationalMetrics?.customerStopCount ?? 0)} />
+                  <MiniStat label="Service locations" value={String(operationalMetrics?.customerStopCount ?? 0)} />
                   <MiniStat label="Items touched" value={`${operationalMetrics?.itemsTouched ?? 0}/${driverJob.items.length}`} />
                   <MiniStat label="Disposal trips" value={String(operationalMetrics?.disposalEventCount ?? 0)} />
                   <MiniStat label="Open issues" value={String(operationalMetrics?.openIssueCount ?? 0)} />
@@ -447,7 +450,7 @@ export default function JobDetail() {
 
                 <div className="grid gap-4 xl:grid-cols-2">
                   <div className="rounded-lg border border-border p-4">
-                    <div className="mb-3 font-semibold">Customer/service stops</div>
+                    <div className="mb-3 font-semibold">Service locations</div>
                     <div className="space-y-3">
                       {customerStops(driverJob.stops).map((stop) => (
                         <DetailRow key={stop.id} label={`${stop.stopOrder}. ${stop.name}`} value={stop.status.replaceAll("_", " ")} />
@@ -552,6 +555,8 @@ export default function JobDetail() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <AssignmentEditor job={job} onSaved={() => setJob(getJobs().find((item) => item.id === job.id) ?? job)} />
+
+                <LocationRepairPanel job={job} locationStatus={locationStatus} onSaved={() => setJob(getJobs().find((item) => item.id === job.id) ?? job)} />
 
                 <div className="rounded-lg border border-border p-4">
                   <div className="mb-3 font-semibold">Publish instruction update</div>
@@ -973,13 +978,13 @@ function DisposalEventsPanel({ jobId, events, onSaved }: { jobId: string; events
         <Button variant="outline" size="sm" onClick={() => {
           const now = new Date().toISOString();
           setDraftEvents((current) => [...current, { id: `disposal-${Date.now()}`, jobId, sequenceNumber: current.length + 1, status: "planned", planned: true, createdAt: now, updatedAt: now }]);
-        }}>Add disposal event</Button>
+        }}>Add disposal trip</Button>
       </div>
       <div className="space-y-3">
         {draftEvents.map((event, index) => (
           <div key={event.id} className="rounded-md bg-muted/40 p-3">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <span className="font-semibold">Trip {index + 1}</span>
+              <span className="font-semibold">Disposal Trip {index + 1}</span>
               <Button variant="outline" size="sm" onClick={() => setDraftEvents((current) => current.filter((item) => item.id !== event.id))}>Remove</Button>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
@@ -1003,6 +1008,74 @@ function DisposalEventsPanel({ jobId, events, onSaved }: { jobId: string; events
   );
 }
 
+function LocationRepairPanel({ job, locationStatus, onSaved }: { job: Job; locationStatus: ReturnType<typeof primaryServiceLocationStatus> | null; onSaved: () => void }) {
+  const [working, setWorking] = useState(false);
+  if (!locationStatus) return null;
+
+  const geocode = async () => {
+    if (!window.google?.maps) {
+      toast.error("Google Maps is not loaded yet.");
+      return;
+    }
+    if (locationStatus.coords && !window.confirm("This service location already has coordinates. Re-geocode and overwrite them?")) return;
+    setWorking(true);
+    try {
+      const geocoder = new google.maps.Geocoder();
+      const response = await geocoder.geocode({ address: locationStatus.address });
+      const location = response.results[0]?.geometry.location;
+      if (!location) {
+        toast.error("No geocode result");
+        return;
+      }
+      const coords = { lat: location.lat(), lng: location.lng() };
+      await saveServiceStopCoordinates({ jobId: job.id, stopId: locationStatus.primaryStop?.id, latitude: coords.lat, longitude: coords.lng });
+      const cache = readLocationCache();
+      cache[locationStatus.cacheKey] = { address: locationStatus.address, coords, updatedAt: new Date().toISOString() };
+      writeLocationCache(cache);
+      toast.success("Service location mapped");
+      onSaved();
+    } catch (error) {
+      const status = typeof error === "object" && error && "code" in error ? String((error as { code?: string }).code) : "UNKNOWN_ERROR";
+      const reason = geocodeStatusToReason(status);
+      const cache = readLocationCache();
+      cache[locationStatus.cacheKey] = { address: locationStatus.address, reason, updatedAt: new Date().toISOString() };
+      writeLocationCache(cache);
+      console.warn("[job-detail] Geocode failed", locationStatus.address, status, error);
+      toast.error(reasonLabel(reason));
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const clear = async () => {
+    if (!window.confirm("Clear saved coordinates for this service location?")) return;
+    await saveServiceStopCoordinates({ jobId: job.id, stopId: locationStatus.primaryStop?.id, clear: true });
+    const cache = readLocationCache();
+    delete cache[locationStatus.cacheKey];
+    writeLocationCache(cache);
+    toast.success("Coordinates cleared");
+    onSaved();
+  };
+
+  return (
+    <div className="rounded-lg border border-border p-4">
+      <div className="mb-3 font-semibold">Service location mapping</div>
+      <div className="grid gap-2 text-sm md:grid-cols-2">
+        <DetailRow label="Address status" value={locationStatus.coords ? "Mapped" : reasonLabel(locationStatus.reason)} />
+        <DetailRow label="Latitude" value={locationStatus.coords ? locationStatus.coords.lat.toFixed(6) : "Not set"} />
+        <DetailRow label="Longitude" value={locationStatus.coords ? locationStatus.coords.lng.toFixed(6) : "Not set"} />
+        <DetailRow label="Source" value={locationStatus.primaryStop ? "Primary service location" : "Job address fallback"} />
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button variant="outline" onClick={() => void geocode()} disabled={working || !locationStatus.address}>
+          {working ? "Geocoding..." : locationStatus.coords ? "Re-geocode" : "Geocode"}
+        </Button>
+        <Button variant="outline" onClick={() => void clear()} disabled={!locationStatus.coords}>Clear coordinates</Button>
+      </div>
+    </div>
+  );
+}
+
 function StopsItemsEditor({ jobId, stops, items, disposalEvents: currentDisposalEvents, onSaved }: { jobId: string; stops: JobStop[]; items: JobItem[]; disposalEvents: JobDisposalEvent[]; onSaved: () => void }) {
   const [draftStops, setDraftStops] = useState(stops);
   const [draftItems, setDraftItems] = useState(items);
@@ -1011,19 +1084,19 @@ function StopsItemsEditor({ jobId, stops, items, disposalEvents: currentDisposal
   useEffect(() => setDraftItems(items), [items]);
 
   const save = async () => {
-    await saveDispatchOperationalPlan(jobId, { stops: draftStops, items: draftItems, disposalEvents: currentDisposalEvents, activityMessage: "Dispatch updated customer stops and item checklist." });
-    toast.success("Customer stops and items updated");
+    await saveDispatchOperationalPlan(jobId, { stops: draftStops, items: draftItems, disposalEvents: currentDisposalEvents, activityMessage: "Dispatch updated service locations and item checklist." });
+    toast.success("Service locations and items updated");
     onSaved();
   };
 
   return (
     <div className="rounded-lg border border-border p-4">
-      <div className="mb-3 font-semibold">Customer stops and items</div>
+      <div className="mb-3 font-semibold">Service locations and items</div>
       <div className="space-y-3">
         {draftStops.map((stop, index) => (
           <div key={stop.id} className="rounded-md bg-muted/40 p-3">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <span className="text-sm font-semibold">Customer stop {index + 1}</span>
+              <span className="text-sm font-semibold">Service location {index + 1}</span>
               <Button variant="outline" size="sm" disabled={draftStops.length === 1} onClick={() => setDraftStops((current) => current.filter((item) => item.id !== stop.id))}>Remove</Button>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
@@ -1058,7 +1131,7 @@ function StopsItemsEditor({ jobId, stops, items, disposalEvents: currentDisposal
           Add Item
         </Button>
       </div>
-      <Button className="mt-4" onClick={() => void save()}>Save Customer Stops and Items</Button>
+      <Button className="mt-4" onClick={() => void save()}>Save Service Locations and Items</Button>
     </div>
   );
 }

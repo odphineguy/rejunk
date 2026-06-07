@@ -192,7 +192,7 @@ export default function NewJob() {
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 font-semibold">
                       <GripVertical className="size-4 text-muted-foreground" />
-                      Customer stop {index + 1}
+                      Service location {index + 1}
                     </div>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" disabled={index === 0} onClick={() => setStops((current) => reorder(current, index, index - 1))}>Up</Button>

@@ -383,6 +383,49 @@ export async function updatePhotoVisibility(photo: JobPhoto, visibility: JobPhot
   }
 }
 
+export async function saveServiceStopCoordinates(input: {
+  jobId: string;
+  stopId?: string;
+  latitude?: number;
+  longitude?: number;
+  clear?: boolean;
+}) {
+  const next = cache();
+  const stop =
+    input.stopId
+      ? next.stops.find((item) => item.id === input.stopId)
+      : next.stops.filter((item) => item.jobId === input.jobId && item.stopType !== "disposal").sort((a, b) => a.stopOrder - b.stopOrder)[0];
+  if (!stop) return false;
+
+  const updated: JobStop = {
+    ...stop,
+    latitude: input.clear ? undefined : input.latitude,
+    longitude: input.clear ? undefined : input.longitude,
+    updatedAt: new Date().toISOString(),
+  };
+  next.stops = [updated, ...next.stops.filter((item) => item.id !== stop.id)];
+  next.activity = [
+    {
+      id: id("activity"),
+      jobId: input.jobId,
+      eventType: "scope_change",
+      message: input.clear ? "Dispatch cleared service location coordinates." : "Dispatch geocoded service location.",
+      metadata: { stopId: stop.id, latitude: updated.latitude, longitude: updated.longitude },
+      createdAt: new Date().toISOString(),
+    },
+    ...next.activity,
+  ];
+  writeCache(next);
+
+  if (supabase && await ensureSession()) {
+    await (supabase as any)
+      .from("job_stops")
+      .update({ latitude: updated.latitude ?? null, longitude: updated.longitude ?? null })
+      .eq("id", stop.id);
+  }
+  return true;
+}
+
 export async function dispatchResolveIssue(
   issue: JobIssue,
   input: {

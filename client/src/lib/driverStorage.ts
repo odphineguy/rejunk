@@ -566,7 +566,7 @@ export async function uploadJobPhoto(input: {
 }
 
 export async function updateDisposalEventStatus(event: JobDisposalEvent, status: JobDisposalEventStatus) {
-  if (status === "canceled") throw new Error("Only dispatch can cancel a disposal event.");
+  if (status === "canceled") throw new Error("Only dispatch can cancel a disposal trip.");
   const now = new Date().toISOString();
   const updated: JobDisposalEvent = {
     ...event,
@@ -586,7 +586,7 @@ export async function updateDisposalEventStatus(event: JobDisposalEvent, status:
         id: id("activity"),
         jobId: event.jobId,
         eventType: "status_change",
-        message: `Disposal event ${event.sequenceNumber} marked ${status.replaceAll("_", " ")}.`,
+        message: `Disposal Trip ${event.sequenceNumber} marked ${status.replaceAll("_", " ")}.`,
         metadata: { disposalEventId: event.id, disposalStatus: status },
         createdAt: now,
       },
@@ -599,7 +599,7 @@ export async function updateDisposalEventStatus(event: JobDisposalEvent, status:
     await (supabase as any).rpc("driver_update_disposal_event_status", {
       target_event_id: event.id,
       next_status: status,
-      note: `Disposal event ${event.sequenceNumber} marked ${status.replaceAll("_", " ")}.`,
+      note: `Disposal Trip ${event.sequenceNumber} marked ${status.replaceAll("_", " ")}.`,
     });
   }
 }

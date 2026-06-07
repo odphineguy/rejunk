@@ -32,3 +32,7 @@ export function jobOperationalMetrics(job: Pick<DriverJob, "stops" | "disposalEv
 export function jobCount<T>(jobs: T[]) {
   return jobs.length;
 }
+
+export function pluralize(count: number, singular: string, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}

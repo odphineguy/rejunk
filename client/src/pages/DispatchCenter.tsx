@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
-import { AlertTriangle, LocateFixed, RefreshCw, Search } from "lucide-react";
+import { AlertTriangle, LocateFixed, MapPin, RefreshCw, Search } from "lucide-react";
+import { toast } from "sonner";
 
 import { JobStatusBadge } from "@/components/JobBadges";
 import { MapView } from "@/components/Map";
@@ -10,40 +11,29 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getDispatchOperationalCache } from "@/lib/dispatchOperations";
+import { getDispatchOperationalCache, saveServiceStopCoordinates } from "@/lib/dispatchOperations";
 import { getJobs } from "@/lib/jobStorage";
-import { customerStops, disposalEvents, jobOperationalMetrics, openIssues } from "@/lib/operationalMetrics";
+import { jobOperationalMetrics, openIssues, pluralize } from "@/lib/operationalMetrics";
+import {
+  geocodeStatusToReason,
+  primaryServiceLocationStatus,
+  readLocationCache,
+  reasonLabel,
+  writeLocationCache,
+  type CachedLocation,
+  type LocationStatus,
+} from "@/lib/locationValidation";
 import { cn } from "@/lib/utils";
 import type { DriverJob, JobIssue } from "@/types/driver";
 import type { Job } from "@/types/jobs";
 import { toDriverJob } from "@/lib/driverStorage";
 
 const PHOENIX = { lat: 33.4484, lng: -112.074 };
-const COORD_CACHE_KEY = "rejunk_dispatch_geocode_cache_v1";
-
 type DispatchRow = {
   job: Job;
   driverJob: DriverJob;
-  primaryAddress: string;
-  coords?: google.maps.LatLngLiteral;
+  location: LocationStatus;
 };
-
-function readCoordCache() {
-  try {
-    return JSON.parse(window.localStorage.getItem(COORD_CACHE_KEY) || "{}") as Record<string, google.maps.LatLngLiteral>;
-  } catch {
-    return {};
-  }
-}
-
-function writeCoordCache(cache: Record<string, google.maps.LatLngLiteral>) {
-  window.localStorage.setItem(COORD_CACHE_KEY, JSON.stringify(cache));
-}
-
-function addressForJob(job: Job, driverJob: DriverJob) {
-  const primaryStop = customerStops(driverJob.stops)[0];
-  return [primaryStop?.address ?? job.address, primaryStop?.city ?? job.city, primaryStop?.state ?? job.state, primaryStop?.zip ?? job.zip].filter(Boolean).join(", ");
-}
 
 function formatWindow(start?: string, end?: string) {
   const format = (value: string) => new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
@@ -74,6 +64,8 @@ export default function DispatchCenter() {
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("active");
+  const [geocoding, setGeocoding] = useState(false);
+  const [locationCacheVersion, setLocationCacheVersion] = useState(0);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const markers = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
@@ -91,16 +83,16 @@ export default function DispatchCenter() {
   }, []);
 
   const rows = useMemo<DispatchRow[]>(() => {
-    const coordCache = typeof window === "undefined" ? {} : readCoordCache();
+    const coordCache = typeof window === "undefined" ? {} : readLocationCache();
     const normalized = query.trim().toLowerCase();
     return jobs
       .map((job) => {
         const driverJob = toDriverJob(job);
-        const primaryAddress = addressForJob(job, driverJob);
-        return { job, driverJob, primaryAddress, coords: coordCache[primaryAddress] };
+        const location = primaryServiceLocationStatus(job, driverJob, coordCache);
+        return { job, driverJob, location };
       })
-      .filter(({ job, driverJob, primaryAddress }) => {
-        const text = [job.jobNumber, job.customerName, job.serviceType, job.materialName, primaryAddress, driverJob.assignedCrew.map((crew) => crew.displayName).join(" ")].join(" ").toLowerCase();
+      .filter(({ job, driverJob, location }) => {
+        const text = [job.jobNumber, job.customerName, job.serviceType, job.materialName, location.address, driverJob.assignedCrew.map((crew) => crew.displayName).join(" ")].join(" ").toLowerCase();
         if (normalized && !text.includes(normalized)) return false;
         if (statusFilter === "today") return sameDay(job.scheduledStart, selectedDate);
         if (statusFilter === "unassigned") return !job.assignment?.crewLead;
@@ -110,7 +102,7 @@ export default function DispatchCenter() {
         return true;
       })
       .sort((a, b) => new Date(a.job.scheduledStart ?? a.job.updatedAt).getTime() - new Date(b.job.scheduledStart ?? b.job.updatedAt).getTime());
-  }, [jobs, query, selectedDate, statusFilter]);
+  }, [jobs, locationCacheVersion, query, selectedDate, statusFilter]);
 
   const exceptions = useMemo(() => {
     const cache = getDispatchOperationalCache();
@@ -120,32 +112,54 @@ export default function DispatchCenter() {
     })).filter((entry): entry is { issue: JobIssue; row: DispatchRow } => Boolean(entry.row));
   }, [rows]);
 
-  useEffect(() => {
-    if (!map || !window.google?.maps) return;
-    let canceled = false;
-    const geocodeMissing = async () => {
-      const coordCache = readCoordCache();
-      const missing = rows.filter((row) => row.primaryAddress && !row.coords).slice(0, 5);
-      if (missing.length === 0) return;
-      const geocoder = new google.maps.Geocoder();
-      for (const row of missing) {
-        if (canceled) return;
-        try {
-          const result = await geocoder.geocode({ address: row.primaryAddress });
-          const location = result.results[0]?.geometry.location;
-          if (location) coordCache[row.primaryAddress] = { lat: location.lat(), lng: location.lng() };
-        } catch {
-          // Keep unavailable rows visible in the side panel.
-        }
+  const unmappedRows = rows.filter((row) => !row.location.coords);
+  const geocodableRows = unmappedRows.filter((row) => row.location.address && row.location.reason === "not_attempted");
+
+  const geocodeMissing = async () => {
+    if (!window.google?.maps) {
+      toast.error("Google Maps is not loaded yet.");
+      return;
+    }
+    setGeocoding(true);
+    const geocoder = new google.maps.Geocoder();
+    const cache = readLocationCache();
+    const result = { mapped: 0, incomplete: 0, failed: 0 };
+
+    for (const row of unmappedRows) {
+      if (!row.location.address || row.location.reason !== "not_attempted") {
+        result.incomplete += 1;
+        continue;
       }
-      writeCoordCache(coordCache);
-      refresh();
-    };
-    void geocodeMissing();
-    return () => {
-      canceled = true;
-    };
-  }, [map, rows]);
+      try {
+        const response = await geocoder.geocode({ address: row.location.address });
+        const location = response.results[0]?.geometry.location;
+        if (!location) {
+          cache[row.location.cacheKey] = failureCache(row.location.address, "geocode_no_results");
+          result.failed += 1;
+          continue;
+        }
+        const coords = { lat: location.lat(), lng: location.lng() };
+        await saveServiceStopCoordinates({
+          jobId: row.job.id,
+          stopId: row.location.primaryStop?.id,
+          latitude: coords.lat,
+          longitude: coords.lng,
+        });
+        cache[row.location.cacheKey] = { address: row.location.address, coords, updatedAt: new Date().toISOString() };
+        result.mapped += 1;
+      } catch (error) {
+        const status = typeof error === "object" && error && "code" in error ? String((error as { code?: string }).code) : "UNKNOWN_ERROR";
+        console.warn("[dispatch] Geocode failed", row.location.address, status, error);
+        cache[row.location.cacheKey] = failureCache(row.location.address, geocodeStatusToReason(status));
+        result.failed += 1;
+      }
+    }
+    writeLocationCache(cache);
+    setLocationCacheVersion((value) => value + 1);
+    refresh();
+    setGeocoding(false);
+    toast.success(`${result.mapped} mapped · ${result.incomplete} incomplete · ${result.failed} failed`);
+  };
 
   useEffect(() => {
     if (!map || !window.google?.maps?.marker) return;
@@ -157,23 +171,23 @@ export default function DispatchCenter() {
 
     const bounds = new google.maps.LatLngBounds();
     rows.forEach((row) => {
-      if (!row.coords) return;
+      if (!row.location.coords) return;
       const metrics = jobOperationalMetrics(row.driverJob);
       const element = document.createElement("button");
       element.className = "flex size-9 items-center justify-center rounded-full border-2 border-white text-xs font-bold text-white shadow-lg";
       element.style.background = markerColor(row.job.status, metrics.openIssueCount);
       element.textContent = metrics.openIssueCount > 0 ? "!" : row.job.jobNumber.replace(/\D/g, "").slice(-2) || "J";
-      const marker = new google.maps.marker.AdvancedMarkerElement({ map, position: row.coords, title: row.job.customerName, content: element });
+      const marker = new google.maps.marker.AdvancedMarkerElement({ map, position: row.location.coords, title: row.job.customerName, content: element });
       marker.addListener("click", () => openMarker(row, marker));
       markers.current.push(marker);
-      bounds.extend(row.coords);
+      bounds.extend(row.location.coords);
     });
     if (!bounds.isEmpty()) map.fitBounds(bounds, 64);
   }, [map, rows]);
 
   const openMarker = (row: DispatchRow, marker?: google.maps.marker.AdvancedMarkerElement) => {
     setSelectedJobId(row.job.id);
-    if (row.coords) map?.panTo(row.coords);
+    if (row.location.coords) map?.panTo(row.location.coords);
     const metrics = jobOperationalMetrics(row.driverJob);
     if (marker && infoWindow.current) {
       infoWindow.current.setContent(`
@@ -181,14 +195,14 @@ export default function DispatchCenter() {
           <strong>${row.job.jobNumber} · ${row.job.customerName}</strong>
           <div>${row.job.serviceType?.replaceAll("_", " ") || row.job.materialName || "Service"}</div>
           <div>${formatWindow(row.job.scheduledStart, row.job.scheduledEnd)}</div>
-          <div>${row.primaryAddress || "Location unavailable"}</div>
+          <div>${row.location.address || reasonLabel(row.location.reason)}</div>
           <hr style="margin:8px 0" />
           <div>Crew: ${row.driverJob.assignedCrew.map((crew) => crew.displayName).join(", ") || "Unassigned"}</div>
           <div>Vehicle: ${row.job.vehicleName || row.job.assignment?.vehicleName || "TBD"}</div>
           <div>Status: ${row.job.status.replaceAll("_", " ")}</div>
-          <div>Customer stops: ${metrics.customerStopCount}</div>
-          <div>Disposal trips: ${metrics.disposalEventCount}</div>
-          <div>Open issues: ${metrics.openIssueCount}</div>
+          <div>${pluralize(metrics.customerStopCount, "service location")}</div>
+          <div>${pluralize(metrics.disposalEventCount, "disposal trip")}</div>
+          <div>${pluralize(metrics.openIssueCount, "open issue")}</div>
           <a href="/jobs/${row.job.id}" style="display:inline-block;margin-top:8px;color:#2563eb">Open Job</a>
         </div>
       `);
@@ -227,13 +241,34 @@ export default function DispatchCenter() {
             <RefreshCw className="size-4" />
           </Button>
         </div>
+        {unmappedRows.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+            <div>
+              {pluralize(unmappedRows.length, "unmapped service location")} · {pluralize(geocodableRows.length, "ready to geocode")}
+            </div>
+            <Button variant="outline" onClick={() => void geocodeMissing()} disabled={geocoding || geocodableRows.length === 0}>
+              <MapPin className="size-4" />
+              {geocoding ? "Geocoding..." : `Geocode ${geocodableRows.length} missing ${geocodableRows.length === 1 ? "location" : "locations"}`}
+            </Button>
+          </div>
+        )}
 
         <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_390px]">
           <div className="relative min-h-[460px] overflow-hidden rounded-lg border border-border bg-muted">
             <MapView className="h-full min-h-[460px]" initialCenter={PHOENIX} initialZoom={10} onMapReady={setMap} />
             <div className="absolute left-3 top-3 rounded-md bg-background/95 px-3 py-2 text-xs shadow">
-              {rows.filter((row) => row.coords).length} mapped · {rows.filter((row) => !row.coords).length} location unavailable
+              {rows.filter((row) => row.location.coords).length} mapped · {rows.filter((row) => !row.location.coords).length} unmapped
             </div>
+            {rows.length === 0 && (
+              <div className="absolute inset-x-4 bottom-4 rounded-lg border border-border bg-background/95 p-4 text-sm shadow">
+                No jobs match this date and filter.
+              </div>
+            )}
+            {rows.length > 0 && rows.every((row) => !row.location.coords) && (
+              <div className="absolute inset-x-4 bottom-4 rounded-lg border border-border bg-background/95 p-4 text-sm shadow">
+                Jobs are available, but their service locations have not been mapped yet.
+              </div>
+            )}
           </div>
 
           <aside className="min-h-0 space-y-3 overflow-y-auto">
@@ -278,10 +313,10 @@ export default function DispatchCenter() {
                         {row.driverJob.assignedCrew.map((crew) => crew.displayName).join(", ") || "Unassigned"} · {row.job.vehicleName || row.job.assignment?.vehicleName || "Vehicle TBD"}
                       </div>
                       <div className="mt-2 flex flex-wrap gap-2">
-                        <Badge variant="outline">{metrics.customerStopCount} customer stops</Badge>
-                        <Badge variant="outline">{metrics.disposalEventCount} disposal trips</Badge>
-                        {metrics.openIssueCount > 0 && <Badge className="bg-red-100 text-red-700">{metrics.openIssueCount} issue</Badge>}
-                        {!row.coords && <Badge className="bg-amber-100 text-amber-800">Location unavailable</Badge>}
+                        <Badge variant="outline">{pluralize(metrics.customerStopCount, "service location")}</Badge>
+                        <Badge variant="outline">{pluralize(metrics.disposalEventCount, "disposal trip")}</Badge>
+                        {metrics.openIssueCount > 0 && <Badge className="bg-red-100 text-red-700">{pluralize(metrics.openIssueCount, "open issue")}</Badge>}
+                        {!row.location.coords && <Badge className="bg-amber-100 text-amber-800">{reasonLabel(row.location.reason)}</Badge>}
                       </div>
                     </button>
                   );
@@ -307,4 +342,8 @@ export default function DispatchCenter() {
       </div>
     </OperationsShell>
   );
+}
+
+function failureCache(address: string, reason: CachedLocation["reason"]): CachedLocation {
+  return { address, reason, updatedAt: new Date().toISOString() };
 }

@@ -278,14 +278,14 @@ export default function DriverJobDetail() {
 
         <Card>
           <CardHeader>
-              <CardTitle className="text-base">Customer Stops</CardTitle>
+              <CardTitle className="text-base">Service Locations</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 p-4 pt-0">
             {customerStops(job.stops).map((stop) => (
               <div key={stop.id} className="rounded-lg border border-border bg-background p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-xs font-semibold uppercase text-muted-foreground">Customer stop {stop.stopOrder} · {label(stop.stopType)}</div>
+                    <div className="text-xs font-semibold uppercase text-muted-foreground">Service location {stop.stopOrder} · {label(stop.stopType)}</div>
                     <div className="mt-1 font-semibold">{stop.name}</div>
                     <div className="text-sm text-muted-foreground">{[stop.address, stop.city, stop.zip].filter(Boolean).join(", ")}</div>
                     {stop.instructions && <div className="mt-2 text-sm">{stop.instructions}</div>}
