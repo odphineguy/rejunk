@@ -22,6 +22,7 @@ import {
   writeLocationCache,
   type CachedLocation,
   type LocationStatus,
+  type LocationUnavailableReason,
 } from "@/lib/locationValidation";
 import { cn } from "@/lib/utils";
 import type { DriverJob, JobIssue } from "@/types/driver";
@@ -29,6 +30,7 @@ import type { Job } from "@/types/jobs";
 import { toDriverJob } from "@/lib/driverStorage";
 
 const PHOENIX = { lat: 33.4484, lng: -112.074 };
+const AUTO_GEOCODE_BATCH_LIMIT = 3;
 type DispatchRow = {
   job: Job;
   driverJob: DriverJob;
@@ -70,6 +72,7 @@ export default function DispatchCenter() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const markers = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
   const infoWindow = useRef<google.maps.InfoWindow | null>(null);
+  const autoGeocodeAttempted = useRef(false);
 
   const refresh = () => setJobs(getJobs());
 
@@ -113,9 +116,10 @@ export default function DispatchCenter() {
   }, [rows]);
 
   const unmappedRows = rows.filter((row) => !row.location.coords);
-  const geocodableRows = unmappedRows.filter((row) => row.location.address && row.location.reason === "not_attempted");
+  const autoGeocodableRows = unmappedRows.filter((row) => canAutoGeocode(row.location));
+  const manualGeocodableRows = unmappedRows.filter((row) => canManualGeocode(row.location));
 
-  const geocodeMissing = async () => {
+  const geocodeRows = async (targetRows: DispatchRow[], mode: "manual" | "auto") => {
     if (!window.google?.maps) {
       toast.error("Google Maps is not loaded yet.");
       return;
@@ -124,42 +128,69 @@ export default function DispatchCenter() {
     const geocoder = new google.maps.Geocoder();
     const cache = readLocationCache();
     const result = { mapped: 0, incomplete: 0, failed: 0 };
+    const attemptedCacheKeys = new Set<string>();
 
-    for (const row of unmappedRows) {
-      if (!row.location.address || row.location.reason !== "not_attempted") {
-        result.incomplete += 1;
-        continue;
-      }
-      try {
-        const response = await geocoder.geocode({ address: row.location.address });
-        const location = response.results[0]?.geometry.location;
-        if (!location) {
-          cache[row.location.cacheKey] = failureCache(row.location.address, "geocode_no_results");
-          result.failed += 1;
+    try {
+      for (const row of targetRows) {
+        if (attemptedCacheKeys.has(row.location.cacheKey)) continue;
+        if (mode === "auto" ? !canAutoGeocode(row.location) : !canManualGeocode(row.location)) {
+          result.incomplete += 1;
           continue;
         }
-        const coords = { lat: location.lat(), lng: location.lng() };
-        await saveServiceStopCoordinates({
-          jobId: row.job.id,
-          stopId: row.location.primaryStop?.id,
-          latitude: coords.lat,
-          longitude: coords.lng,
-        });
-        cache[row.location.cacheKey] = { address: row.location.address, coords, updatedAt: new Date().toISOString() };
-        result.mapped += 1;
-      } catch (error) {
-        const status = typeof error === "object" && error && "code" in error ? String((error as { code?: string }).code) : "UNKNOWN_ERROR";
-        console.warn("[dispatch] Geocode failed", row.location.address, status, error);
-        cache[row.location.cacheKey] = failureCache(row.location.address, geocodeStatusToReason(status));
-        result.failed += 1;
+        attemptedCacheKeys.add(row.location.cacheKey);
+        try {
+          const response = await geocoder.geocode({ address: row.location.address });
+          const location = response.results[0]?.geometry.location;
+          if (!location) {
+            cache[row.location.cacheKey] = failureCache(row.location.address, "geocode_no_results");
+            result.failed += 1;
+            continue;
+          }
+          const coords = { lat: location.lat(), lng: location.lng() };
+          await saveServiceStopCoordinates({
+            jobId: row.job.id,
+            stopId: row.location.primaryStop?.id,
+            latitude: coords.lat,
+            longitude: coords.lng,
+          });
+          cache[row.location.cacheKey] = { address: row.location.address, coords, updatedAt: new Date().toISOString() };
+          result.mapped += 1;
+        } catch (error) {
+          const status = typeof error === "object" && error && "code" in error ? String((error as { code?: string }).code) : "UNKNOWN_ERROR";
+          console.warn("[dispatch] Geocode failed", row.location.address, status, error);
+          cache[row.location.cacheKey] = failureCache(row.location.address, geocodeStatusToReason(status));
+          result.failed += 1;
+        }
       }
+    } finally {
+      writeLocationCache(cache);
+      setLocationCacheVersion((value) => value + 1);
+      refresh();
+      setGeocoding(false);
     }
-    writeLocationCache(cache);
-    setLocationCacheVersion((value) => value + 1);
-    refresh();
-    setGeocoding(false);
-    toast.success(`${result.mapped} mapped · ${result.incomplete} incomplete · ${result.failed} failed`);
+
+    return result;
   };
+
+  const geocodeMissing = async () => {
+    autoGeocodeAttempted.current = true;
+    const result = await geocodeRows(unmappedRows, "manual");
+    if (result) toast.success(`${result.mapped} mapped · ${result.incomplete} incomplete · ${result.failed} failed`);
+  };
+
+  useEffect(() => {
+    if (autoGeocodeAttempted.current || geocoding || !map || !window.google?.maps) return;
+    const batch = autoGeocodableRows.slice(0, AUTO_GEOCODE_BATCH_LIMIT);
+    if (batch.length === 0) return;
+
+    autoGeocodeAttempted.current = true;
+    void geocodeRows(batch, "auto").then((result) => {
+      if (!result || result.mapped + result.failed === 0) return;
+      const summary = `${result.mapped} mapped · ${result.failed} failed`;
+      if (result.mapped > 0) toast.success(`Auto-geocoded ${summary}`);
+      else toast.error(`Auto-geocode failed · ${summary}`);
+    });
+  }, [autoGeocodableRows, geocoding, map]);
 
   useEffect(() => {
     if (!map || !window.google?.maps?.marker) return;
@@ -244,11 +275,11 @@ export default function DispatchCenter() {
         {unmappedRows.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
             <div>
-              {pluralize(unmappedRows.length, "unmapped service location")} · {pluralize(geocodableRows.length, "ready to geocode")}
+              {pluralize(unmappedRows.length, "unmapped service location")} · {pluralize(manualGeocodableRows.length, "ready to geocode")}
             </div>
-            <Button variant="outline" onClick={() => void geocodeMissing()} disabled={geocoding || geocodableRows.length === 0}>
+            <Button variant="outline" onClick={() => void geocodeMissing()} disabled={geocoding || manualGeocodableRows.length === 0}>
               <MapPin className="size-4" />
-              {geocoding ? "Geocoding..." : `Geocode ${geocodableRows.length} missing ${geocodableRows.length === 1 ? "location" : "locations"}`}
+              {geocoding ? "Geocoding..." : `Geocode ${manualGeocodableRows.length} missing ${manualGeocodableRows.length === 1 ? "location" : "locations"}`}
             </Button>
           </div>
         )}
@@ -343,6 +374,24 @@ export default function DispatchCenter() {
     </OperationsShell>
   );
 }
+
+function canAutoGeocode(location: LocationStatus) {
+  return Boolean(location.address && location.reason === "not_attempted");
+}
+
+function canManualGeocode(location: LocationStatus) {
+  return Boolean(location.address && !location.coords && !nonGeocodableReasons.has(location.reason));
+}
+
+const nonGeocodableReasons = new Set<LocationUnavailableReason | undefined>([
+  undefined,
+  "missing_street",
+  "missing_city",
+  "missing_state",
+  "missing_zip",
+  "incomplete_address",
+  "coordinates_invalid",
+]);
 
 function failureCache(address: string, reason: CachedLocation["reason"]): CachedLocation {
   return { address, reason, updatedAt: new Date().toISOString() };

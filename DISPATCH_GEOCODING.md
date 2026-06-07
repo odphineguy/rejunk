@@ -31,7 +31,9 @@ The Dispatch Center shows concise labels such as “Missing ZIP,” “Incomplet
 
 ## Geocoding Flow
 
-The Dispatch Center shows a manual “Geocode missing locations” action when the current workload has unmapped service locations. It processes jobs sequentially to avoid avoidable API pressure, saves successful coordinates to the primary service location, and summarizes mapped/incomplete/failed counts.
+When the Dispatch Center first loads, it automatically attempts a small batch of valid, unmapped service locations whose status is `not_attempted`. The automatic pass runs sequentially, saves successful coordinates to the primary service location, and caches failure reasons so the same failed address is not retried automatically on later loads.
+
+The Dispatch Center also keeps the manual “Geocode missing locations” action when the current workload has unmapped service locations. Manual geocoding processes jobs sequentially too, and it can retry previous geocode failures for repair or bulk recovery after an API key, quota, or address issue is fixed.
 
 ## Persistence
 
