@@ -96,8 +96,8 @@ function InvoiceHeader({ crumb, actions }: { crumb?: string; actions?: React.Rea
     <div className="border-b border-border bg-background px-4 py-5 md:px-8">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2 text-base">
-          <FileText className="size-5 text-[#7180a8]" />
-          <Link href="/invoices" className="text-[#7180a8] hover:text-[#3f3df1]">
+          <FileText className="size-5 text-foreground" />
+          <Link href="/invoices" className="text-foreground hover:text-[#2d5016]">
             Invoices
           </Link>
           {crumb && (
@@ -145,7 +145,7 @@ function InvoiceList() {
     <>
       <InvoiceHeader
         actions={
-          <Button asChild className="rounded-lg bg-[#3f3df1] text-white hover:bg-[#3330df]">
+          <Button asChild className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
             <Link href="/invoices/new">
               <Plus className="size-4" />
               Create Invoice
@@ -278,7 +278,7 @@ function InvoiceDetails({ invoiceId, initialInvoice, isNew = false }: { invoiceI
               <Send className="size-4" />
               Send Invoice
             </Button>
-            <Button onClick={persistInvoice} className="rounded-lg bg-[#3f3df1] text-white hover:bg-[#3330df]">
+            <Button onClick={persistInvoice} className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
               <Save className="size-4" />
               Save
             </Button>
@@ -340,7 +340,7 @@ function InvoiceDetails({ invoiceId, initialInvoice, isNew = false }: { invoiceI
               <h1 className="text-2xl font-bold">Invoice #</h1>
               <Input value={invoice.invoiceNumber} readOnly className="h-10 w-24 rounded-lg" />
             </div>
-            <Button variant="outline" className="w-fit rounded-full border-[#3f3df1] text-[#3f3df1] hover:text-[#3f3df1]">
+            <Button variant="outline" className="w-fit rounded-full border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]">
               Edit Client
             </Button>
           </div>
@@ -372,7 +372,7 @@ function InvoiceDetails({ invoiceId, initialInvoice, isNew = false }: { invoiceI
         <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
           <div className="space-y-5">
             <Panel>
-              <SectionHeader icon={FileText} title="Items" action={<Button variant="outline" className="rounded-full border-[#3f3df1] text-[#3f3df1] hover:text-[#3f3df1]">Add Item</Button>} />
+              <SectionHeader icon={FileText} title="Items" action={<Button variant="outline" className="rounded-full border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]">Add Item</Button>} />
               <Table>
                 <TableHeader className="bg-muted/30">
                   <TableRow>
@@ -388,7 +388,7 @@ function InvoiceDetails({ invoiceId, initialInvoice, isNew = false }: { invoiceI
                     <TableRow key={item.id}>
                       <TableCell>
                         {item.name}
-                        {item.taxable && <Badge className="ml-2 rounded-full bg-[#efedff] text-[#3f3df1]">Taxable</Badge>}
+                        {item.taxable && <Badge className="ml-2 rounded-full bg-[#eaf1e3] text-[#2d5016]">Taxable</Badge>}
                       </TableCell>
                       <TableCell>{item.quantity}</TableCell>
                       <TableCell>{money.format(item.amount)}</TableCell>
@@ -408,7 +408,7 @@ function InvoiceDetails({ invoiceId, initialInvoice, isNew = false }: { invoiceI
             </Panel>
 
             <Panel>
-              <SectionHeader icon={CreditCard} title="Payments" action={<Button variant="outline" className="rounded-full border-[#3f3df1] text-[#3f3df1] hover:text-[#3f3df1]">Add Payment</Button>} />
+              <SectionHeader icon={CreditCard} title="Payments" action={<Button variant="outline" className="rounded-full border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]">Add Payment</Button>} />
               <p className="text-sm text-[#7180a8]">No payments made</p>
             </Panel>
 
@@ -445,8 +445,8 @@ function InvoiceDetails({ invoiceId, initialInvoice, isNew = false }: { invoiceI
                 title="Attachments"
                 action={
                   <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" className="rounded-full border-[#3f3df1] text-[#3f3df1] hover:text-[#3f3df1]">Add Photo/Doc</Button>
-                    <Button variant="outline" className="rounded-full border-[#3f3df1] text-[#3f3df1] hover:text-[#3f3df1]">Transfer from Job</Button>
+                    <Button variant="outline" className="rounded-full border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]">Add Photo/Doc</Button>
+                    <Button variant="outline" className="rounded-full border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]">Transfer from Job</Button>
                   </div>
                 }
               />
@@ -457,7 +457,7 @@ function InvoiceDetails({ invoiceId, initialInvoice, isNew = false }: { invoiceI
               <SectionHeader icon={Signature} title="Signature" />
               <div className="h-48 rounded-lg border border-dashed border-[#dce1f1] bg-background" />
               <div className="mt-5 flex justify-end">
-                <Button variant="secondary" className="rounded-lg bg-[#efedff] text-[#3f3df1] hover:bg-[#e5e2ff]">
+                <Button variant="secondary" className="rounded-lg bg-[#eaf1e3] text-[#2d5016] hover:bg-[#dde9d2]">
                   Save Signature
                 </Button>
               </div>
@@ -553,7 +553,7 @@ function SummaryRow({
   return (
     <div className="grid grid-cols-[1fr_auto_auto] items-center gap-4 border-b border-border py-3 last:border-b-0">
       <div className="font-medium">{label}</div>
-      {action && <button className="text-[#3f3df1] underline-offset-2 hover:underline">{action}</button>}
+      {action && <button className="text-[#2d5016] underline-offset-2 hover:underline">{action}</button>}
       <div className={cn("text-right", valueClassName)}>{value}</div>
     </div>
   );

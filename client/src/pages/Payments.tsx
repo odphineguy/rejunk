@@ -115,7 +115,7 @@ export default function Payments() {
                 {filteredPayments.map((payment, index) => (
                   <TableRow key={payment.id} className={index % 2 === 1 ? "bg-muted/20" : undefined}>
                     <TableCell className="px-5 font-medium">
-                      <span className="text-[#3f3df1] underline underline-offset-2">{payment.customerName}</span>
+                      <span className="text-[#2d5016] underline underline-offset-2">{payment.customerName}</span>
                     </TableCell>
                     <TableCell>{payment.method}</TableCell>
                     <TableCell>{money.format(payment.baseAmount)}</TableCell>
@@ -124,7 +124,7 @@ export default function Payments() {
                     <TableCell>{formatPaymentDate(payment.paidAt)}</TableCell>
                     <TableCell>
                       {payment.jobId ? (
-                        <Link href={`/jobs/${payment.jobId}`} className="text-[#3f3df1] underline underline-offset-2">
+                        <Link href={`/jobs/${payment.jobId}`} className="text-[#2d5016] underline underline-offset-2">
                           {payment.jobId}
                         </Link>
                       ) : (
@@ -133,7 +133,7 @@ export default function Payments() {
                     </TableCell>
                     <TableCell>
                       {payment.invoiceId ? (
-                        <Link href={`/invoices/${payment.invoiceId}`} className="text-[#3f3df1] underline underline-offset-2">
+                        <Link href={`/invoices/${payment.invoiceId}`} className="text-[#2d5016] underline underline-offset-2">
                           {payment.invoiceId}
                         </Link>
                       ) : (

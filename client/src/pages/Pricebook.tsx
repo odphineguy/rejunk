@@ -4,17 +4,16 @@ import {
   Edit3,
   FileImage,
   MoreHorizontal,
+  PackageSearch,
   Plus,
   Save,
   Search,
-  Settings,
   Trash2,
   Upload,
   X,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -165,11 +164,7 @@ export default function Pricebook() {
       <div className="border-b border-border bg-background px-4 py-5 md:px-8">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2 text-base">
-            <Settings className="size-5 text-[#7180a8]" />
-            <Link href="/settings" className="text-[#7180a8] hover:text-[#3f3df1]">
-              Settings
-            </Link>
-            <span className="text-muted-foreground">/</span>
+            <PackageSearch className="size-5 text-foreground" />
             <span className="font-medium text-foreground">Pricebook</span>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -177,7 +172,7 @@ export default function Pricebook() {
               <Plus className="size-4" />
               Create Category
             </Button>
-            <Button className="rounded-lg bg-[#3f3df1] text-white hover:bg-[#3330df]" onClick={() => setEditingItem(newItemDraft(pricebook.categories[0]?.id))}>
+            <Button className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]" onClick={() => setEditingItem(newItemDraft(pricebook.categories[0]?.id))}>
               <Plus className="size-4" />
               Create Item
             </Button>
@@ -283,7 +278,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
       onClick={onClick}
       className={cn(
         "min-w-28 border-b-4 border-transparent px-4 py-4 text-left text-base font-medium transition-colors",
-        active ? "border-[#3f3df1] text-[#3f3df1]" : "text-foreground hover:text-[#3f3df1]",
+        active ? "border-[#2d5016] text-[#2d5016]" : "text-foreground hover:text-[#2d5016]",
       )}
     >
       {children}
@@ -425,7 +420,7 @@ function UploadRow({ onSelect }: { onSelect: (fileName: string) => void }) {
           event.currentTarget.value = "";
         }}
       />
-      <Button type="button" onClick={() => inputRef.current?.click()} className="rounded-lg bg-[#3f3df1] text-white hover:bg-[#3330df]">
+      <Button type="button" onClick={() => inputRef.current?.click()} className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
         <Upload className="size-4" />
         Select
       </Button>
@@ -587,7 +582,7 @@ function ItemDialog({
             <XCircle className="size-4" />
             Cancel
           </Button>
-          <Button onClick={() => onSave(draft)} className="rounded-lg bg-[#3f3df1] text-white hover:bg-[#3330df]">
+          <Button onClick={() => onSave(draft)} className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
             {isEditing ? <Save className="size-4" /> : <Plus className="size-4" />}
             {isEditing ? "Save" : "Create Item"}
           </Button>
@@ -640,7 +635,7 @@ function CategoryDialog({
             <XCircle className="size-4" />
             Cancel
           </Button>
-          <Button onClick={() => onSave(draft)} className="rounded-lg bg-[#3f3df1] text-white hover:bg-[#3330df]">
+          <Button onClick={() => onSave(draft)} className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
             {isEditing ? <CheckCircle2 className="size-4" /> : <Plus className="size-4" />}
             {isEditing ? "Submit" : "Create Category"}
           </Button>

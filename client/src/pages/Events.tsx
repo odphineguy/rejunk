@@ -91,8 +91,8 @@ function EventsHeader({ crumb, actions }: { crumb?: string; actions?: ReactNode 
     <div className="border-b border-border bg-background px-4 py-5 md:px-8">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2 text-base">
-          <CalendarDays className="size-5 text-[#7180a8]" />
-          <Link href="/events" className="text-[#7180a8] hover:text-[#3f3df1]">
+          <CalendarDays className="size-5 text-foreground" />
+          <Link href="/events" className="text-foreground hover:text-[#2d5016]">
             Events
           </Link>
           {crumb && (
@@ -138,7 +138,7 @@ function EventsList() {
     <>
       <EventsHeader
         actions={
-          <Button asChild className="rounded-lg bg-[#3f3df1] text-white hover:bg-[#3330df]">
+          <Button asChild className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
             <Link href="/events/new">
               <Plus className="size-4" />
               Create Event
@@ -276,7 +276,7 @@ function EventEditor({ mode, eventId }: { mode?: "new"; eventId?: string }) {
         crumb={isNew ? "New Event" : event.title || "Event Details"}
         actions={
           <>
-            <Button onClick={persistEvent} className="rounded-lg bg-[#3f3df1] text-white hover:bg-[#3330df]">
+            <Button onClick={persistEvent} className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
               {isNew ? <Plus className="size-4" /> : <Save className="size-4" />}
               {isNew ? "Create Event" : "Save"}
             </Button>
@@ -438,7 +438,7 @@ function MapPreview() {
           <span className="bg-card px-5 py-3 font-bold">Map</span>
           <span className="bg-muted px-5 py-3 text-muted-foreground">Satellite</span>
         </div>
-        <div className="absolute bottom-2 left-3 font-bold text-[#3f3df1]">Google</div>
+        <div className="absolute bottom-2 left-3 font-bold text-[#2d5016]">Google</div>
         <div className="absolute right-3 top-3 flex size-10 items-center justify-center rounded-md bg-card shadow-sm">
           <Plus className="size-5 rotate-45" />
         </div>

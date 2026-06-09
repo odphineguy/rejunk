@@ -145,7 +145,7 @@ export default function Messages() {
             <MessageSquare className="size-5" />
             Messages
           </div>
-          <Button onClick={() => setNewMessageOpen(true)} className="rounded-lg bg-[#3f3df1] text-white hover:bg-[#3330df]">
+          <Button onClick={() => setNewMessageOpen(true)} className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
             <Plus className="size-4" />
             New Message
           </Button>
@@ -182,7 +182,7 @@ export default function Messages() {
                   onClick={() => setActiveId(conversation.id)}
                   className={cn(
                     "w-full rounded-md border border-border p-4 text-left transition-colors",
-                    activeConversation?.id === conversation.id ? "bg-[#f2f2ff]" : "bg-card hover:bg-muted/40",
+                    activeConversation?.id === conversation.id ? "bg-[#eef4e8]" : "bg-card hover:bg-muted/40",
                   )}
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -234,7 +234,7 @@ export default function Messages() {
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                  <Button variant="secondary" size="icon" className="size-10 rounded-lg bg-[#f2f2ff] text-[#3f3df1]">
+                  <Button variant="secondary" size="icon" className="size-10 rounded-lg bg-[#eef4e8] text-[#2d5016]">
                     <ChevronRight className="size-5" />
                   </Button>
                 </div>
@@ -299,7 +299,7 @@ export default function Messages() {
                 </button>
               )}
             </div>
-            <Button onClick={createConversation} className="mt-6 h-10 w-full rounded-lg bg-[#f2f2ff] text-[#3f3df1] hover:bg-[#e7e7ff]">
+            <Button onClick={createConversation} className="mt-6 h-10 w-full rounded-lg bg-[#eef4e8] text-[#2d5016] hover:bg-[#e1ecd6]">
               <Send className="size-4" />
               Proceed
             </Button>

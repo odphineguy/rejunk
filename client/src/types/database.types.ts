@@ -244,6 +244,56 @@ export type Database = {
         }
         Relationships: []
       }
+      clients: {
+        Row: {
+          company: string | null
+          created_at: string
+          created_by: string | null
+          data: Json
+          email: string | null
+          first_name: string | null
+          id: string
+          kind: string | null
+          last_name: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string
+          created_by?: string | null
+          data: Json
+          email?: string | null
+          first_name?: string | null
+          id: string
+          kind?: string | null
+          last_name?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company?: string | null
+          created_at?: string
+          created_by?: string | null
+          data?: Json
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          kind?: string | null
+          last_name?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clients_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       jobs: {
         Row: {
           created_at: string

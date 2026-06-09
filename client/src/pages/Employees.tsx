@@ -104,8 +104,8 @@ function EmployeesHeader({ crumb, actions }: { crumb?: string; actions?: ReactNo
     <div className="border-b border-border bg-background px-4 py-5 md:px-8">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2 text-base">
-          <UsersRound className="size-5 text-[#7180a8]" />
-          <Link href="/employees" className="text-[#7180a8] hover:text-[#3f3df1]">
+          <UsersRound className="size-5 text-foreground" />
+          <Link href="/employees" className="text-foreground hover:text-[#2d5016]">
             Employees
           </Link>
           {crumb && (
@@ -169,7 +169,7 @@ function EmployeeList() {
                 Create Subcontractor
               </Link>
             </Button>
-            <Button asChild className="rounded-lg bg-[#3f3df1] text-white hover:bg-[#3330df]">
+            <Button asChild className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
               <Link href="/employees/new">
                 <Plus className="size-4" />
                 Create Employee
@@ -253,7 +253,7 @@ function EmployeeList() {
                   <TableRow>
                     <TableCell colSpan={8} className="h-72 text-center">
                       <div className="flex flex-col items-center justify-center gap-4">
-                        <BriefcaseBusiness className="size-8 text-[#3f3df1]" />
+                        <BriefcaseBusiness className="size-8 text-[#2d5016]" />
                         <span className="text-sm text-muted-foreground">No employees match that search.</span>
                       </div>
                     </TableCell>
@@ -324,7 +324,7 @@ function EmployeeEditor({ mode, employeeId }: { mode?: "new"; employeeId?: strin
         crumb={isNew ? (employee.type === "subcontractor" ? "New Subcontractor" : "New Employee") : employeeName(employee as EmployeeRecord)}
         actions={
           <>
-            <Button onClick={persistEmployee} className="rounded-lg bg-[#3f3df1] text-white hover:bg-[#3330df]">
+            <Button onClick={persistEmployee} className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
               {isNew ? <Plus className="size-4" /> : <Save className="size-4" />}
               {isNew ? `Create ${employee.type === "subcontractor" ? "Subcontractor" : "Employee"}` : "Save"}
             </Button>
@@ -425,7 +425,7 @@ function EmployeeTypePanel({
             event.currentTarget.value = "";
           }}
         />
-        <Button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg bg-[#3f3df1] text-white hover:bg-[#3330df]">
+        <Button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
           <Upload className="size-4" />
           Upload
         </Button>
@@ -443,9 +443,9 @@ function EmployeeTypePanel({
         />
       </div>
 
-      <div className="mt-6 rounded-lg border border-[#3f3df1] bg-[#3f3df1]/5 p-5 text-sm leading-6">
+      <div className="mt-6 rounded-lg border border-[#2d5016] bg-[#2d5016]/5 p-5 text-sm leading-6">
         <div className="flex gap-3">
-          <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-[#3f3df1] text-white">
+          <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-[#2d5016] text-white">
             <Info className="size-3" />
           </span>
           <div>
@@ -505,7 +505,7 @@ function EmployeeAttachments({
             event.currentTarget.value = "";
           }}
         />
-        <Button type="button" variant="outline" onClick={() => attachmentInputRef.current?.click()} className="rounded-lg border-[#3f3df1] text-[#3f3df1] hover:text-[#3f3df1]">
+        <Button type="button" variant="outline" onClick={() => attachmentInputRef.current?.click()} className="rounded-lg border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]">
           <Upload className="size-4" />
           Upload Files
         </Button>
@@ -545,7 +545,7 @@ function ProfileColorPicker({ value, onChange, compact = false }: { value: Profi
               key={color.value}
               type="button"
               onClick={() => onChange(color.value)}
-              className={cn("flex size-8 items-center justify-center rounded-md ring-offset-2 transition", color.className, value === color.value && "ring-2 ring-[#3f3df1]")}
+              className={cn("flex size-8 items-center justify-center rounded-md ring-offset-2 transition", color.className, value === color.value && "ring-2 ring-[#2d5016]")}
               aria-label={`Use ${color.label} profile color`}
             >
               {value === color.value && <Check className="size-4 text-white" />}

@@ -23,6 +23,7 @@ import {
   UsersRound,
   Wrench,
   X,
+  type LucideIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -111,38 +112,53 @@ function formatSearchDate(value?: string) {
 }
 
 function clientRows(clients: ClientRecord[]) {
-  return clients.map((client) => ({
+  return clients.map(client => ({
     id: client.id,
     title: clientName(client),
-    subtitle: [client.phone, client.email].filter(Boolean).join(", ") || [client.company, client.city].filter(Boolean).join(", "),
+    subtitle:
+      [client.phone, client.email].filter(Boolean).join(", ") ||
+      [client.company, client.city].filter(Boolean).join(", "),
     href: `/clients/${client.id}`,
   }));
 }
 
 function employeeRows(employees: EmployeeRecord[]) {
-  return employees.map((employee) => ({
+  return employees.map(employee => ({
     id: employee.id,
     title: employeeName(employee),
-    subtitle: [employee.email, employee.phone, employee.role].filter(Boolean).join(", "),
+    subtitle: [employee.email, employee.phone, employee.role]
+      .filter(Boolean)
+      .join(", "),
     href: `/employees/${employee.id}`,
   }));
 }
 
 function eventRows(events: EventRecord[]) {
-  return events.map((event) => ({
+  return events.map(event => ({
     id: event.id,
     title: event.title,
-    subtitle: [formatSearchDate(event.startDate), eventAddress(event)].filter(Boolean).join(", "),
+    subtitle: [formatSearchDate(event.startDate), eventAddress(event)]
+      .filter(Boolean)
+      .join(", "),
     href: `/events/${event.id}`,
   }));
 }
 
 function paymentRows(payments: PaymentRecord[]) {
-  const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
-  return payments.map((payment) => ({
+  const money = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  });
+  return payments.map(payment => ({
     id: payment.id,
     title: payment.customerName,
-    subtitle: [payment.method, money.format(payment.baseAmount + payment.tip), payment.invoiceId ? `Invoice ${payment.invoiceId}` : undefined].filter(Boolean).join(", "),
+    subtitle: [
+      payment.method,
+      money.format(payment.baseAmount + payment.tip),
+      payment.invoiceId ? `Invoice ${payment.invoiceId}` : undefined,
+    ]
+      .filter(Boolean)
+      .join(", "),
     href: "/payments",
   }));
 }
@@ -153,25 +169,31 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-muted/20 md:flex md:h-screen md:overflow-hidden">
       <aside className="hidden w-[248px] shrink-0 border-r border-border bg-card md:flex md:h-screen md:flex-col">
-        <Link href="/" className="flex h-20 items-center border-b border-border px-6">
+        <Link href="/" className="flex h-20 items-center px-6">
           <img src="/rejunk-whites.png" alt="reJunk" className="h-20 w-auto" />
         </Link>
 
-        <nav className="flex-1 space-y-6 overflow-y-auto px-4 py-6">
-          {navGroups.map((group) => (
+        <nav className="flex-1 space-y-6 overflow-y-auto border-t border-border px-4 py-6">
+          {navGroups.map(group => (
             <div key={group.label} className="space-y-2">
-              <div className="px-2 text-xs font-medium text-muted-foreground">{group.label}</div>
+              <div className="px-2 text-xs font-medium text-muted-foreground">
+                {group.label}
+              </div>
               <div className="space-y-1">
-                {group.items.map((item) => {
+                {group.items.map(item => {
                   const Icon = item.icon;
-                  const active = location === item.href || (item.href !== "/" && location.startsWith(item.href));
+                  const active =
+                    location === item.href ||
+                    (item.href !== "/" && location.startsWith(item.href));
                   return (
                     <Link
                       key={item.href}
                       href={item.href}
                       className={cn(
                         "flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors",
-                        active ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted",
+                        active
+                          ? "bg-primary/10 text-primary"
+                          : "text-foreground hover:bg-muted"
                       )}
                     >
                       <Icon className="size-4" />
@@ -191,53 +213,76 @@ export function AppShell({ children }: { children: ReactNode }) {
             <GlobalSearch />
             <div className="flex flex-wrap items-center gap-3">
               <AddNewMenu />
-              <button className="flex size-10 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted" aria-label="Notifications">
+              <button
+                className="flex size-10 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted"
+                aria-label="Notifications"
+              >
                 <Bell className="size-5" />
               </button>
-              <button className="flex h-10 items-center gap-2 rounded-full px-2 text-sm font-medium text-primary transition-colors hover:bg-muted" aria-label="Account menu">
-                <span className="flex size-7 items-center justify-center rounded-full bg-primary/10">AM</span>
+              <button
+                className="flex h-10 items-center gap-2 rounded-full px-2 text-sm font-medium text-primary transition-colors hover:bg-muted"
+                aria-label="Account menu"
+              >
+                <span className="flex size-7 items-center justify-center rounded-full bg-primary/10">
+                  AM
+                </span>
                 <ChevronDown className="size-4 text-foreground" />
               </button>
             </div>
           </div>
 
           <div className="flex gap-2 overflow-x-auto border-t border-border px-4 py-3 md:hidden">
-            {navGroups.flatMap((group) => group.items).map((item) => {
-              const Icon = item.icon;
-              const active = location === item.href || (item.href !== "/" && location.startsWith(item.href));
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "inline-flex items-center gap-2 whitespace-nowrap rounded-md border px-3 py-2 text-sm font-medium transition-colors",
-                    active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-muted",
-                  )}
-                >
-                  <Icon className="size-4" />
-                  {item.label}
-                </Link>
-              );
-            })}
+            {navGroups
+              .flatMap(group => group.items)
+              .map(item => {
+                const Icon = item.icon;
+                const active =
+                  location === item.href ||
+                  (item.href !== "/" && location.startsWith(item.href));
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "inline-flex items-center gap-2 whitespace-nowrap rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+                      active
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-card hover:bg-muted"
+                    )}
+                  >
+                    <Icon className="size-4" />
+                    {item.label}
+                  </Link>
+                );
+              })}
           </div>
         </header>
 
-        <main className="min-w-0 md:flex-1 md:overflow-y-auto">
-          {children}
-        </main>
+        <main className="min-w-0 md:flex-1 md:overflow-y-auto">{children}</main>
       </div>
     </div>
   );
 }
 
-export function OperationsShell({ title, eyebrow, actions, children }: { title: string; eyebrow?: string; actions?: ReactNode; children: ReactNode }) {
+export function OperationsShell({
+  title,
+  icon: Icon,
+  actions,
+  children,
+}: {
+  title: string;
+  icon?: LucideIcon;
+  eyebrow?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <>
       <div className="border-b border-border bg-background px-4 py-5 md:px-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            {eyebrow && <div className="text-sm font-medium text-muted-foreground">{eyebrow}</div>}
-            <h1 className="mt-1 text-2xl font-bold text-foreground md:text-3xl">{title}</h1>
+          <div className="flex items-center gap-2 text-base">
+            {Icon && <Icon className="size-5 text-foreground" />}
+            <span className="font-medium text-foreground">{title}</span>
           </div>
           {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
         </div>
@@ -251,18 +296,22 @@ export function AddNewMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button className="h-10 gap-2 rounded-lg bg-[#3f3df1] px-2 pr-4 text-white hover:bg-[#3330df]">
-          <span className="flex size-8 items-center justify-center rounded-md bg-[#1515d6]">
+        <Button className="h-10 gap-2 rounded-lg bg-[#2d5016] px-2 pr-4 text-white hover:bg-[#234011]">
+          <span className="flex size-8 items-center justify-center rounded-md bg-[#1a2f0d]">
             <Plus className="size-5" />
           </span>
           <span>Add New</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-52 rounded-lg p-3">
-        {actionItems.map((item) => {
+        {actionItems.map(item => {
           const Icon = item.icon;
           return (
-            <DropdownMenuItem key={item.label} asChild className="rounded-md px-3 py-2.5 text-[15px]">
+            <DropdownMenuItem
+              key={item.label}
+              asChild
+              className="rounded-md px-3 py-2.5 text-[15px]"
+            >
               <Link href={item.href}>
                 <Icon className="size-4 text-foreground" />
                 {item.label}
@@ -279,10 +328,16 @@ function GlobalSearch() {
   const [query, setQuery] = useState("");
   const [jobs, setJobs] = useState<Job[]>(() => getJobs());
   const [clients, setClients] = useState<ClientRecord[]>(() => getClients());
-  const [employees, setEmployees] = useState<EmployeeRecord[]>(() => getEmployees());
+  const [employees, setEmployees] = useState<EmployeeRecord[]>(() =>
+    getEmployees()
+  );
   const [events, setEvents] = useState<EventRecord[]>(() => getEvents());
-  const [invoices, setInvoices] = useState<InvoiceRecord[]>(() => getInvoices());
-  const [payments, setPayments] = useState<PaymentRecord[]>(() => getPayments());
+  const [invoices, setInvoices] = useState<InvoiceRecord[]>(() =>
+    getInvoices()
+  );
+  const [payments, setPayments] = useState<PaymentRecord[]>(() =>
+    getPayments()
+  );
   const [estimates, setEstimates] = useState(() => loadSavedEstimates());
   const trimmedQuery = query.trim().toLowerCase();
 
@@ -318,27 +373,36 @@ function GlobalSearch() {
     if (!trimmedQuery) return [];
     const matches = (values: Array<string | number | undefined>) =>
       values
-        .filter((value) => value !== undefined && value !== null)
+        .filter(value => value !== undefined && value !== null)
         .join(" ")
         .toLowerCase()
         .includes(trimmedQuery);
 
     const clientResults = clientRows(clients)
-      .filter((client) => matches([client.title, client.subtitle]))
+      .filter(client => matches([client.title, client.subtitle]))
       .slice(0, 4);
 
     const employeeResults = employeeRows(employees)
-      .filter((employee) => matches([employee.title, employee.subtitle]))
+      .filter(employee => matches([employee.title, employee.subtitle]))
       .slice(0, 4);
 
     const eventResults = eventRows(events)
-      .filter((event) => matches([event.title, event.subtitle]))
+      .filter(event => matches([event.title, event.subtitle]))
       .slice(0, 4);
 
     const jobRows = jobs
-      .filter((job) => matches([job.jobNumber, job.customerName, job.jobLabel, job.address, job.city, job.quotedAmount]))
+      .filter(job =>
+        matches([
+          job.jobNumber,
+          job.customerName,
+          job.jobLabel,
+          job.address,
+          job.city,
+          job.quotedAmount,
+        ])
+      )
       .slice(0, 4)
-      .map((job) => ({
+      .map(job => ({
         id: job.id,
         title: `${job.jobNumber} - ${job.customerName}`,
         subtitle: `${formatSearchDate(job.scheduledStart)}, ${job.city ?? "no city"}`,
@@ -346,9 +410,17 @@ function GlobalSearch() {
       }));
 
     const invoiceRows = invoices
-      .filter((invoice) => matches([invoice.invoiceNumber, invoice.jobId, invoice.clientName, invoice.total, invoice.status]))
+      .filter(invoice =>
+        matches([
+          invoice.invoiceNumber,
+          invoice.jobId,
+          invoice.clientName,
+          invoice.total,
+          invoice.status,
+        ])
+      )
       .slice(0, 3)
-      .map((invoice) => ({
+      .map(invoice => ({
         id: invoice.id,
         title: `Invoice #${invoice.invoiceNumber}`,
         subtitle: `${invoice.clientName} - ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(invoice.total)}`,
@@ -356,38 +428,90 @@ function GlobalSearch() {
       }));
 
     const paymentResults = paymentRows(payments)
-      .filter((payment) => matches([payment.title, payment.subtitle]))
+      .filter(payment => matches([payment.title, payment.subtitle]))
       .slice(0, 3);
 
     const estimateRows = estimates
-      .filter((estimate) => matches([estimate.customerName, estimate.loadLabel, estimate.jobAddress, estimate.finalQuote]))
+      .filter(estimate =>
+        matches([
+          estimate.customerName,
+          estimate.loadLabel,
+          estimate.jobAddress,
+          estimate.finalQuote,
+        ])
+      )
       .slice(0, 3)
-      .map((estimate) => ({
+      .map(estimate => ({
         id: estimate.id,
         title: estimate.customerName || estimate.loadLabel || "Saved estimate",
-        subtitle: new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(estimate.finalQuote),
+        subtitle: new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+        }).format(estimate.finalQuote),
         href: "/estimate-builder",
       }));
 
     return [
-      { label: "Clients", href: "/clients", icon: UsersRound, items: clientResults },
-      { label: "Employees", href: "/employees", icon: BriefcaseBusiness, items: employeeResults },
-      { label: "Events", href: "/events", icon: CalendarPlus, items: eventResults },
+      {
+        label: "Clients",
+        href: "/clients",
+        icon: UsersRound,
+        items: clientResults,
+      },
+      {
+        label: "Employees",
+        href: "/employees",
+        icon: BriefcaseBusiness,
+        items: employeeResults,
+      },
+      {
+        label: "Events",
+        href: "/events",
+        icon: CalendarPlus,
+        items: eventResults,
+      },
       { label: "Jobs", href: "/jobs", icon: ClipboardList, items: jobRows },
-      { label: "Invoices", href: "/invoices", icon: FileText, items: invoiceRows },
-      { label: "Payments", href: "/payments", icon: Banknote, items: paymentResults },
-      { label: "Estimates", href: "/estimate-builder", icon: Calculator, items: estimateRows },
-    ].filter((group) => group.items.length > 0);
-  }, [clients, employees, events, estimates, invoices, jobs, payments, trimmedQuery]);
+      {
+        label: "Invoices",
+        href: "/invoices",
+        icon: FileText,
+        items: invoiceRows,
+      },
+      {
+        label: "Payments",
+        href: "/payments",
+        icon: Banknote,
+        items: paymentResults,
+      },
+      {
+        label: "Estimates",
+        href: "/estimate-builder",
+        icon: Calculator,
+        items: estimateRows,
+      },
+    ].filter(group => group.items.length > 0);
+  }, [
+    clients,
+    employees,
+    events,
+    estimates,
+    invoices,
+    jobs,
+    payments,
+    trimmedQuery,
+  ]);
 
-  const resultCount = groups.reduce((sum, group) => sum + group.items.length, 0);
+  const resultCount = groups.reduce(
+    (sum, group) => sum + group.items.length,
+    0
+  );
 
   return (
     <div className="relative w-full md:max-w-[370px]">
       <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-foreground" />
       <Input
         value={query}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={event => setQuery(event.target.value)}
         placeholder="Search"
         className="h-10 rounded-lg bg-card pl-10 pr-10 text-base"
       />
@@ -406,18 +530,22 @@ function GlobalSearch() {
         <div className="absolute left-0 top-[calc(100%+6px)] z-50 max-h-[70vh] w-full overflow-y-auto rounded-lg border border-border bg-popover p-6 shadow-xl md:w-[370px]">
           {groups.length > 0 ? (
             <div className="space-y-6">
-              {groups.map((group) => {
+              {groups.map(group => {
                 const Icon = group.icon;
                 return (
                   <section key={group.label} className="space-y-3">
                     <div className="flex items-center gap-2 text-primary">
                       <Icon className="size-4" />
-                      <span className="text-base font-medium">{group.label}</span>
+                      <span className="text-base font-medium">
+                        {group.label}
+                      </span>
                       <span className="h-px flex-1 bg-border" />
-                      <span className="text-xs text-[#7180a8]">{group.items.length} result</span>
+                      <span className="text-xs text-[#7180a8]">
+                        {group.items.length} result
+                      </span>
                     </div>
                     <div className="space-y-3">
-                      {group.items.map((item) => (
+                      {group.items.map(item => (
                         <Link
                           key={item.id}
                           href={item.href}
@@ -425,8 +553,14 @@ function GlobalSearch() {
                           className="group flex items-start justify-between gap-3 rounded-md"
                         >
                           <span className="min-w-0">
-                            <span className="block truncate text-base font-semibold text-foreground">{item.title}</span>
-                            {item.subtitle && <span className="mt-0.5 block truncate text-sm text-[#7180a8]">{item.subtitle}</span>}
+                            <span className="block truncate text-base font-semibold text-foreground">
+                              {item.title}
+                            </span>
+                            {item.subtitle && (
+                              <span className="mt-0.5 block truncate text-sm text-[#7180a8]">
+                                {item.subtitle}
+                              </span>
+                            )}
                           </span>
                           <SquareArrowOutUpRight className="mt-1 size-4 shrink-0 text-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                         </Link>
@@ -435,10 +569,15 @@ function GlobalSearch() {
                   </section>
                 );
               })}
-              <div className="border-t border-border pt-3 text-xs text-[#7180a8]">{resultCount} total results</div>
+              <div className="border-t border-border pt-3 text-xs text-[#7180a8]">
+                {resultCount} total results
+              </div>
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">No clients, employees, events, jobs, invoices, or estimates match that search.</div>
+            <div className="text-sm text-muted-foreground">
+              No clients, employees, events, jobs, invoices, or estimates match
+              that search.
+            </div>
           )}
         </div>
       )}

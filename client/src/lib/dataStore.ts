@@ -16,6 +16,7 @@ import type {
   VolumePricingBenchmark,
 } from "@/types/pricing";
 import type { Job } from "@/types/jobs";
+import type { ClientRecord } from "@/types/clients";
 import type {
   PricebookCategory,
   PricebookCrewSize,
@@ -34,17 +35,23 @@ type BenchmarkRow = Tables["volume_benchmarks"]["Row"];
 type DefaultsRow = Tables["pricing_defaults"]["Row"];
 type EstimateRow = Tables["saved_estimates"]["Row"];
 type JobRow = Tables["jobs"]["Row"];
+type ClientRow = Tables["clients"]["Row"];
 
 // ---------------------------------------------------------------------------
 // Row -> domain mappers
 // ---------------------------------------------------------------------------
 
-function deriveAcceptance(accepted: string[], facilityType: string): FacilityAcceptanceFlags {
+function deriveAcceptance(
+  accepted: string[],
+  facilityType: string
+): FacilityAcceptanceFlags {
   return {
     tires: accepted.includes("tires"),
     appliances: accepted.includes("appliances"),
     recycling:
-      facilityType === "recycling_center" || accepted.includes("cardboard") || accepted.includes("metal"),
+      facilityType === "recycling_center" ||
+      accepted.includes("cardboard") ||
+      accepted.includes("metal"),
     hazardousWaste: accepted.includes("hazardous_excluded"),
   };
 }
@@ -69,17 +76,36 @@ function derivePricing(row: FacilityRow): LegacyFacilityPricing {
 
   return {
     msw: rateLabel,
-    minimum: row.minimum_charge > 0 ? `$${row.minimum_charge} minimum estimate` : undefined,
+    minimum:
+      row.minimum_charge > 0
+        ? `$${row.minimum_charge} minimum estimate`
+        : undefined,
   };
 }
 
-function defaultHandlingClass(materialCategory: MaterialCategory): MaterialHandlingClass {
-  if (["clean_concrete", "dirt", "rock", "sod", "stone", "brick", "clean_tile", "asphalt", "pavers", "heavy_clean_debris"].includes(materialCategory)) {
+function defaultHandlingClass(
+  materialCategory: MaterialCategory
+): MaterialHandlingClass {
+  if (
+    [
+      "clean_concrete",
+      "dirt",
+      "rock",
+      "sod",
+      "stone",
+      "brick",
+      "clean_tile",
+      "asphalt",
+      "pavers",
+      "heavy_clean_debris",
+    ].includes(materialCategory)
+  ) {
     return "heavy_lowboy";
   }
   if (materialCategory === "green_waste") return "green_waste";
   if (materialCategory === "mixed_c_and_d") return "mixed_demo";
-  if (materialCategory === "appliances" || materialCategory === "metal") return "metal_appliance";
+  if (materialCategory === "appliances" || materialCategory === "metal")
+    return "metal_appliance";
   return "standard_junk";
 }
 
@@ -126,12 +152,33 @@ function facilityFromRow(row: FacilityRow): Facility {
 
 function vehicleFromRow(row: VehicleRow): Vehicle {
   const vehicleType = row.vehicle_type as VehicleType;
-  const heavyMaterialSuitable = vehicleType === "dump_trailer" ? true : vehicleType === "cargo_van" ? "conditional" : false;
-  const bedHeightClass = vehicleType === "dump_trailer" ? "low" : vehicleType === "box_truck" ? "high" : "medium";
+  const heavyMaterialSuitable =
+    vehicleType === "dump_trailer"
+      ? true
+      : vehicleType === "cargo_van"
+        ? "conditional"
+        : false;
+  const bedHeightClass =
+    vehicleType === "dump_trailer"
+      ? "low"
+      : vehicleType === "box_truck"
+        ? "high"
+        : "medium";
   const allowedHandlingClasses =
     vehicleType === "box_truck"
-      ? (["standard_junk", "green_waste", "mixed_demo", "metal_appliance"] as const)
-      : (["standard_junk", "green_waste", "mixed_demo", "metal_appliance", "heavy_lowboy"] as const);
+      ? ([
+          "standard_junk",
+          "green_waste",
+          "mixed_demo",
+          "metal_appliance",
+        ] as const)
+      : ([
+          "standard_junk",
+          "green_waste",
+          "mixed_demo",
+          "metal_appliance",
+          "heavy_lowboy",
+        ] as const);
 
   return {
     id: row.id,
@@ -176,7 +223,12 @@ function materialFromRow(row: MaterialRow): MaterialPricingRule {
     handlingClass,
     requiresWeightOverride: row.requires_weight_override,
     preferredFacilityTypes: row.preferred_facility_types as FacilityType[],
-    includedTons: handlingClass === "heavy_lowboy" ? (materialCategory === "heavy_clean_debris" ? 3 : 4) : undefined,
+    includedTons:
+      handlingClass === "heavy_lowboy"
+        ? materialCategory === "heavy_clean_debris"
+          ? 3
+          : 4
+        : undefined,
     extraTonRate: handlingClass === "heavy_lowboy" ? 95 : undefined,
     warningText: row.warning_text ?? undefined,
     laborDifficultyMultiplier: row.labor_difficulty_multiplier,
@@ -187,7 +239,12 @@ function materialFromRow(row: MaterialRow): MaterialPricingRule {
 }
 
 function benchmarkFromRow(row: BenchmarkRow): VolumePricingBenchmark {
-  return { id: row.id, label: row.label, fraction: row.fraction, price: row.price };
+  return {
+    id: row.id,
+    label: row.label,
+    fraction: row.fraction,
+    price: row.price,
+  };
 }
 
 function defaultsFromRow(row: DefaultsRow): PricingSettings["defaults"] {
@@ -260,7 +317,9 @@ function vehicleToRow(v: Vehicle): Tables["vehicles"]["Insert"] {
   };
 }
 
-function materialToRow(m: MaterialPricingRule): Tables["material_pricing_rules"]["Insert"] {
+function materialToRow(
+  m: MaterialPricingRule
+): Tables["material_pricing_rules"]["Insert"] {
   return {
     id: m.id,
     material_name: m.materialName,
@@ -279,7 +338,9 @@ function materialToRow(m: MaterialPricingRule): Tables["material_pricing_rules"]
   };
 }
 
-function benchmarkToRow(b: VolumePricingBenchmark): Tables["volume_benchmarks"]["Insert"] {
+function benchmarkToRow(
+  b: VolumePricingBenchmark
+): Tables["volume_benchmarks"]["Insert"] {
   return { id: b.id, label: b.label, fraction: b.fraction, price: b.price };
 }
 
@@ -295,15 +356,19 @@ async function getUserId(): Promise<string | null> {
 
 /** Sync a config table to exactly `rows`: upsert all, delete any id not present. */
 async function syncTable(
-  table: "facilities" | "vehicles" | "material_pricing_rules" | "volume_benchmarks",
-  rows: { id: string }[],
+  table:
+    | "facilities"
+    | "vehicles"
+    | "material_pricing_rules"
+    | "volume_benchmarks",
+  rows: { id: string }[]
 ) {
   if (!supabase) return;
   if (rows.length > 0) {
     const { error } = await supabase.from(table).upsert(rows as never[]);
     if (error) throw error;
   }
-  const ids = rows.map((r) => r.id);
+  const ids = rows.map(r => r.id);
   const remove = supabase.from(table).delete();
   const { error } =
     ids.length > 0
@@ -317,16 +382,21 @@ export async function loadAllSettings(): Promise<PricingSettings | null> {
   const ok = await ensureSession();
   if (!ok) return null;
 
-  const [facilities, vehicles, materials, benchmarks, defaults] = await Promise.all([
-    supabase.from("facilities").select("*"),
-    supabase.from("vehicles").select("*"),
-    supabase.from("material_pricing_rules").select("*"),
-    supabase.from("volume_benchmarks").select("*").order("fraction"),
-    supabase.from("pricing_defaults").select("*").eq("id", 1).maybeSingle(),
-  ]);
+  const [facilities, vehicles, materials, benchmarks, defaults] =
+    await Promise.all([
+      supabase.from("facilities").select("*"),
+      supabase.from("vehicles").select("*"),
+      supabase.from("material_pricing_rules").select("*"),
+      supabase.from("volume_benchmarks").select("*").order("fraction"),
+      supabase.from("pricing_defaults").select("*").eq("id", 1).maybeSingle(),
+    ]);
 
   const firstError =
-    facilities.error || vehicles.error || materials.error || benchmarks.error || defaults.error;
+    facilities.error ||
+    vehicles.error ||
+    materials.error ||
+    benchmarks.error ||
+    defaults.error;
   if (firstError) {
     console.error("[dataStore] Failed to load settings:", firstError.message);
     return null;
@@ -338,19 +408,29 @@ export async function loadAllSettings(): Promise<PricingSettings | null> {
     materialPricingRules: (materials.data ?? []).map(materialFromRow),
     volumePricingBenchmarks: (benchmarks.data ?? []).map(benchmarkFromRow),
     heavyBedloadPricing: defaultPricingSettings.heavyBedloadPricing,
-    defaults: defaults.data ? defaultsFromRow(defaults.data) : defaultPricingSettings.defaults,
+    defaults: defaults.data
+      ? defaultsFromRow(defaults.data)
+      : defaultPricingSettings.defaults,
   };
 }
 
-export async function saveAllSettings(settings: PricingSettings): Promise<void> {
+export async function saveAllSettings(
+  settings: PricingSettings
+): Promise<void> {
   if (!supabase) return;
   const ok = await ensureSession();
   if (!ok) return;
 
   await syncTable("facilities", settings.disposalFacilities.map(facilityToRow));
   await syncTable("vehicles", settings.vehicles.map(vehicleToRow));
-  await syncTable("material_pricing_rules", settings.materialPricingRules.map(materialToRow));
-  await syncTable("volume_benchmarks", settings.volumePricingBenchmarks.map(benchmarkToRow));
+  await syncTable(
+    "material_pricing_rules",
+    settings.materialPricingRules.map(materialToRow)
+  );
+  await syncTable(
+    "volume_benchmarks",
+    settings.volumePricingBenchmarks.map(benchmarkToRow)
+  );
 
   const d = settings.defaults;
   const { error } = await supabase.from("pricing_defaults").upsert({
@@ -366,7 +446,9 @@ export async function saveAllSettings(settings: PricingSettings): Promise<void> 
   if (error) throw error;
 }
 
-export async function loadSavedEstimatesRemote(): Promise<SavedEstimate[] | null> {
+export async function loadSavedEstimatesRemote(): Promise<
+  SavedEstimate[] | null
+> {
   if (!supabase) return null;
   const ok = await ensureSession();
   if (!ok) return null;
@@ -379,10 +461,14 @@ export async function loadSavedEstimatesRemote(): Promise<SavedEstimate[] | null
     console.error("[dataStore] Failed to load estimates:", error.message);
     return null;
   }
-  return (data ?? []).map((row: EstimateRow) => row.data as unknown as SavedEstimate);
+  return (data ?? []).map(
+    (row: EstimateRow) => row.data as unknown as SavedEstimate
+  );
 }
 
-export async function upsertSavedEstimateRemote(estimate: SavedEstimate): Promise<void> {
+export async function upsertSavedEstimateRemote(
+  estimate: SavedEstimate
+): Promise<void> {
   if (!supabase) return;
   const ok = await ensureSession();
   if (!ok) return;
@@ -405,7 +491,10 @@ export async function deleteSavedEstimateRemote(id: string): Promise<void> {
   if (!supabase) return;
   const ok = await ensureSession();
   if (!ok) return;
-  const { error } = await supabase.from("saved_estimates").delete().eq("id", id);
+  const { error } = await supabase
+    .from("saved_estimates")
+    .delete()
+    .eq("id", id);
   if (error) throw error;
 }
 
@@ -456,6 +545,53 @@ export async function deleteJobRemote(id: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Clients (full ClientRecord snapshot in the jsonb `data` column, like jobs).
+// Carries the contact log alongside the client.
+// ---------------------------------------------------------------------------
+
+export async function loadClientsRemote(): Promise<ClientRecord[] | null> {
+  if (!supabase) return null;
+  const ok = await ensureSession();
+  if (!ok) return null;
+
+  const { data, error } = await supabase.from("clients").select("*");
+  if (error) {
+    console.error("[dataStore] Failed to load clients:", error.message);
+    return null;
+  }
+  return (data ?? []).map(
+    (row: ClientRow) => row.data as unknown as ClientRecord
+  );
+}
+
+export async function upsertClientRemote(client: ClientRecord): Promise<void> {
+  if (!supabase) return;
+  const ok = await ensureSession();
+  if (!ok) return;
+
+  const { error } = await supabase.from("clients").upsert({
+    id: client.id,
+    created_by: await getUserId(),
+    kind: client.kind,
+    first_name: client.firstName ?? null,
+    last_name: client.lastName ?? null,
+    company: client.company ?? null,
+    email: client.email ?? null,
+    phone: client.phone ?? null,
+    data: client as unknown as Database["public"]["Tables"]["clients"]["Insert"]["data"],
+  });
+  if (error) throw error;
+}
+
+export async function deleteClientRemote(id: string): Promise<void> {
+  if (!supabase) return;
+  const ok = await ensureSession();
+  if (!ok) return;
+  const { error } = await supabase.from("clients").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
 // Pricebook (canonical columns, like config tables — readable by a future
 // server-side quote engine, not just the browser)
 // ---------------------------------------------------------------------------
@@ -463,7 +599,9 @@ export async function deleteJobRemote(id: string): Promise<void> {
 type PricebookCategoryRow = Tables["pricebook_categories"]["Row"];
 type PricebookItemRow = Tables["pricebook_items"]["Row"];
 
-function pricebookCategoryFromRow(row: PricebookCategoryRow): PricebookCategory {
+function pricebookCategoryFromRow(
+  row: PricebookCategoryRow
+): PricebookCategory {
   return {
     id: row.id,
     name: row.name,
@@ -476,7 +614,9 @@ function pricebookCategoryFromRow(row: PricebookCategoryRow): PricebookCategory 
   };
 }
 
-function pricebookCategoryToRow(c: PricebookCategory): Tables["pricebook_categories"]["Insert"] {
+function pricebookCategoryToRow(
+  c: PricebookCategory
+): Tables["pricebook_categories"]["Insert"] {
   return {
     id: c.id,
     name: c.name,
@@ -512,7 +652,9 @@ function pricebookItemFromRow(row: PricebookItemRow): PricebookItem {
   };
 }
 
-function pricebookItemToRow(it: PricebookItem): Tables["pricebook_items"]["Insert"] {
+function pricebookItemToRow(
+  it: PricebookItem
+): Tables["pricebook_items"]["Insert"] {
   return {
     id: it.id,
     name: it.name,
@@ -535,7 +677,10 @@ function pricebookItemToRow(it: PricebookItem): Tables["pricebook_items"]["Inser
   };
 }
 
-export async function loadPricebookRemote(): Promise<{ categories: PricebookCategory[]; items: PricebookItem[] } | null> {
+export async function loadPricebookRemote(): Promise<{
+  categories: PricebookCategory[];
+  items: PricebookItem[];
+} | null> {
   if (!supabase) return null;
   const ok = await ensureSession();
   if (!ok) return null;
@@ -545,7 +690,10 @@ export async function loadPricebookRemote(): Promise<{ categories: PricebookCate
     supabase.from("pricebook_items").select("*"),
   ]);
   if (categories.error || items.error) {
-    console.error("[dataStore] Failed to load pricebook:", (categories.error || items.error)?.message);
+    console.error(
+      "[dataStore] Failed to load pricebook:",
+      (categories.error || items.error)?.message
+    );
     return null;
   }
   return {
@@ -555,33 +703,48 @@ export async function loadPricebookRemote(): Promise<{ categories: PricebookCate
 }
 
 /** Bulk upsert (used for the one-time seed of an empty pricebook). Categories first for the FK. */
-export async function seedPricebookRemote(categories: PricebookCategory[], items: PricebookItem[]): Promise<void> {
+export async function seedPricebookRemote(
+  categories: PricebookCategory[],
+  items: PricebookItem[]
+): Promise<void> {
   if (!supabase) return;
   const ok = await ensureSession();
   if (!ok) return;
   if (categories.length > 0) {
-    const { error } = await supabase.from("pricebook_categories").upsert(categories.map(pricebookCategoryToRow));
+    const { error } = await supabase
+      .from("pricebook_categories")
+      .upsert(categories.map(pricebookCategoryToRow));
     if (error) throw error;
   }
   if (items.length > 0) {
-    const { error } = await supabase.from("pricebook_items").upsert(items.map(pricebookItemToRow));
+    const { error } = await supabase
+      .from("pricebook_items")
+      .upsert(items.map(pricebookItemToRow));
     if (error) throw error;
   }
 }
 
-export async function upsertPricebookCategoryRemote(category: PricebookCategory): Promise<void> {
+export async function upsertPricebookCategoryRemote(
+  category: PricebookCategory
+): Promise<void> {
   if (!supabase) return;
   const ok = await ensureSession();
   if (!ok) return;
-  const { error } = await supabase.from("pricebook_categories").upsert(pricebookCategoryToRow(category));
+  const { error } = await supabase
+    .from("pricebook_categories")
+    .upsert(pricebookCategoryToRow(category));
   if (error) throw error;
 }
 
-export async function upsertPricebookItemRemote(item: PricebookItem): Promise<void> {
+export async function upsertPricebookItemRemote(
+  item: PricebookItem
+): Promise<void> {
   if (!supabase) return;
   const ok = await ensureSession();
   if (!ok) return;
-  const { error } = await supabase.from("pricebook_items").upsert(pricebookItemToRow(item));
+  const { error } = await supabase
+    .from("pricebook_items")
+    .upsert(pricebookItemToRow(item));
   if (error) throw error;
 }
 
@@ -590,7 +753,10 @@ export async function deletePricebookCategoryRemote(id: string): Promise<void> {
   const ok = await ensureSession();
   if (!ok) return;
   // Items cascade-delete via the FK.
-  const { error } = await supabase.from("pricebook_categories").delete().eq("id", id);
+  const { error } = await supabase
+    .from("pricebook_categories")
+    .delete()
+    .eq("id", id);
   if (error) throw error;
 }
 
@@ -598,6 +764,9 @@ export async function deletePricebookItemRemote(id: string): Promise<void> {
   if (!supabase) return;
   const ok = await ensureSession();
   if (!ok) return;
-  const { error } = await supabase.from("pricebook_items").delete().eq("id", id);
+  const { error } = await supabase
+    .from("pricebook_items")
+    .delete()
+    .eq("id", id);
   if (error) throw error;
 }

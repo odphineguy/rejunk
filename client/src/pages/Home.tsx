@@ -1,11 +1,11 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import MapView from '@/components/Map';
-import FacilityDetails from '@/components/FacilityDetails';
-import FacilityList from '@/components/FacilityList';
-import { Facility, facilityTypeColors } from '@/data/facilities';
-import { loadPricingSettings } from '@/utils/pricingStorage';
-import { cn } from '@/lib/utils';
-import { AlertCircle, MapPin } from 'lucide-react';
+import { useState, useCallback, useRef, useEffect } from "react";
+import MapView from "@/components/Map";
+import FacilityDetails from "@/components/FacilityDetails";
+import FacilityList from "@/components/FacilityList";
+import { Facility, facilityTypeColors } from "@/data/facilities";
+import { loadPricingSettings } from "@/utils/pricingStorage";
+import { cn } from "@/lib/utils";
+import { AlertCircle, Map as MapIcon, MapPin } from "lucide-react";
 
 /**
  * Design Philosophy: Eco-Conscious Organic
@@ -20,19 +20,29 @@ import { AlertCircle, MapPin } from 'lucide-react';
 export default function Home() {
   // Single source of truth: facilities come from saved pricing settings (Supabase-backed,
   // hydrated at startup). Editing a facility in Settings updates the map automatically.
-  const [facilities, setFacilities] = useState<Facility[]>(() => loadPricingSettings().disposalFacilities);
-  const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
+  const [facilities, setFacilities] = useState<Facility[]>(
+    () => loadPricingSettings().disposalFacilities
+  );
+  const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(
+    null
+  );
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<Map<string, google.maps.marker.AdvancedMarkerElement>>(new Map());
+  const markersRef = useRef<
+    Map<string, google.maps.marker.AdvancedMarkerElement>
+  >(new Map());
 
-  const selectedFacility = selectedFacilityId ? facilities.find((f) => f.id === selectedFacilityId) ?? null : null;
+  const selectedFacility = selectedFacilityId
+    ? (facilities.find(f => f.id === selectedFacilityId) ?? null)
+    : null;
 
   // Refresh the list when settings finish loading from Supabase or are edited.
   useEffect(() => {
-    const refresh = () => setFacilities(loadPricingSettings().disposalFacilities);
-    window.addEventListener('pricing-settings-updated', refresh);
-    return () => window.removeEventListener('pricing-settings-updated', refresh);
+    const refresh = () =>
+      setFacilities(loadPricingSettings().disposalFacilities);
+    window.addEventListener("pricing-settings-updated", refresh);
+    return () =>
+      window.removeEventListener("pricing-settings-updated", refresh);
   }, []);
 
   const handleMapReady = useCallback((mapInstance: google.maps.Map) => {
@@ -48,43 +58,49 @@ export default function Home() {
     if (!map) return;
 
     // Remove any existing markers before redrawing.
-    markersRef.current.forEach((marker) => {
+    markersRef.current.forEach(marker => {
       marker.map = null;
     });
     markersRef.current.clear();
 
-    facilities.forEach((facility) => {
+    facilities.forEach(facility => {
       const color = facilityTypeColors[facility.type];
 
       // Create custom marker element
-      const markerElement = document.createElement('div');
-      markerElement.style.width = '40px';
-      markerElement.style.height = '40px';
+      const markerElement = document.createElement("div");
+      markerElement.style.width = "40px";
+      markerElement.style.height = "40px";
       markerElement.style.backgroundColor = color;
-      markerElement.style.borderRadius = '50%';
-      markerElement.style.display = 'flex';
-      markerElement.style.alignItems = 'center';
-      markerElement.style.justifyContent = 'center';
-      markerElement.style.border = '2px solid white';
-      markerElement.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-      markerElement.style.cursor = 'pointer';
-      markerElement.style.transition = 'all 0.3s ease';
+      markerElement.style.borderRadius = "50%";
+      markerElement.style.display = "flex";
+      markerElement.style.alignItems = "center";
+      markerElement.style.justifyContent = "center";
+      markerElement.style.border = "2px solid white";
+      markerElement.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
+      markerElement.style.cursor = "pointer";
+      markerElement.style.transition = "all 0.3s ease";
 
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('width', '20');
-      svg.setAttribute('height', '20');
-      svg.setAttribute('viewBox', '0 0 24 24');
-      svg.setAttribute('fill', 'none');
-      svg.setAttribute('stroke', 'white');
-      svg.setAttribute('stroke-width', '2.5');
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("width", "20");
+      svg.setAttribute("height", "20");
+      svg.setAttribute("viewBox", "0 0 24 24");
+      svg.setAttribute("fill", "none");
+      svg.setAttribute("stroke", "white");
+      svg.setAttribute("stroke-width", "2.5");
 
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', 'M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z');
+      const path = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "path"
+      );
+      path.setAttribute("d", "M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z");
 
-      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      circle.setAttribute('cx', '12');
-      circle.setAttribute('cy', '10');
-      circle.setAttribute('r', '3');
+      const circle = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "circle"
+      );
+      circle.setAttribute("cx", "12");
+      circle.setAttribute("cy", "10");
+      circle.setAttribute("r", "3");
 
       svg.appendChild(path);
       svg.appendChild(circle);
@@ -99,28 +115,28 @@ export default function Home() {
       });
 
       // Add click listener to marker
-      advancedMarker.addListener('click', () => {
+      advancedMarker.addListener("click", () => {
         setSelectedFacilityId(facility.id);
         map.panTo({ lat: facility.lat, lng: facility.lng });
         map.setZoom(12);
       });
 
       // Add hover effects
-      markerElement.addEventListener('mouseenter', () => {
-        markerElement.style.transform = 'scale(1.2)';
+      markerElement.addEventListener("mouseenter", () => {
+        markerElement.style.transform = "scale(1.2)";
         markerElement.style.boxShadow = `0 8px 24px ${color}60`;
       });
 
-      markerElement.addEventListener('mouseleave', () => {
-        markerElement.style.transform = 'scale(1)';
-        markerElement.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+      markerElement.addEventListener("mouseleave", () => {
+        markerElement.style.transform = "scale(1)";
+        markerElement.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
       });
 
       markersRef.current.set(facility.id, advancedMarker);
     });
 
     return () => {
-      markersRef.current.forEach((marker) => {
+      markersRef.current.forEach(marker => {
         marker.map = null;
       });
       markersRef.current.clear();
@@ -130,74 +146,86 @@ export default function Home() {
   const handleSelectFacility = useCallback(
     (facilityId: string) => {
       setSelectedFacilityId(facilityId);
-      const facility = facilities.find((f) => f.id === facilityId);
+      const facility = facilities.find(f => f.id === facilityId);
       if (facility && mapRef.current) {
         mapRef.current.panTo({ lat: facility.lat, lng: facility.lng });
         mapRef.current.setZoom(12);
       }
     },
-    [facilities],
+    [facilities]
   );
 
   return (
-    <div className="space-y-6 px-4 py-6 md:px-6">
-      <div className="flex flex-col gap-2">
-        <div className="text-sm font-medium text-muted-foreground">Facility map</div>
-        <h1 className="text-2xl font-bold text-foreground md:text-3xl">Arizona Disposal Facilities</h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          Browse facility coverage, select a disposal site, and send it into the estimate flow when needed.
-        </p>
+    <>
+      <div className="border-b border-border bg-background px-4 py-5 md:px-8">
+        <div className="flex items-center gap-2 text-base">
+          <MapIcon className="size-5 text-foreground" />
+          <span className="font-medium text-foreground">Map Facility</span>
+        </div>
       </div>
+      <div className="space-y-6 px-4 py-6 md:px-6">
+        <div className="grid gap-3 lg:grid-cols-[2fr_1fr]">
+          <section className="relative overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+            <MapView
+              className="h-[58vh] min-h-[520px]"
+              onMapReady={handleMapReady}
+              fallback={error => (
+                <LocalFacilityMap
+                  facilities={facilities}
+                  selectedFacilityId={selectedFacilityId}
+                  error={error}
+                  onSelectFacility={handleSelectFacility}
+                />
+              )}
+            />
+          </section>
 
-      <div className="grid gap-3 lg:grid-cols-[2fr_1fr]">
-        <section className="relative overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-          <MapView
-            className="h-[58vh] min-h-[520px]"
-            onMapReady={handleMapReady}
-            fallback={(error) => (
-              <LocalFacilityMap
-                facilities={facilities}
-                selectedFacilityId={selectedFacilityId}
-                error={error}
-                onSelectFacility={handleSelectFacility}
-              />
+          {/* Facility detail panel: always shown on wide screens, stacks below the
+            map (and only when a facility is selected) on smaller screens. */}
+          <div
+            className={cn(
+              "h-[58vh] min-h-[520px] overflow-hidden rounded-lg border border-border bg-card shadow-sm",
+              selectedFacility ? "block" : "hidden lg:block"
             )}
+          >
+            {selectedFacility ? (
+              <FacilityDetails
+                facility={selectedFacility}
+                onClose={() => setSelectedFacilityId(null)}
+              />
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-muted-foreground">
+                <MapPin className="size-8 opacity-40" />
+                <p className="text-sm font-medium text-foreground">
+                  Select a facility
+                </p>
+                <p className="text-xs">
+                  Tap a pin on the map or a card below to see its details,
+                  pricing, and what it accepts.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <section className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
+          <div className="mb-4 flex flex-col gap-1">
+            <h2 className="text-lg font-semibold text-foreground">
+              Facility Directory
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Search and filter facilities without leaving the map page.
+            </p>
+          </div>
+          <FacilityList
+            facilities={facilities}
+            selectedFacilityId={selectedFacilityId}
+            onSelectFacility={handleSelectFacility}
+            onFacilityClick={() => undefined}
           />
         </section>
-
-        {/* Facility detail panel: always shown on wide screens, stacks below the
-            map (and only when a facility is selected) on smaller screens. */}
-        <div
-          className={cn(
-            "h-[58vh] min-h-[520px] overflow-hidden rounded-lg border border-border bg-card shadow-sm",
-            selectedFacility ? "block" : "hidden lg:block",
-          )}
-        >
-          {selectedFacility ? (
-            <FacilityDetails facility={selectedFacility} onClose={() => setSelectedFacilityId(null)} />
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-muted-foreground">
-              <MapPin className="size-8 opacity-40" />
-              <p className="text-sm font-medium text-foreground">Select a facility</p>
-              <p className="text-xs">Tap a pin on the map or a card below to see its details, pricing, and what it accepts.</p>
-            </div>
-          )}
-        </div>
       </div>
-
-      <section className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
-        <div className="mb-4 flex flex-col gap-1">
-          <h2 className="text-lg font-semibold text-foreground">Facility Directory</h2>
-          <p className="text-sm text-muted-foreground">Search and filter facilities without leaving the map page.</p>
-        </div>
-        <FacilityList
-          facilities={facilities}
-          selectedFacilityId={selectedFacilityId}
-          onSelectFacility={handleSelectFacility}
-          onFacilityClick={() => undefined}
-        />
-      </section>
-    </div>
+    </>
   );
 }
 
@@ -224,7 +252,7 @@ function LocalFacilityMap({
       maxLat: Number.NEGATIVE_INFINITY,
       minLng: Number.POSITIVE_INFINITY,
       maxLng: Number.NEGATIVE_INFINITY,
-    },
+    }
   );
 
   const latRange = bounds.maxLat - bounds.minLat || 1;
@@ -243,7 +271,10 @@ function LocalFacilityMap({
           <AlertCircle className="mt-0.5 size-4 text-amber-600" />
           <div>
             <p className="text-sm font-semibold">Local map fallback</p>
-            <p className="text-xs text-muted-foreground">Google Maps did not load, so this view is using facility coordinates locally.</p>
+            <p className="text-xs text-muted-foreground">
+              Google Maps did not load, so this view is using facility
+              coordinates locally.
+            </p>
             <p className="mt-1 text-[11px] text-muted-foreground">{error}</p>
           </div>
         </div>
@@ -253,7 +284,7 @@ function LocalFacilityMap({
         Phoenix-area disposal facilities
       </div>
 
-      {facilities.map((facility) => {
+      {facilities.map(facility => {
         const left = 8 + ((facility.lng - bounds.minLng) / lngRange) * 84;
         const top = 8 + ((bounds.maxLat - facility.lat) / latRange) * 84;
         const color = facilityTypeColors[facility.type];
@@ -264,13 +295,15 @@ function LocalFacilityMap({
             key={facility.id}
             onClick={() => onSelectFacility(facility.id)}
             className={`absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full border-2 border-white px-2 py-1 text-xs font-semibold text-white shadow-lg transition-transform hover:scale-110 ${
-              isSelected ? 'scale-125 ring-4 ring-primary/25' : ''
+              isSelected ? "scale-125 ring-4 ring-primary/25" : ""
             }`}
             style={{ left: `${left}%`, top: `${top}%`, backgroundColor: color }}
             title={facility.name}
           >
             <MapPin size={14} />
-            <span className="hidden max-w-40 truncate lg:inline">{facility.name}</span>
+            <span className="hidden max-w-40 truncate lg:inline">
+              {facility.name}
+            </span>
           </button>
         );
       })}

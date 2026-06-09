@@ -60,10 +60,10 @@ ref `nglmgglrexxumjndhyzo`. There is **no Express/REST API** — the browser tal
 guarded by row-level security. Two distinct persistence patterns coexist:
 
 1. **Supabase-backed modules** (the important data): `utils/pricingStorage.ts`, `lib/jobStorage.ts`,
-   `lib/pricebookStorage.ts`, `lib/dispatchOperations.ts`, `lib/driverStorage.ts`, all going through
-   `lib/dataStore.ts` (row ↔ type mapping) + `lib/supabase.ts`. The pattern:
+   `lib/pricebookStorage.ts`, `lib/clientStorage.ts`, `lib/dispatchOperations.ts`, `lib/driverStorage.ts`,
+   all going through `lib/dataStore.ts` (row ↔ type mapping) + `lib/supabase.ts`. The pattern:
    - **Hydrate at startup**: `main.tsx` awaits `hydratePricingData()` + `hydrateJobs()` +
-     `hydratePricebook()` in a `Promise.race` against a **2.5s timeout** before first render. A slow/
+     `hydratePricebook()` + `hydrateClients()` in a `Promise.race` against a **2.5s timeout** before first render. A slow/
      unreachable backend can't block the UI — it falls back to the localStorage cache and finishes
      hydrating in the background.
    - **Read synchronously** from an in-memory cache (pages use `useState` initializers).
@@ -71,7 +71,7 @@ guarded by row-level security. Two distinct persistence patterns coexist:
      background, then dispatch a `*-updated` window event so other components re-render.
    - localStorage (keys `junk_estimator_*`) is now only a **warm cache / offline fallback**, plus a
      one-time demo-seed promotion into an empty DB (e.g. `hydrateJobs`).
-2. **localStorage-only modules** (newer ops features, not yet on Supabase): `lib/clientStorage.ts`,
+2. **localStorage-only modules** (newer ops features, not yet on Supabase):
    `employeeStorage.ts`, `eventStorage.ts`, `invoiceStorage.ts`, `messageStorage.ts`, `paymentStorage.ts`.
    Same `*-updated` window-event convention, but no remote sync.
 
@@ -126,7 +126,7 @@ Schema + RLS live in `supabase/migrations/` (run in order); seed in `supabase/se
 up profiles (role: owner/admin/estimator/crew), config tables (facilities, vehicles,
 material_pricing_rules, volume_benchmarks, pricing_defaults), and ops tables (customers, saved_estimates,
 jobs). `0003` relaxed config writes to any authenticated user; `0004` reworked the jobs snapshot; `0006`
-added the pricebook tables.
+added the pricebook tables; `0007` added the `clients` table (snapshot pattern, carries the contact log).
 
 ⚠️ **The `202606070001`–`202606070003` driver/dispatch migrations are on disk but NOT applied to the live
 DB.** Driver tables (`job_stops`, `job_items`, `job_messages`, `job_issues`, `job_photos`, disposal
