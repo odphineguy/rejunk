@@ -150,10 +150,9 @@ events) and their RPCs exist only as files. **Do not blindly regenerate `client/
 from the live DB** — it would drop the driver types the code imports. Generated types are hand-maintained
 to include them.
 
-⚠️ **`202606090001_driver_activation_live_map.sql` (driver activation + live GPS tables) is also NOT yet
-applied to the live DB.** It is standalone/additive (no dependency on the phase-1/2 driver migrations) and
-also adds `driver_sessions` to the `supabase_realtime` publication. The activation flow and live driver map
-are inert until it's applied. Remove this warning once applied.
+`202606090001_driver_activation_live_map.sql` (driver activation + live GPS tables) **IS applied to the
+live DB** (2026-06-09). It is standalone/additive — no dependency on the phase-1/2 driver migrations — and
+also added `driver_sessions` to the `supabase_realtime` publication.
 
 ## Deployment
 

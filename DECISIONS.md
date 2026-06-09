@@ -46,8 +46,8 @@ Key calls inside that:
   A2P 10DLC anyway).
 
 **Constraints / Open risks**
-- Migration `202606090001_driver_activation_live_map.sql` must be applied to the live DB
-  before any of this works (it also adds `driver_sessions` to the Realtime publication).
+- Migration `202606090001_driver_activation_live_map.sql` was applied to the live DB on
+  2026-06-09 (it also added `driver_sessions` to the Realtime publication).
 - Anonymous-auth trust model: RLS says "authenticated", which today means any visitor. The
   activation key + hashed PIN + session token are the real gate. Revisit when real auth lands.
 - Resend on an unverified domain can only send from `onboarding@resend.dev` (override with
