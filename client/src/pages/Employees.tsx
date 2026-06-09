@@ -6,6 +6,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Copy,
   FileText,
   Image as ImageIcon,
   Info,
@@ -16,6 +17,7 @@ import {
   Plus,
   Save,
   Search,
+  Smartphone,
   Trash2,
   Upload,
   User,
@@ -24,8 +26,19 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,8 +49,18 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  activateDriver,
+  fetchDriverAppStatuses,
+  isActivationExpired,
+  isSessionLive,
+  revokeDriverAccess,
+  type ActivateDriverResult,
+} from "@/lib/driverActivation";
 import { deleteEmployee, employeeName, getEmployee, getEmployees, saveEmployee } from "@/lib/employeeStorage";
+import { colorFor, profileColors } from "@/lib/profileColors";
 import { cn } from "@/lib/utils";
+import type { DriverAppStatus } from "@/types/driver";
 import type {
   EmployeeAttachment,
   EmployeeRecord,
@@ -48,19 +71,6 @@ import type {
 } from "@/types/employees";
 
 const roles: EmployeeRole[] = ["Owner", "Manager", "Dispatcher", "Technician", "Driver", "Helper"];
-const profileColors: Array<{ value: ProfileColor; label: string; className: string; hex: string }> = [
-  { value: "purple", label: "Purple", className: "bg-purple-600", hex: "#9333ea" },
-  { value: "red", label: "Red", className: "bg-rose-600", hex: "#e11d48" },
-  { value: "brown", label: "Brown", className: "bg-amber-700", hex: "#a16207" },
-  { value: "rose", label: "Rose", className: "bg-pink-600", hex: "#db2777" },
-  { value: "orange", label: "Orange", className: "bg-orange-500", hex: "#f97316" },
-  { value: "green", label: "Green", className: "bg-green-600", hex: "#16a34a" },
-  { value: "teal", label: "Teal", className: "bg-teal-600", hex: "#0d9488" },
-  { value: "navy", label: "Navy", className: "bg-blue-950", hex: "#172554" },
-  { value: "blue", label: "Blue", className: "bg-blue-600", hex: "#2563eb" },
-  { value: "magenta", label: "Magenta", className: "bg-fuchsia-600", hex: "#c026d3" },
-  { value: "black", label: "Black", className: "bg-black", hex: "#111111" },
-];
 
 const emptyEmployee: Partial<EmployeeRecord> = {
   firstName: "",
@@ -88,6 +98,292 @@ function formatFileSize(size: number) {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+// ---------------------------------------------------------------------------
+// Mobile App activation (driver app access)
+// ---------------------------------------------------------------------------
+
+function useDriverAppStatuses() {
+  const [statuses, setStatuses] = useState<Record<string, DriverAppStatus>>({});
+
+  useEffect(() => {
+    const load = () => void fetchDriverAppStatuses().then(setStatuses);
+    load();
+    window.addEventListener("driver-activations-updated", load);
+    // Keeps Online / "Last seen" fresh without a manual refresh.
+    const timer = window.setInterval(load, 60_000);
+    return () => {
+      window.removeEventListener("driver-activations-updated", load);
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  return statuses;
+}
+
+function agoLabel(iso: string) {
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(iso));
+}
+
+function expiryCountdown(expiresAt: string) {
+  const hoursLeft = Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 3600000));
+  return hoursLeft >= 1 ? `${hoursLeft}h left` : "expiring";
+}
+
+type ActivationRequest = { employee: EmployeeRecord; hasActiveSession: boolean };
+
+function MobileAppCell({
+  employee,
+  status,
+  onActivate,
+}: {
+  employee: EmployeeRecord;
+  status?: DriverAppStatus;
+  onActivate: (request: ActivationRequest) => void;
+}) {
+  if (employee.type === "subcontractor") {
+    return <span className="text-xs text-muted-foreground">SMS only</span>;
+  }
+  if (!employee.email) {
+    return <span className="text-xs text-muted-foreground">No email</span>;
+  }
+
+  const activation = status?.activation ?? null;
+  const session = status?.session ?? null;
+  const request = { employee, hasActiveSession: Boolean(session && activation?.status === "activated") };
+
+  if (activation?.status === "activated") {
+    if (isSessionLive(session)) {
+      return <Badge className="rounded-full bg-green-100 px-3 font-normal text-green-700">Online</Badge>;
+    }
+    if (session?.lastSeenAt) {
+      return <span className="text-xs text-muted-foreground">Last seen {agoLabel(session.lastSeenAt)}</span>;
+    }
+    return (
+      <Badge variant="secondary" className="rounded-full bg-muted px-3 font-normal text-muted-foreground">
+        Offline
+      </Badge>
+    );
+  }
+  if (activation?.status === "pending" && !isActivationExpired(activation)) {
+    return (
+      <Badge className="rounded-full bg-amber-100 px-3 font-normal text-amber-800">
+        Pending · {expiryCountdown(activation.expiresAt)}
+      </Badge>
+    );
+  }
+  if (activation && (activation.status === "expired" || isActivationExpired(activation))) {
+    return (
+      <Button size="sm" variant="outline" onClick={() => onActivate(request)}>
+        Resend
+      </Button>
+    );
+  }
+  return (
+    <Button size="sm" variant="outline" className="border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]" onClick={() => onActivate(request)}>
+      Activate
+    </Button>
+  );
+}
+
+/**
+ * Confirm dialog -> create activation + send email -> success toast, or a
+ * follow-up dialog with the key + link to copy when the email couldn't go out.
+ */
+function ActivateDriverFlow({ request, onClose }: { request: ActivationRequest | null; onClose: () => void }) {
+  const [sending, setSending] = useState(false);
+  const [emailFallback, setEmailFallback] = useState<(ActivateDriverResult & { email: string }) | null>(null);
+
+  const copyText = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error("Couldn't copy. Select and copy it manually.");
+    }
+  };
+
+  const confirmActivation = async () => {
+    if (!request) return;
+    setSending(true);
+    try {
+      const result = await activateDriver(request.employee);
+      if (result.emailSent) {
+        toast.success(`Activation email sent to ${request.employee.email}`);
+      } else {
+        setEmailFallback({ ...result, email: request.employee.email ?? "" });
+        toast.warning("The activation was created, but the email couldn't be sent.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't create the activation.");
+    } finally {
+      setSending(false);
+      onClose();
+    }
+  };
+
+  return (
+    <>
+      <AlertDialog open={Boolean(request)} onOpenChange={(open) => !open && !sending && onClose()}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {request?.hasActiveSession ? "Resend activation?" : "Send activation email?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {request?.hasActiveSession
+                ? `This driver already has an active session. Resending will sign them out everywhere and email a new key to ${request?.employee.email}.`
+                : `Send activation email to ${request ? employeeName(request.employee) : ""} at ${request?.employee.email}? The activation key expires in 72 hours.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={sending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={sending}
+              className="bg-[#2d5016] text-white hover:bg-[#234011]"
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmActivation();
+              }}
+            >
+              {sending ? "Sending..." : request?.hasActiveSession ? "Resend" : "Send email"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={Boolean(emailFallback)} onOpenChange={(open) => !open && setEmailFallback(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Email didn't go out</DialogTitle>
+            <DialogDescription>
+              {emailFallback?.emailError ?? "The email service couldn't be reached."} The activation still works — copy the key or
+              link below and text it to {emailFallback?.email || "the driver"}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/30 p-3">
+              <span className="font-mono text-lg font-bold tracking-wider">{emailFallback?.activation.activationKey}</span>
+              <Button size="sm" variant="outline" onClick={() => void copyText(emailFallback?.activation.activationKey ?? "", "Key")}>
+                <Copy className="size-4" />
+                Copy
+              </Button>
+            </div>
+            <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/30 p-3">
+              <span className="truncate text-xs text-muted-foreground">{emailFallback?.activationLink}</span>
+              <Button size="sm" variant="outline" onClick={() => void copyText(emailFallback?.activationLink ?? "", "Link")}>
+                <Copy className="size-4" />
+                Copy
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+/** "App Access" card on the employee detail page. */
+function AppAccessPanel({ employee }: { employee: EmployeeRecord }) {
+  const statuses = useDriverAppStatuses();
+  const status = statuses[employee.id];
+  const [activationRequest, setActivationRequest] = useState<ActivationRequest | null>(null);
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
+
+  const activation = status?.activation ?? null;
+  const session = status?.session ?? null;
+  const hasAccess = activation?.status === "activated" || (activation?.status === "pending" && !isActivationExpired(activation));
+
+  const statusLine = (() => {
+    if (employee.type === "subcontractor") return "Subcontractors don't get app access — they get SMS notifications only.";
+    if (!employee.email) return "No email on file. Add one above to activate the driver app.";
+    if (!activation) return "Not activated yet.";
+    if (activation.status === "revoked") return "Access revoked.";
+    if (activation.status === "activated") return isSessionLive(session) ? "Activated · online now" : "Activated · offline";
+    if (isActivationExpired(activation)) return "Activation expired before it was used.";
+    return `Activation pending · ${expiryCountdown(activation.expiresAt)} (sent to ${activation.emailSentTo}).`;
+  })();
+
+  // City-level only on purpose: round to ~1 decimal (~7 miles) so the detail
+  // page doesn't read like a surveillance log.
+  const roughLocation =
+    session?.lastLat != null && session?.lastLng != null ? `Near ${session.lastLat.toFixed(1)}, ${session.lastLng.toFixed(1)}` : null;
+
+  const revoke = async () => {
+    setConfirmRevoke(false);
+    try {
+      await revokeDriverAccess(employee.id);
+      toast.success("App access revoked");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't revoke access.");
+    }
+  };
+
+  return (
+    <Panel>
+      <SectionTitle icon={Smartphone}>App Access</SectionTitle>
+      <div className="space-y-4 text-sm">
+        <p>{statusLine}</p>
+        {session?.lastSeenAt && (
+          <p className="text-muted-foreground">
+            Last seen {agoLabel(session.lastSeenAt)}
+            {roughLocation ? ` · ${roughLocation}` : ""}
+          </p>
+        )}
+        {employee.type === "employee" && employee.email && (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              className="rounded-lg border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]"
+              onClick={() =>
+                setActivationRequest({ employee, hasActiveSession: Boolean(session && activation?.status === "activated") })
+              }
+            >
+              <Mail className="size-4" />
+              {activation ? "Resend Activation" : "Send Activation"}
+            </Button>
+            {hasAccess && (
+              <Button variant="outline" className="rounded-lg text-destructive hover:text-destructive" onClick={() => setConfirmRevoke(true)}>
+                <Trash2 className="size-4" />
+                Revoke Access
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <ActivateDriverFlow request={activationRequest} onClose={() => setActivationRequest(null)} />
+      <AlertDialog open={confirmRevoke} onOpenChange={setConfirmRevoke}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke app access?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {employeeName(employee)} will be signed out of the driver app immediately and will need a new activation email to get
+              back in.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={(event) => {
+                event.preventDefault();
+                void revoke();
+              }}
+            >
+              Revoke
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Panel>
+  );
 }
 
 export default function Employees() {
@@ -126,6 +422,8 @@ function EmployeeList() {
   const [query, setQuery] = useState("");
   const [pageSize, setPageSize] = useState("10");
   const [, navigate] = useLocation();
+  const appStatuses = useDriverAppStatuses();
+  const [activationRequest, setActivationRequest] = useState<ActivationRequest | null>(null);
 
   useEffect(() => {
     const refresh = () => setEmployees(getEmployees());
@@ -215,6 +513,7 @@ function EmployeeList() {
                   <TableHead>Role</TableHead>
                   <TableHead>Field Tech</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Mobile App</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -237,6 +536,9 @@ function EmployeeList() {
                         {titleCase(employee.status)}
                       </Badge>
                     </TableCell>
+                    <TableCell onClick={(event) => event.stopPropagation()}>
+                      <MobileAppCell employee={employee} status={appStatuses[employee.id]} onActivate={setActivationRequest} />
+                    </TableCell>
                     <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
                       <Button variant="ghost" size="icon" asChild aria-label={`Open ${employeeName(employee)}`}>
                         <Link href={`/employees/${employee.id}`}>
@@ -251,7 +553,7 @@ function EmployeeList() {
                 ))}
                 {filteredEmployees.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-72 text-center">
+                    <TableCell colSpan={9} className="h-72 text-center">
                       <div className="flex flex-col items-center justify-center gap-4">
                         <BriefcaseBusiness className="size-8 text-[#2d5016]" />
                         <span className="text-sm text-muted-foreground">No employees match that search.</span>
@@ -277,6 +579,8 @@ function EmployeeList() {
           </div>
         </section>
       </div>
+
+      <ActivateDriverFlow request={activationRequest} onClose={() => setActivationRequest(null)} />
     </>
   );
 }
@@ -358,6 +662,7 @@ function EmployeeEditor({ mode, employeeId }: { mode?: "new"; employeeId?: strin
               <Textarea value={employee.notes ?? ""} onChange={(event) => updateEmployee({ notes: event.target.value })} placeholder="Enter notes (optional)" className="min-h-[180px] resize-none rounded-lg p-5" />
             </Panel>
           )}
+          {!isNew && employee.id && <AppAccessPanel employee={employee as EmployeeRecord} />}
         </div>
       </div>
     </>
@@ -641,8 +946,4 @@ function SectionTitle({ icon: Icon, children, noBorder = false }: { icon: Lucide
       <h2 className="text-2xl font-bold">{children}</h2>
     </div>
   );
-}
-
-function colorFor(value: ProfileColor) {
-  return profileColors.find((color) => color.value === value) ?? profileColors[1];
 }

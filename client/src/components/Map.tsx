@@ -123,6 +123,65 @@ export function loadMapScript() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Driver markers (live GPS layer on the Dispatch Center map)
+// ---------------------------------------------------------------------------
+
+/** Colored circle with the driver's first initial; faded at 50% when offline. */
+export function createDriverMarkerContent({ hex, initial, online }: { hex: string; initial: string; online: boolean }) {
+  const element = document.createElement("div");
+  element.className =
+    "flex size-10 items-center justify-center rounded-full border-2 border-white text-sm font-bold text-white shadow-lg";
+  element.style.background = hex;
+  element.style.opacity = online ? "1" : "0.5";
+  element.style.transition = "opacity 300ms ease";
+  element.textContent = initial;
+  return element;
+}
+
+function toLatLngLiteral(position: google.maps.marker.AdvancedMarkerElement["position"]): google.maps.LatLngLiteral | null {
+  if (!position) return null;
+  if (typeof (position as google.maps.LatLng).lat === "function") {
+    const latLng = position as google.maps.LatLng;
+    return { lat: latLng.lat(), lng: latLng.lng() };
+  }
+  const literal = position as google.maps.LatLngLiteral;
+  return typeof literal.lat === "number" && typeof literal.lng === "number" ? { lat: literal.lat, lng: literal.lng } : null;
+}
+
+const markerAnimations = new WeakMap<google.maps.marker.AdvancedMarkerElement, number>();
+
+/** Lerps a marker to a new position with requestAnimationFrame (~0.9s ease). */
+export function animateMarkerTo(
+  marker: google.maps.marker.AdvancedMarkerElement,
+  target: google.maps.LatLngLiteral,
+  durationMs = 900,
+) {
+  const from = toLatLngLiteral(marker.position);
+  if (!from) {
+    marker.position = target;
+    return;
+  }
+  const previous = markerAnimations.get(marker);
+  if (previous !== undefined) cancelAnimationFrame(previous);
+
+  const startedAt = performance.now();
+  const step = (now: number) => {
+    const progress = Math.min(1, (now - startedAt) / durationMs);
+    const eased = progress < 0.5 ? 2 * progress * progress : 1 - (-2 * progress + 2) ** 2 / 2;
+    marker.position = {
+      lat: from.lat + (target.lat - from.lat) * eased,
+      lng: from.lng + (target.lng - from.lng) * eased,
+    };
+    if (progress < 1) {
+      markerAnimations.set(marker, requestAnimationFrame(step));
+    } else {
+      markerAnimations.delete(marker);
+    }
+  };
+  markerAnimations.set(marker, requestAnimationFrame(step));
+}
+
 interface MapViewProps {
   className?: string;
   initialCenter?: google.maps.LatLngLiteral;

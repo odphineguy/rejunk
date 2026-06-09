@@ -239,7 +239,49 @@ function vitePluginMapsProxy(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy(), vitePluginMapsProxy()];
+// Dev-server twin of the Express POST /api/driver/activate route (the Vite dev
+// server doesn't run Express, same situation as the maps proxy above). Key/PIN
+// validation doesn't need a dev endpoint — the browser does that directly
+// against Supabase via client/src/lib/driverSession.ts.
+function vitePluginDriverApi(): Plugin {
+  return {
+    name: "rejunk-driver-api",
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use("/api/driver/activate", (req, res) => {
+        if (req.method !== "POST") {
+          res.writeHead(405, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "POST only" }));
+          return;
+        }
+        let body = "";
+        req.on("data", (chunk) => {
+          body += chunk.toString();
+        });
+        req.on("end", () => {
+          void (async () => {
+            try {
+              const { sendActivationEmail, validateActivationEmailPayload } = await import("./server/driverEmail");
+              const payload = validateActivationEmailPayload(JSON.parse(body || "{}"));
+              if (!payload) {
+                res.writeHead(400, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: "A valid email and activation key are required." }));
+                return;
+              }
+              const result = await sendActivationEmail(payload);
+              res.writeHead(result.sent ? 200 : 502, { "Content-Type": "application/json" });
+              res.end(JSON.stringify(result.sent ? { sent: true } : { error: result.error ?? "Email could not be sent." }));
+            } catch (error) {
+              res.writeHead(500, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: String(error) }));
+            }
+          })();
+        });
+      });
+    },
+  };
+}
+
+const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy(), vitePluginMapsProxy(), vitePluginDriverApi()];
 
 export default defineConfig(({ mode }) => {
   // Vite only hands VITE_-prefixed values to the browser. The dev maps + storage
@@ -247,7 +289,7 @@ export default defineConfig(({ mode }) => {
   // .env file here and copy the keys in — otherwise the maps proxy can't find the
   // Google key and the map silently falls back to the local placeholder view.
   const env = loadEnv(mode, path.resolve(import.meta.dirname), "");
-  for (const key of ["GOOGLE_MAPS_API_KEY", "VITE_GOOGLE_MAPS_API_KEY", "BUILT_IN_FORGE_API_URL", "BUILT_IN_FORGE_API_KEY"]) {
+  for (const key of ["GOOGLE_MAPS_API_KEY", "VITE_GOOGLE_MAPS_API_KEY", "BUILT_IN_FORGE_API_URL", "BUILT_IN_FORGE_API_KEY", "RESEND_API_KEY", "RESEND_FROM"]) {
     if (!process.env[key] && env[key]) {
       process.env[key] = env[key];
     }

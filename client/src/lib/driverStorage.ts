@@ -1,3 +1,4 @@
+import { getStoredDriverSession } from "@/lib/driverSession";
 import { getEmployees, employeeName } from "@/lib/employeeStorage";
 import { getJobs, updateJob } from "@/lib/jobStorage";
 import { canTransitionJobStatus, statusActivityMessage, toDriverStatus } from "@/lib/jobStatus";
@@ -74,6 +75,21 @@ function fullAddress(job: Pick<Job, "address" | "city" | "state" | "zip">) {
 }
 
 function defaultDriverFromEmployees(): DriverProfile | null {
+  // An activated session pins the identity. The driver's phone usually doesn't
+  // have the office employee list in localStorage, so fall back to the name
+  // carried on the session itself.
+  const session = getStoredDriverSession();
+  if (session) {
+    const employee = getEmployees().find((item) => item.id === session.employeeId);
+    if (employee) return driverProfileFromEmployee(employee);
+    return {
+      id: session.employeeId,
+      employeeId: session.employeeId,
+      displayName: session.displayName || "Driver",
+      role: "driver",
+      status: "active",
+    };
+  }
   const employees = getEmployees();
   const driver = employees.find((employee) => employee.status === "active" && (employee.role === "Driver" || employee.fieldTech)) ?? employees[0];
   return driver ? driverProfileFromEmployee(driver) : null;

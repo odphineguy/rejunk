@@ -10,6 +10,51 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
 
 ---
 
+## 2026-06-09 — Driver activation: emailed key + 4-digit PIN, no passwords; live GPS map in Dispatch
+
+**Decision**
+Drivers get app access through a manager-triggered flow: Employees page → "Activate" → email
+with a 12-character key (expires 72h) → driver opens `/driver/activate`, enters key, sets a
+4-digit PIN, grants location. Returning drivers re-auth with PIN only at `/driver/login`
+(5 misses = 15-minute lockout). New tables: `driver_activations`, `driver_sessions`,
+`driver_location_history` (migration `202606090001`, standalone — does NOT depend on the
+unapplied driver phase-1/2 migrations). Activated drivers report GPS every 30s while the tab
+is open; Dispatch Center's "Show drivers" toggle renders colored live markers via Supabase
+Realtime on `driver_sessions`.
+
+Key calls inside that:
+- **Key/PIN validation happens in the browser against Supabase directly** (PBKDF2-SHA256 via
+  WebCrypto), because the deployed site is a static SPA with no Express. The spec'd Express
+  endpoints (`/api/driver/validate-key`, `/api/driver/validate-pin`) exist too, with an
+  identical hash format, for the legacy `pnpm start` path.
+- **Email sending is the only backend-required step** (Resend). It exists in three places that
+  share `server/driverEmail.ts`: Express route, Vite dev middleware, and a Vercel function
+  (`api/driver/activate.ts`). If the email fails, the manager gets a dialog with the key +
+  link to copy/text instead — activation still works.
+- **Driver identity rides on the session rows** (`employee_name` / `display_name` columns,
+  beyond the original spec) because employees live only in the office browser's localStorage —
+  the driver's phone has no way to look up their own name.
+- **Location privacy:** RLS only exposes the last 24h of `driver_location_history`; the
+  employee detail page shows coordinates rounded to ~1 decimal ("city-level"); dispatch treats
+  >5 min of silence as offline regardless of the `is_online` flag.
+
+**Rejected**
+- *Passwords / Supabase email auth* — workforce is not tech-savvy; key-then-PIN is the model.
+- *Geocoding driver coords into city names* — Maps key is locked to Maps JavaScript API;
+  Geocoding returns REQUEST_DENIED. Rounded coordinates instead.
+- *Activation for subcontractors* — they show "SMS only" (future Twilio feature, blocked on
+  A2P 10DLC anyway).
+
+**Constraints / Open risks**
+- Migration `202606090001_driver_activation_live_map.sql` must be applied to the live DB
+  before any of this works (it also adds `driver_sessions` to the Realtime publication).
+- Anonymous-auth trust model: RLS says "authenticated", which today means any visitor. The
+  activation key + hashed PIN + session token are the real gate. Revisit when real auth lands.
+- Resend on an unverified domain can only send from `onboarding@resend.dev` (override with
+  `RESEND_FROM` once the domain is verified). Vercel needs `RESEND_API_KEY` set for prod email.
+
+---
+
 ## 2026-06-08 — Pricebook v4: merged Sam's market-tested prices with v3 cost model
 
 **Decision**

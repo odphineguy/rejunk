@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { AlertCircle, CheckCircle2, Clock, MapPinned, MessageSquare, Navigation, RefreshCw, UserRound, WifiOff } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, MapPinned, MessageSquare, Navigation, RefreshCw, UserRound, WifiOff, X } from "lucide-react";
 
 import { JobStatusBadge } from "@/components/JobBadges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { getLocationPermissionState, isLocationReporting, startLocationReporting } from "@/lib/driverLocation";
 import { loadDriverToday, formatDriverAddress } from "@/lib/driverStorage";
 import { toDriverStatus } from "@/lib/jobStatus";
 import { jobOperationalMetrics, pluralize } from "@/lib/operationalMetrics";
@@ -82,6 +83,8 @@ function DriverJobCard({ job, active }: { job: DriverJob; active?: boolean }) {
 export default function DriverHome() {
   const [today, setToday] = useState<DriverTodayData | null>(null);
   const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+  const [locationActive, setLocationActive] = useState(() => isLocationReporting());
+  const [locationBannerDismissed, setLocationBannerDismissed] = useState(false);
 
   const refresh = async () => setToday(await loadDriverToday());
 
@@ -89,15 +92,25 @@ export default function DriverHome() {
     void refresh();
     const updateOnline = () => setOnline(navigator.onLine);
     const updateData = () => void refresh();
+    const updateLocation = () => setLocationActive(isLocationReporting());
     window.addEventListener("online", updateOnline);
     window.addEventListener("offline", updateOnline);
     window.addEventListener("jobs-updated", updateData);
     window.addEventListener("driver-data-updated", updateData);
+    window.addEventListener("driver-location-reporting-changed", updateLocation);
+
+    // Resume GPS reporting if the driver already granted permission during
+    // activation (the prompt itself only ever shows on the activation flow).
+    void getLocationPermissionState().then((state) => {
+      if (state === "granted") void startLocationReporting();
+    });
+
     return () => {
       window.removeEventListener("online", updateOnline);
       window.removeEventListener("offline", updateOnline);
       window.removeEventListener("jobs-updated", updateData);
       window.removeEventListener("driver-data-updated", updateData);
+      window.removeEventListener("driver-location-reporting-changed", updateLocation);
     };
   }, []);
 
@@ -129,6 +142,15 @@ export default function DriverHome() {
       </header>
 
       <main className="mx-auto max-w-md space-y-5 px-4 py-5">
+        {locationActive && !locationBannerDismissed && (
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-[#2d5016]/30 bg-[#2d5016]/5 px-3 py-2 text-sm text-[#2d5016]">
+            <span>📍 Location sharing active</span>
+            <button type="button" onClick={() => setLocationBannerDismissed(true)} aria-label="Dismiss location banner">
+              <X className="size-4" />
+            </button>
+          </div>
+        )}
+
         <section className="rounded-lg border border-border bg-background p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">

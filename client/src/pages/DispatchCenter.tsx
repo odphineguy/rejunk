@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import {
   AlertTriangle,
+  ChevronDown,
+  ChevronUp,
   LocateFixed,
   Map as MapIcon,
   MapPin,
@@ -11,7 +13,7 @@ import {
 import { toast } from "sonner";
 
 import { JobStatusBadge } from "@/components/JobBadges";
-import { MapView } from "@/components/Map";
+import { animateMarkerTo, createDriverMarkerContent, MapView } from "@/components/Map";
 import { OperationsShell } from "@/components/OperationsShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,7 +30,16 @@ import {
   getDispatchOperationalCache,
   saveServiceStopCoordinates,
 } from "@/lib/dispatchOperations";
+import {
+  fetchLiveDriverSessions,
+  isSessionLive,
+  mapSessionRow,
+} from "@/lib/driverActivation";
+import { getEmployees, employeeName } from "@/lib/employeeStorage";
 import { getJobs } from "@/lib/jobStorage";
+import { profileColorHex } from "@/lib/profileColors";
+import { ensureSession, supabase } from "@/lib/supabase";
+import type { DriverSession } from "@/types/driver";
 import {
   jobOperationalMetrics,
   openIssues,
@@ -73,6 +84,13 @@ function sameDay(value: string | undefined, date: string) {
   return value.slice(0, 10) === date;
 }
 
+function agoShort(iso: string) {
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  return `${Math.round(minutes / 60)}h ago`;
+}
+
 function markerColor(status: Job["status"], openIssueCount: number) {
   if (openIssueCount > 0 || status === "issue") return "#dc2626";
   if (status === "completed") return "#16a34a";
@@ -97,7 +115,14 @@ export default function DispatchCenter() {
   const [locationCacheVersion, setLocationCacheVersion] = useState(0);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [showDrivers, setShowDrivers] = useState(false);
+  const [driverSessions, setDriverSessions] = useState<DriverSession[]>([]);
+  const [driversCollapsed, setDriversCollapsed] = useState(false);
+  // Bumped every 30s while the GPS layer is on, so "last seen" labels and the
+  // 5-minute offline fade stay honest between realtime events.
+  const [staleTick, setStaleTick] = useState(0);
   const markers = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
+  const driverMarkers = useRef<Map<string, google.maps.marker.AdvancedMarkerElement>>(new Map());
   const infoWindow = useRef<google.maps.InfoWindow | null>(null);
   const autoGeocodeAttempted = useRef(false);
 
@@ -328,6 +353,178 @@ export default function DispatchCenter() {
     if (!bounds.isEmpty()) map.fitBounds(bounds, 64);
   }, [map, rows]);
 
+  // ---------------------------------------------------------------------------
+  // Live driver layer ("Show drivers" toggle)
+  // ---------------------------------------------------------------------------
+
+  const driverDetails = useMemo(() => {
+    void staleTick; // staleness re-evaluation dependency
+    const employees = getEmployees();
+    return driverSessions.map(session => {
+      const employee = employees.find(item => item.id === session.employeeId);
+      const name = employee ? employeeName(employee) : session.displayName || "Driver";
+      const online = isSessionLive(session);
+      const job = rows.find(
+        row =>
+          !["completed", "canceled"].includes(row.job.status) &&
+          row.driverJob.assignedCrew.some(
+            crew => crew.displayName.toLowerCase() === name.toLowerCase()
+          )
+      );
+      return {
+        session,
+        name,
+        phone: employee?.phone,
+        hex: profileColorHex(employee?.profileColor),
+        online,
+        job,
+      };
+    });
+  }, [driverSessions, rows, staleTick]);
+
+  type DriverDetail = (typeof driverDetails)[number];
+  const driverDetailsRef = useRef<DriverDetail[]>([]);
+  driverDetailsRef.current = driverDetails;
+
+  // Fetch the live sessions + subscribe to realtime updates while the toggle is on.
+  useEffect(() => {
+    if (!showDrivers) {
+      setDriverSessions([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchLiveDriverSessions().then(sessions => {
+      if (!cancelled) setDriverSessions(sessions);
+    });
+    const tick = window.setInterval(() => setStaleTick(value => value + 1), 30_000);
+
+    let channel: ReturnType<NonNullable<typeof supabase>["channel"]> | null = null;
+    if (supabase) {
+      void ensureSession().then(ready => {
+        if (!ready || cancelled || !supabase) return;
+        channel = supabase
+          .channel("dispatch-driver-sessions")
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "driver_sessions" },
+            payload => {
+              const row = payload.new as { id?: string; session_token?: string | null } | null;
+              if (!row?.id) return;
+              const session = mapSessionRow(row as never);
+              setDriverSessions(previous => {
+                const others = previous.filter(
+                  item => item.id !== session.id && item.employeeId !== session.employeeId
+                );
+                // A nulled token means dispatch revoked the session — drop the marker.
+                return row.session_token === null ? others : [...others, session];
+              });
+            }
+          )
+          .subscribe();
+      });
+    }
+    return () => {
+      cancelled = true;
+      window.clearInterval(tick);
+      if (channel && supabase) void supabase.removeChannel(channel);
+    };
+  }, [showDrivers]);
+
+  const driverStatusText = (detail: DriverDetail) => {
+    if (!detail.online) return "offline";
+    if (!detail.job) return "idle";
+    const status = detail.job.job.status;
+    if (status.startsWith("en_route") || status === "on_my_way") return "en route";
+    if (["arrived", "in_progress", "loaded", "dumping"].includes(status)) return "on job";
+    return "assigned";
+  };
+
+  const openDriverInfo = (
+    detail: DriverDetail,
+    marker?: google.maps.marker.AdvancedMarkerElement | null
+  ) => {
+    if (detail.session.lastLat != null && detail.session.lastLng != null) {
+      map?.panTo({ lat: detail.session.lastLat, lng: detail.session.lastLng });
+    }
+    if (!marker || !infoWindow.current) return;
+    const updated = detail.session.lastSeenAt
+      ? new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(
+          new Date(detail.session.lastSeenAt)
+        )
+      : "unknown";
+    infoWindow.current.setContent(`
+      <div style="min-width:220px;font-family:system-ui,sans-serif">
+        <strong>${detail.name}${detail.online ? "" : " (offline)"}</strong>
+        <div>${driverStatusText(detail)} · updated ${updated}</div>
+        <div>${detail.phone ?? "No phone on file"}</div>
+        <div>${detail.job ? `Job: ${detail.job.job.jobNumber} · ${detail.job.job.customerName}` : "No job assigned"}</div>
+        <div style="margin-top:8px;display:flex;gap:12px">
+          ${detail.phone ? `<a href="tel:${detail.phone}" style="color:#2d5016;font-weight:600">Call</a>` : ""}
+          ${detail.phone ? `<a href="sms:${detail.phone}" style="color:#2d5016;font-weight:600">Message</a>` : ""}
+          ${detail.job ? `<a href="/jobs/${detail.job.job.id}" style="color:#2563eb">Open Job</a>` : ""}
+        </div>
+      </div>
+    `);
+    infoWindow.current.open({ map, anchor: marker });
+  };
+
+  // Render/refresh driver markers; remove them all when the toggle goes off.
+  useEffect(() => {
+    if (!map || !window.google?.maps?.marker) return;
+    if (!showDrivers) {
+      driverMarkers.current.forEach(marker => {
+        marker.map = null;
+      });
+      driverMarkers.current.clear();
+      return;
+    }
+    infoWindow.current ??= new google.maps.InfoWindow();
+
+    const seen = new Set<string>();
+    driverDetails.forEach(detail => {
+      const { session } = detail;
+      if (session.lastLat == null || session.lastLng == null) return;
+      seen.add(session.employeeId);
+      const position = { lat: session.lastLat, lng: session.lastLng };
+      const title = `${detail.name} · ${driverStatusText(detail)} · updated ${
+        session.lastSeenAt ? agoShort(session.lastSeenAt) : "unknown"
+      }`;
+      const content = createDriverMarkerContent({
+        hex: detail.hex,
+        initial: detail.name.charAt(0).toUpperCase() || "D",
+        online: detail.online,
+      });
+
+      const existing = driverMarkers.current.get(session.employeeId);
+      if (!existing) {
+        const marker = new google.maps.marker.AdvancedMarkerElement({
+          map,
+          position,
+          title,
+          content,
+        });
+        marker.addListener("click", () => {
+          const latest = driverDetailsRef.current.find(
+            item => item.session.employeeId === session.employeeId
+          );
+          if (latest) openDriverInfo(latest, marker);
+        });
+        driverMarkers.current.set(session.employeeId, marker);
+      } else {
+        existing.title = title;
+        existing.content = content;
+        animateMarkerTo(existing, position);
+      }
+    });
+    driverMarkers.current.forEach((marker, employeeId) => {
+      if (!seen.has(employeeId)) {
+        marker.map = null;
+        driverMarkers.current.delete(employeeId);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, showDrivers, driverDetails]);
+
   const openMarker = (
     row: DispatchRow,
     marker?: google.maps.marker.AdvancedMarkerElement
@@ -398,7 +595,12 @@ export default function DispatchCenter() {
               <SelectItem value="all">All</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" disabled title="Future GPS layer">
+          <Button
+            variant={showDrivers ? "default" : "outline"}
+            className={showDrivers ? "bg-[#2d5016] text-white hover:bg-[#234011]" : undefined}
+            onClick={() => setShowDrivers(value => !value)}
+            title={showDrivers ? "Hide live driver locations" : "Show live driver locations"}
+          >
             <LocateFixed className="size-4" />
             Show drivers
           </Button>
@@ -493,6 +695,72 @@ export default function DispatchCenter() {
                 )}
               </CardContent>
             </Card>
+
+            {showDrivers && (
+              <Card>
+                <CardContent className="space-y-2 p-4">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between"
+                    onClick={() => setDriversCollapsed(value => !value)}
+                  >
+                    <span className="flex items-center gap-2 text-base font-semibold text-foreground">
+                      <LocateFixed className="size-4 text-[#2d5016]" />
+                      Drivers
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <Badge variant="secondary">{driverDetails.length}</Badge>
+                      {driversCollapsed ? (
+                        <ChevronDown className="size-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronUp className="size-4 text-muted-foreground" />
+                      )}
+                    </span>
+                  </button>
+                  {!driversCollapsed &&
+                    driverDetails.map(detail => (
+                      <button
+                        key={detail.session.id}
+                        type="button"
+                        onClick={() =>
+                          openDriverInfo(
+                            detail,
+                            driverMarkers.current.get(detail.session.employeeId)
+                          )
+                        }
+                        className="w-full rounded-md border border-border p-3 text-left text-sm transition-colors hover:bg-muted"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={cn(
+                              "size-2.5 rounded-full",
+                              detail.online ? "bg-green-500" : "bg-gray-400"
+                            )}
+                          />
+                          <span className="font-semibold">{detail.name}</span>
+                          {!detail.online && (
+                            <span className="text-xs text-muted-foreground">offline</span>
+                          )}
+                        </div>
+                        <div className="mt-1 text-muted-foreground">
+                          {detail.session.lastSeenAt
+                            ? `Last seen ${agoShort(detail.session.lastSeenAt)}`
+                            : "No location yet"}
+                          {detail.job
+                            ? ` · ${detail.job.job.customerName}`
+                            : " · No job assigned"}
+                        </div>
+                      </button>
+                    ))}
+                  {!driversCollapsed && driverDetails.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      No drivers online. Drivers appear here once they activate the
+                      driver app and share location.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardContent className="space-y-2 p-4">

@@ -92,6 +92,22 @@ every visitor gets an `authenticated` session for RLS. This **requires the Anony
 enabled** in the Supabase dashboard (Auth → Providers); if it's off, the app silently falls back to
 local-only mode. `supabase` is `null` when env vars are absent, and callers treat null as "not configured".
 
+### Driver activation & live GPS
+Drivers (not managers) have an app-level identity layered on top of the anonymous session. A manager
+activates an employee from `/employees` ("Mobile App" column / "App Access" card): `lib/driverActivation.ts`
+creates a `driver_activations` row (key `XXXX-XXXX-XXXX`, 72h expiry) and `POST /api/driver/activate`
+emails it via Resend (`server/driverEmail.ts`, shared by the Express route `server/routes/driverActivation.ts`,
+a Vite dev middleware in `vite.config.ts`, and the Vercel function `api/driver/activate.ts` — three places,
+keep in sync like the maps proxy). The driver enters the key at `/driver/activate`, sets a 4-digit PIN, and
+gets a `driver_sessions` token stored under `rejunk_driver_session`; returning drivers re-auth PIN-only at
+`/driver/login` (5 misses → 15-min lockout). All other `/driver` routes are wrapped in `DriverSessionGate`.
+Key/PIN validation runs **in the browser directly against Supabase** (`lib/driverSession.ts`; PBKDF2-SHA256
+hashes interchangeable with the Express endpoints). Activated drivers report GPS every 30s
+(`lib/driverLocation.ts`) into `driver_sessions` + `driver_location_history`; Dispatch Center's
+"Show drivers" toggle fetches sessions and subscribes to **Supabase Realtime** on `driver_sessions`,
+rendering profile-colored markers (helpers in `Map.tsx`). Subcontractors never get activation ("SMS only").
+RLS exposes only the last 24h of location history; dispatch treats >5 min of silence as offline.
+
 ### Routing & shell
 `client/src/App.tsx` uses **wouter** (not react-router). Two route trees keyed on the URL:
 
@@ -133,6 +149,11 @@ DB.** Driver tables (`job_stops`, `job_items`, `job_messages`, `job_issues`, `jo
 events) and their RPCs exist only as files. **Do not blindly regenerate `client/src/types/database.types.ts`
 from the live DB** — it would drop the driver types the code imports. Generated types are hand-maintained
 to include them.
+
+⚠️ **`202606090001_driver_activation_live_map.sql` (driver activation + live GPS tables) is also NOT yet
+applied to the live DB.** It is standalone/additive (no dependency on the phase-1/2 driver migrations) and
+also adds `driver_sessions` to the `supabase_realtime` publication. The activation flow and live driver map
+are inert until it's applied. Remove this warning once applied.
 
 ## Deployment
 

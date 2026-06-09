@@ -256,3 +256,50 @@ export interface DriverTodayData {
   lastSyncedAt?: string;
   fromCache: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Driver activation + live sessions (driver_activations / driver_sessions /
+// driver_location_history tables)
+// ---------------------------------------------------------------------------
+
+export type DriverActivationStatus = "pending" | "activated" | "expired" | "revoked";
+
+export interface DriverActivation {
+  id: string;
+  employeeId: string;
+  employeeName?: string;
+  activationKey: string;
+  emailSentTo?: string;
+  status: DriverActivationStatus;
+  expiresAt: string;
+  activatedAt?: string;
+  createdBy?: string;
+  createdAt: string;
+}
+
+export interface DriverSession {
+  id: string;
+  employeeId: string;
+  activationId?: string;
+  displayName?: string;
+  lastSeenAt?: string;
+  lastLat?: number;
+  lastLng?: number;
+  lastHeading?: number;
+  isOnline: boolean;
+  createdAt: string;
+}
+
+/** Stored in localStorage under `rejunk_driver_session` on the driver's phone. */
+export interface StoredDriverSession {
+  sessionId: string;
+  sessionToken: string;
+  employeeId: string;
+  displayName?: string;
+}
+
+/** Per-employee summary the Employees page renders in the "Mobile App" column. */
+export interface DriverAppStatus {
+  activation: DriverActivation | null;
+  session: DriverSession | null;
+}

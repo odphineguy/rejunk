@@ -22,8 +22,11 @@ import Pricebook from "./pages/Pricebook";
 import Schedule from "./pages/Schedule";
 import Settings from "./pages/Settings";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
+import { DriverSessionGate } from "./components/DriverSessionGate";
+import DriverActivate from "./pages/driver/DriverActivate";
 import DriverHome from "./pages/driver/DriverHome";
 import DriverJobDetail from "./pages/driver/DriverJobDetail";
+import DriverLogin from "./pages/driver/DriverLogin";
 
 
 function Router() {
@@ -61,12 +64,32 @@ function Router() {
 }
 
 function DriverRouter() {
+  // /driver/activate and /driver/login are the only ungated driver routes;
+  // everything else requires a stored (and still valid) driver session.
   return (
     <Switch>
-      <Route path={"/driver"} component={DriverHome} />
-      <Route path={"/driver/jobs/:jobId"} component={DriverJobDetail} />
-      <Route path={"/driver/messages"} component={() => <PlaceholderPage title="Driver Messages" />} />
-      <Route path={"/driver/profile"} component={() => <PlaceholderPage title="Driver Profile" />} />
+      <Route path={"/driver/activate"} component={DriverActivate} />
+      <Route path={"/driver/login"} component={DriverLogin} />
+      <Route path={"/driver"}>
+        <DriverSessionGate>
+          <DriverHome />
+        </DriverSessionGate>
+      </Route>
+      <Route path={"/driver/jobs/:jobId"}>
+        <DriverSessionGate>
+          <DriverJobDetail />
+        </DriverSessionGate>
+      </Route>
+      <Route path={"/driver/messages"}>
+        <DriverSessionGate>
+          <PlaceholderPage title="Driver Messages" />
+        </DriverSessionGate>
+      </Route>
+      <Route path={"/driver/profile"}>
+        <DriverSessionGate>
+          <PlaceholderPage title="Driver Profile" />
+        </DriverSessionGate>
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );

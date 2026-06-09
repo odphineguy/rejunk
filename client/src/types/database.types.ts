@@ -58,6 +58,145 @@ export type Database = {
           },
         ]
       }
+      driver_activations: {
+        Row: {
+          activated_at: string | null
+          activation_key: string
+          created_at: string
+          created_by: string | null
+          email_sent_to: string | null
+          employee_id: string
+          employee_name: string | null
+          expires_at: string
+          id: string
+          pin_hash: string | null
+          session_token: string | null
+          status: string
+        }
+        Insert: {
+          activated_at?: string | null
+          activation_key: string
+          created_at?: string
+          created_by?: string | null
+          email_sent_to?: string | null
+          employee_id: string
+          employee_name?: string | null
+          expires_at: string
+          id?: string
+          pin_hash?: string | null
+          session_token?: string | null
+          status?: string
+        }
+        Update: {
+          activated_at?: string | null
+          activation_key?: string
+          created_at?: string
+          created_by?: string | null
+          email_sent_to?: string | null
+          employee_id?: string
+          employee_name?: string | null
+          expires_at?: string
+          id?: string
+          pin_hash?: string | null
+          session_token?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      driver_sessions: {
+        Row: {
+          activation_id: string | null
+          created_at: string
+          display_name: string | null
+          employee_id: string
+          id: string
+          is_online: boolean
+          last_heading: number | null
+          last_lat: number | null
+          last_lng: number | null
+          last_seen_at: string | null
+          session_token: string | null
+        }
+        Insert: {
+          activation_id?: string | null
+          created_at?: string
+          display_name?: string | null
+          employee_id: string
+          id?: string
+          is_online?: boolean
+          last_heading?: number | null
+          last_lat?: number | null
+          last_lng?: number | null
+          last_seen_at?: string | null
+          session_token?: string | null
+        }
+        Update: {
+          activation_id?: string | null
+          created_at?: string
+          display_name?: string | null
+          employee_id?: string
+          id?: string
+          is_online?: boolean
+          last_heading?: number | null
+          last_lat?: number | null
+          last_lng?: number | null
+          last_seen_at?: string | null
+          session_token?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_sessions_activation_id_fkey"
+            columns: ["activation_id"]
+            isOneToOne: false
+            referencedRelation: "driver_activations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      driver_location_history: {
+        Row: {
+          accuracy: number | null
+          employee_id: string
+          heading: number | null
+          id: string
+          lat: number
+          lng: number
+          recorded_at: string
+          session_id: string | null
+          speed: number | null
+        }
+        Insert: {
+          accuracy?: number | null
+          employee_id: string
+          heading?: number | null
+          id?: string
+          lat: number
+          lng: number
+          recorded_at?: string
+          session_id?: string | null
+          speed?: number | null
+        }
+        Update: {
+          accuracy?: number | null
+          employee_id?: string
+          heading?: number | null
+          id?: string
+          lat?: number
+          lng?: number
+          recorded_at?: string
+          session_id?: string | null
+          speed?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_location_history_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "driver_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       driver_location_snapshots: {
         Row: {
           accuracy_meters: number | null
