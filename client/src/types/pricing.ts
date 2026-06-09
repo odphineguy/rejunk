@@ -382,4 +382,11 @@ export interface SavedEstimate {
   recommendationSnapshot?: BestFacilityRecommendation;
   heavyBedload?: HeavyBedloadCalculation;
   notes?: string;
+  // Service/task mode (Pricebook v4 Mode 1 — assembly/handyman/appliance). When
+  // `mode` is "service", the volume/weight/facility fields above are placeholders
+  // and the real breakdown lives in `service`.
+  mode?: import("@/types/service").EstimateMode;
+  service?: import("@/types/service").ServiceEstimateSnapshot;
+  serviceType?: import("@/types/jobs").JobServiceType;
+  crewSize?: number;
 }

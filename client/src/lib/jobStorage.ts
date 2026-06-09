@@ -175,6 +175,8 @@ export function createJobFromEstimate(estimate: SavedEstimate): Job {
   const estimatedMarginDecimal = estimate.grossMarginDecimal ?? (estimate.finalQuote > 0 ? estimatedProfit / estimate.finalQuote : 0);
   const location = parseEstimateLocation(estimate.jobAddress);
 
+  const isService = estimate.mode === "service";
+
   return saveJob({
     id: jobId(),
     jobNumber: nextJobNumber(cachedJobs),
@@ -184,20 +186,23 @@ export function createJobFromEstimate(estimate: SavedEstimate): Job {
     updatedAt: now,
     customerName: estimate.customerName || estimate.jobAddress || "Unnamed job",
     jobLabel: estimate.loadLabel,
+    serviceType: estimate.serviceType ?? (isService ? "other" : undefined),
+    crewSize: estimate.crewSize,
     address: estimate.jobAddress,
     city: location.city,
     zip: location.zip,
     status: "open",
     paymentStatus: "unpaid",
-    materialType: estimate.materialType,
+    // Service estimates carry no material/volume/facility — skip those fields.
+    materialType: isService ? undefined : estimate.materialType,
     materialName: estimate.materialName,
-    cubicYards: estimate.cubicYards,
-    estimatedWeightLbs: estimate.estimatedWeightLbs,
-    estimatedTons: estimate.estimatedTons ?? estimate.estimatedWeightLbs / 2000,
-    facilityId: estimate.facilityId,
-    facilityName: estimate.facilityName,
-    vehicleId: estimate.vehicleId,
-    vehicleName: estimate.vehicleName,
+    cubicYards: isService ? undefined : estimate.cubicYards,
+    estimatedWeightLbs: isService ? undefined : estimate.estimatedWeightLbs,
+    estimatedTons: isService ? undefined : estimate.estimatedTons ?? estimate.estimatedWeightLbs / 2000,
+    facilityId: isService ? undefined : estimate.facilityId,
+    facilityName: isService ? undefined : estimate.facilityName,
+    vehicleId: isService ? undefined : estimate.vehicleId,
+    vehicleName: isService ? undefined : estimate.vehicleName,
     quotedAmount: estimate.finalQuote,
     estimatedCost,
     estimatedProfit,

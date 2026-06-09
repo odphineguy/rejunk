@@ -16,6 +16,14 @@ import type {
   VolumePricingBenchmark,
 } from "@/types/pricing";
 import type { Job } from "@/types/jobs";
+import type {
+  PricebookCategory,
+  PricebookCrewSize,
+  PricebookItem,
+  PricebookItemType,
+  PricebookMode,
+  PricebookPriceUnit,
+} from "@/types/pricebook";
 import { defaultPricingSettings } from "@/data/defaultPricing";
 
 type Tables = Database["public"]["Tables"];
@@ -444,5 +452,152 @@ export async function deleteJobRemote(id: string): Promise<void> {
   const ok = await ensureSession();
   if (!ok) return;
   const { error } = await supabase.from("jobs").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Pricebook (canonical columns, like config tables — readable by a future
+// server-side quote engine, not just the browser)
+// ---------------------------------------------------------------------------
+
+type PricebookCategoryRow = Tables["pricebook_categories"]["Row"];
+type PricebookItemRow = Tables["pricebook_items"]["Row"];
+
+function pricebookCategoryFromRow(row: PricebookCategoryRow): PricebookCategory {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    imageName: row.image_name ?? undefined,
+    mode: (row.mode as PricebookMode | null) ?? undefined,
+    sortOrder: row.sort_order ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function pricebookCategoryToRow(c: PricebookCategory): Tables["pricebook_categories"]["Insert"] {
+  return {
+    id: c.id,
+    name: c.name,
+    description: c.description ?? "",
+    image_name: c.imageName ?? null,
+    mode: c.mode ?? null,
+    sort_order: c.sortOrder ?? null,
+  };
+}
+
+function pricebookItemFromRow(row: PricebookItemRow): PricebookItem {
+  return {
+    id: row.id,
+    name: row.name,
+    modelNumber: row.model_number ?? undefined,
+    price: row.price,
+    cost: row.cost,
+    categoryId: row.category_id ?? "",
+    itemType: row.item_type as PricebookItemType,
+    description: row.description,
+    imageName: row.image_name ?? undefined,
+    crewSize: (row.crew_size as PricebookCrewSize | null) ?? undefined,
+    marginDecimal: row.margin_decimal ?? undefined,
+    priceUnit: row.price_unit as PricebookPriceUnit,
+    priceNote: row.price_note ?? undefined,
+    mode: (row.mode as PricebookMode | null) ?? undefined,
+    notes: row.notes ?? undefined,
+    photoRequired: row.photo_required,
+    addToOnlineBooking: row.add_to_online_booking,
+    taxable: row.taxable,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function pricebookItemToRow(it: PricebookItem): Tables["pricebook_items"]["Insert"] {
+  return {
+    id: it.id,
+    name: it.name,
+    model_number: it.modelNumber ?? null,
+    price: it.price,
+    cost: it.cost,
+    category_id: it.categoryId,
+    item_type: it.itemType,
+    description: it.description ?? "",
+    image_name: it.imageName ?? null,
+    crew_size: it.crewSize ?? null,
+    margin_decimal: it.marginDecimal ?? null,
+    price_unit: it.priceUnit ?? "flat",
+    price_note: it.priceNote ?? null,
+    mode: it.mode ?? null,
+    notes: it.notes ?? null,
+    photo_required: it.photoRequired ?? false,
+    add_to_online_booking: it.addToOnlineBooking,
+    taxable: it.taxable,
+  };
+}
+
+export async function loadPricebookRemote(): Promise<{ categories: PricebookCategory[]; items: PricebookItem[] } | null> {
+  if (!supabase) return null;
+  const ok = await ensureSession();
+  if (!ok) return null;
+
+  const [categories, items] = await Promise.all([
+    supabase.from("pricebook_categories").select("*").order("sort_order"),
+    supabase.from("pricebook_items").select("*"),
+  ]);
+  if (categories.error || items.error) {
+    console.error("[dataStore] Failed to load pricebook:", (categories.error || items.error)?.message);
+    return null;
+  }
+  return {
+    categories: (categories.data ?? []).map(pricebookCategoryFromRow),
+    items: (items.data ?? []).map(pricebookItemFromRow),
+  };
+}
+
+/** Bulk upsert (used for the one-time seed of an empty pricebook). Categories first for the FK. */
+export async function seedPricebookRemote(categories: PricebookCategory[], items: PricebookItem[]): Promise<void> {
+  if (!supabase) return;
+  const ok = await ensureSession();
+  if (!ok) return;
+  if (categories.length > 0) {
+    const { error } = await supabase.from("pricebook_categories").upsert(categories.map(pricebookCategoryToRow));
+    if (error) throw error;
+  }
+  if (items.length > 0) {
+    const { error } = await supabase.from("pricebook_items").upsert(items.map(pricebookItemToRow));
+    if (error) throw error;
+  }
+}
+
+export async function upsertPricebookCategoryRemote(category: PricebookCategory): Promise<void> {
+  if (!supabase) return;
+  const ok = await ensureSession();
+  if (!ok) return;
+  const { error } = await supabase.from("pricebook_categories").upsert(pricebookCategoryToRow(category));
+  if (error) throw error;
+}
+
+export async function upsertPricebookItemRemote(item: PricebookItem): Promise<void> {
+  if (!supabase) return;
+  const ok = await ensureSession();
+  if (!ok) return;
+  const { error } = await supabase.from("pricebook_items").upsert(pricebookItemToRow(item));
+  if (error) throw error;
+}
+
+export async function deletePricebookCategoryRemote(id: string): Promise<void> {
+  if (!supabase) return;
+  const ok = await ensureSession();
+  if (!ok) return;
+  // Items cascade-delete via the FK.
+  const { error } = await supabase.from("pricebook_categories").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function deletePricebookItemRemote(id: string): Promise<void> {
+  if (!supabase) return;
+  const ok = await ensureSession();
+  if (!ok) return;
+  const { error } = await supabase.from("pricebook_items").delete().eq("id", id);
   if (error) throw error;
 }

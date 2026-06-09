@@ -76,6 +76,8 @@ export interface Job {
   priority?: JobPriority;
   estimatedDurationMinutes?: number;
   crewSequence?: number;
+  /** Required crew size (safety classification, esp. from service/Pricebook estimates). */
+  crewSize?: number;
   phone?: string;
   email?: string;
   address?: string;

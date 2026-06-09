@@ -1,157 +1,104 @@
+import { defaultPricebookCategories, defaultPricebookItems } from "@/data/defaultPricebook";
+import {
+  deletePricebookCategoryRemote,
+  deletePricebookItemRemote,
+  loadPricebookRemote,
+  seedPricebookRemote,
+  upsertPricebookCategoryRemote,
+  upsertPricebookItemRemote,
+} from "@/lib/dataStore";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import type { PricebookCategory, PricebookItem } from "@/types/pricebook";
 
-const PRICEBOOK_KEY = "junk_estimator_pricebook_v1";
+// Bumped to v2 when the localStorage shape changed (full Pricebook v4 catalog +
+// new item fields). v1 held only the old 5 demo items; ignoring it forces the
+// fresh default before Supabase hydration lands.
+const PRICEBOOK_KEY = "junk_estimator_pricebook_v2";
+const PRICEBOOK_SEEDED_KEY = "junk_estimator_pricebook_seeded_v1";
 
-type PricebookState = {
+export type PricebookState = {
   categories: PricebookCategory[];
   items: PricebookItem[];
 };
 
-const now = "2026-06-01T18:45:00.000Z";
-
-const defaultCategories: PricebookCategory[] = [
-  {
-    id: "category-junk-removal",
-    name: "Junk Removal",
-    description:
-      "Junk removal is the process of collecting, hauling, and responsibly disposing of unwanted items, debris, and waste from homes, businesses, or construction sites.",
-    createdAt: now,
-    updatedAt: now,
-  },
-  {
-    id: "category-dumpster-rental",
-    name: "Dumpster Rental",
-    description:
-      "Dumpster rental is a service that provides temporary waste containers for homes, businesses, or construction projects, allowing for easy disposal of debris and junk.",
-    createdAt: now,
-    updatedAt: now,
-  },
-  {
-    id: "category-overages",
-    name: "Overages",
-    description: "Applies when the job exceeds the selected load size, time, or labor and requires additional truck space or effort.",
-    createdAt: now,
-    updatedAt: now,
-  },
-  {
-    id: "category-fees",
-    name: "Fees",
-    description: "Additional charges that may apply for payment processing, special handling, or regulated disposal requirements.",
-    createdAt: now,
-    updatedAt: now,
-  },
-  {
-    id: "category-demolition",
-    name: "Demolition",
-    description: "Light demolition services such as sheds, small structures, or interior tear-outs, including teardown, loading, and hot tubs.",
-    createdAt: now,
-    updatedAt: now,
-  },
-];
-
-const defaultItems: PricebookItem[] = [
-  {
-    id: "item-hot-tub-removal",
-    name: "Demo - Hot Tub Removal",
-    price: 450,
-    cost: 0,
-    categoryId: "category-demolition",
-    itemType: "Service",
-    description:
-      "Hot tub removed safely and professionally; when one-piece removal is not possible, the unit is cut into up to four sections to ensure safe transport and proper disposal. All labor, cutting, loading, and cleanup are included.",
-    addToOnlineBooking: false,
-    taxable: true,
-    createdAt: now,
-    updatedAt: now,
-  },
-  {
-    id: "item-shed-removal",
-    name: "Demo - Shed Removal",
-    price: 450,
-    cost: 0,
-    categoryId: "category-demolition",
-    itemType: "Service",
-    description: "We tear down and haul away sheds, small outbuildings, and similar light structures.",
-    addToOnlineBooking: false,
-    taxable: true,
-    createdAt: now,
-    updatedAt: now,
-  },
-  {
-    id: "item-bed-bugs",
-    name: "Fees - Bed Bugs",
-    price: 300,
-    cost: 0,
-    categoryId: "category-fees",
-    itemType: "Fee",
-    description: "Items contaminated with bed bugs require special handling, wrapping, and disposal precautions.",
-    addToOnlineBooking: false,
-    taxable: false,
-    createdAt: now,
-    updatedAt: now,
-  },
-  {
-    id: "item-disassemble",
-    name: "Fees - Disassemble Item",
-    price: 20,
-    cost: 0,
-    categoryId: "category-fees",
-    itemType: "Fee",
-    description: "We safely take apart items so they can be removed without damaging the property.",
-    addToOnlineBooking: false,
-    taxable: false,
-    createdAt: now,
-    updatedAt: now,
-  },
-  {
-    id: "item-drug-paraphernalia",
-    name: "Fees - Drug Paraphernalia",
-    price: 50,
-    cost: 0,
-    categoryId: "category-fees",
-    itemType: "Fee",
-    description: "Applies to items that require special handling due to regulated or unsafe materials.",
-    addToOnlineBooking: false,
-    taxable: false,
-    createdAt: now,
-    updatedAt: now,
-  },
-];
-
 const defaultState: PricebookState = {
-  categories: defaultCategories,
-  items: defaultItems,
+  categories: defaultPricebookCategories,
+  items: defaultPricebookItems,
 };
 
 const canUseLocalStorage = () => typeof window !== "undefined" && Boolean(window.localStorage);
 
-function readPricebook(): PricebookState {
-  if (!canUseLocalStorage()) return defaultState;
+function readJson<T>(key: string, fallback: T): T {
+  if (!canUseLocalStorage()) return fallback;
   try {
-    const raw = window.localStorage.getItem(PRICEBOOK_KEY);
-    return raw ? { ...defaultState, ...JSON.parse(raw) } : defaultState;
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
-    return defaultState;
+    return fallback;
   }
 }
 
-function writePricebook(pricebook: PricebookState) {
+function writeJson<T>(key: string, value: T) {
   if (!canUseLocalStorage()) return;
-  window.localStorage.setItem(PRICEBOOK_KEY, JSON.stringify(pricebook));
-  window.dispatchEvent(new Event("pricebook-updated"));
+  window.localStorage.setItem(key, JSON.stringify(value));
 }
 
 function idFor(prefix: string) {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${prefix}-${Date.now()}`;
 }
 
-export function getPricebook(): PricebookState {
-  return readPricebook();
+// Synchronous in-memory cache. The page reads this synchronously; Supabase reads
+// happen via hydratePricebook() and writes are fire-and-forget. localStorage is a
+// warm offline cache / fallback.
+let cache: PricebookState = readJson<PricebookState>(PRICEBOOK_KEY, defaultState);
+
+function reportRemoteError(context: string) {
+  return (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[pricebookStorage] Remote ${context} failed; local cache kept in sync.`, message);
+  };
 }
 
-export function savePricebookCategory(category: Partial<PricebookCategory> & Pick<PricebookCategory, "name">): PricebookCategory {
-  const pricebook = readPricebook();
-  const existing = category.id ? pricebook.categories.find((item) => item.id === category.id) : undefined;
+function commit(next: PricebookState) {
+  cache = next;
+  writeJson(PRICEBOOK_KEY, cache);
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("pricebook-updated"));
+}
+
+/**
+ * Loads the pricebook from Supabase into the in-memory cache. Call once at startup
+ * BEFORE rendering. Falls back to the localStorage cache when Supabase is
+ * unconfigured/unreachable. First run against an empty pricebook promotes the
+ * default v4 catalog to shared data (one-time, guarded by a localStorage flag).
+ */
+export async function hydratePricebook(): Promise<void> {
+  if (!isSupabaseConfigured) return;
+
+  const remote = await loadPricebookRemote().catch((error) => {
+    reportRemoteError("pricebook load")(error);
+    return null;
+  });
+  if (!remote) return; // unreachable — keep the local cache
+
+  const alreadySeeded = canUseLocalStorage() && window.localStorage.getItem(PRICEBOOK_SEEDED_KEY) === "1";
+
+  if (remote.categories.length === 0 && remote.items.length === 0 && !alreadySeeded) {
+    if (canUseLocalStorage()) window.localStorage.setItem(PRICEBOOK_SEEDED_KEY, "1");
+    void seedPricebookRemote(defaultPricebookCategories, defaultPricebookItems).catch(reportRemoteError("pricebook seed"));
+    commit(defaultState);
+  } else if (remote.categories.length > 0 || remote.items.length > 0) {
+    commit({ categories: remote.categories, items: remote.items });
+  }
+}
+
+export function getPricebook(): PricebookState {
+  return cache;
+}
+
+export function savePricebookCategory(
+  category: Partial<PricebookCategory> & Pick<PricebookCategory, "name">,
+): PricebookCategory {
+  const existing = category.id ? cache.categories.find((item) => item.id === category.id) : undefined;
   const timestamp = new Date().toISOString();
   const saved: PricebookCategory = {
     description: "",
@@ -162,22 +109,26 @@ export function savePricebookCategory(category: Partial<PricebookCategory> & Pic
     createdAt: existing?.createdAt ?? category.createdAt ?? timestamp,
     updatedAt: timestamp,
   };
-  writePricebook({
-    ...pricebook,
-    categories: [saved, ...pricebook.categories.filter((item) => item.id !== saved.id)],
+  commit({
+    ...cache,
+    categories: [saved, ...cache.categories.filter((item) => item.id !== saved.id)],
   });
+  void upsertPricebookCategoryRemote(saved).catch(reportRemoteError("category save"));
   return saved;
 }
 
-export function savePricebookItem(item: Partial<PricebookItem> & Pick<PricebookItem, "name" | "categoryId">): PricebookItem {
-  const pricebook = readPricebook();
-  const existing = item.id ? pricebook.items.find((entry) => entry.id === item.id) : undefined;
+export function savePricebookItem(
+  item: Partial<PricebookItem> & Pick<PricebookItem, "name" | "categoryId">,
+): PricebookItem {
+  const existing = item.id ? cache.items.find((entry) => entry.id === item.id) : undefined;
   const timestamp = new Date().toISOString();
   const saved: PricebookItem = {
     price: 0,
     cost: 0,
     itemType: "Service",
     description: "",
+    priceUnit: "flat",
+    photoRequired: false,
     addToOnlineBooking: false,
     taxable: false,
     ...existing,
@@ -188,29 +139,28 @@ export function savePricebookItem(item: Partial<PricebookItem> & Pick<PricebookI
     createdAt: existing?.createdAt ?? item.createdAt ?? timestamp,
     updatedAt: timestamp,
   };
-  writePricebook({
-    ...pricebook,
-    items: [saved, ...pricebook.items.filter((entry) => entry.id !== saved.id)],
+  commit({
+    ...cache,
+    items: [saved, ...cache.items.filter((entry) => entry.id !== saved.id)],
   });
+  void upsertPricebookItemRemote(saved).catch(reportRemoteError("item save"));
   return saved;
 }
 
 export function deletePricebookCategory(categoryId: string): PricebookState {
-  const pricebook = readPricebook();
-  const next = {
-    categories: pricebook.categories.filter((category) => category.id !== categoryId),
-    items: pricebook.items.filter((item) => item.categoryId !== categoryId),
-  };
-  writePricebook(next);
-  return next;
+  commit({
+    categories: cache.categories.filter((category) => category.id !== categoryId),
+    items: cache.items.filter((item) => item.categoryId !== categoryId),
+  });
+  void deletePricebookCategoryRemote(categoryId).catch(reportRemoteError("category delete"));
+  return cache;
 }
 
 export function deletePricebookItem(itemId: string): PricebookState {
-  const pricebook = readPricebook();
-  const next = {
-    ...pricebook,
-    items: pricebook.items.filter((item) => item.id !== itemId),
-  };
-  writePricebook(next);
-  return next;
+  commit({
+    ...cache,
+    items: cache.items.filter((item) => item.id !== itemId),
+  });
+  void deletePricebookItemRemote(itemId).catch(reportRemoteError("item delete"));
+  return cache;
 }

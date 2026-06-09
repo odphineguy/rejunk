@@ -37,11 +37,36 @@ import {
   savePricebookItem,
 } from "@/lib/pricebookStorage";
 import { cn } from "@/lib/utils";
-import type { PricebookCategory, PricebookItem, PricebookItemType } from "@/types/pricebook";
+import type {
+  PricebookCategory,
+  PricebookCrewSize,
+  PricebookItem,
+  PricebookItemType,
+  PricebookMode,
+  PricebookPriceUnit,
+} from "@/types/pricebook";
 
 type PricebookTab = "items" | "categories";
 
 const itemTypes: PricebookItemType[] = ["Service", "Product", "Fee"];
+
+const crewOptions: PricebookCrewSize[] = [1, 2, 3];
+
+const priceUnitOptions: { value: PricebookPriceUnit; label: string }[] = [
+  { value: "flat", label: "Flat" },
+  { value: "hourly", label: "Per hour" },
+  { value: "per_item", label: "Per item" },
+  { value: "per_mile", label: "Per mile" },
+  { value: "per_30min", label: "Per 30 min" },
+  { value: "percent", label: "Percent" },
+];
+
+const modeOptions: { value: PricebookMode; label: string }[] = [
+  { value: "assembly_service", label: "Assembly & Service" },
+  { value: "moving", label: "Moving & Delivery" },
+  { value: "junk_removal", label: "Junk Removal" },
+  { value: "surcharge_fee", label: "Surcharge / Fee" },
+];
 
 function truncate(value: string, max = 34) {
   if (!value) return "";
@@ -52,9 +77,39 @@ function priceText(value: number) {
   return value.toFixed(2);
 }
 
+function unitSuffix(unit?: PricebookPriceUnit) {
+  switch (unit) {
+    case "hourly":
+      return "/hr";
+    case "per_item":
+      return "/item";
+    case "per_mile":
+      return "/mi";
+    case "per_30min":
+      return "/30min";
+    case "percent":
+      return "%";
+    default:
+      return "";
+  }
+}
+
 function numeric(value: string | number | undefined) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/** Safety crew classification badge (1 / ⚠️2 / ⚠️3 from Pricebook v4). */
+function CrewBadge({ crewSize }: { crewSize?: PricebookCrewSize }) {
+  if (!crewSize) return <span className="text-muted-foreground">—</span>;
+  if (crewSize === 1) {
+    return <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium">1</span>;
+  }
+  return (
+    <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+      ⚠️ {crewSize}
+    </span>
+  );
 }
 
 export default function Pricebook() {
@@ -260,9 +315,9 @@ function ItemsTable({
       <TableHeader className="bg-muted/30">
         <TableRow>
           <TableHead className="h-14 px-5">Name</TableHead>
-          <TableHead>Image</TableHead>
           <TableHead>Description</TableHead>
           <TableHead>Price</TableHead>
+          <TableHead>Crew</TableHead>
           <TableHead>Category</TableHead>
           <TableHead>Taxable</TableHead>
           <TableHead className="text-right">Actions</TableHead>
@@ -271,12 +326,23 @@ function ItemsTable({
       <TableBody>
         {items.map((item, index) => (
           <TableRow key={item.id} className={index % 2 === 1 ? "bg-muted/20" : undefined}>
-            <TableCell className="px-5 font-medium">{item.name}</TableCell>
-            <TableCell>
-              <ImagePlaceholder label={`${item.name} image`} />
+            <TableCell className="px-5 font-medium">
+              <div className="flex items-center gap-2">
+                {item.name}
+                {item.photoRequired && (
+                  <span title="Photos required before confirming final price" aria-label="Photos required">📷</span>
+                )}
+              </div>
             </TableCell>
             <TableCell className="max-w-[320px]">{truncate(item.description)}</TableCell>
-            <TableCell>{priceText(item.price)}</TableCell>
+            <TableCell className="whitespace-nowrap">
+              {priceText(item.price)}
+              {unitSuffix(item.priceUnit)}
+              {item.priceNote && <div className="text-xs text-muted-foreground">{item.priceNote}</div>}
+            </TableCell>
+            <TableCell>
+              <CrewBadge crewSize={item.crewSize} />
+            </TableCell>
             <TableCell>{categories[item.categoryId] ?? ""}</TableCell>
             <TableCell>{item.taxable ? "Yes" : "No"}</TableCell>
             <TableCell className="text-right">
@@ -442,12 +508,78 @@ function ItemDialog({
               </Select>
             </Field>
           </div>
+          <div className="grid gap-5 md:grid-cols-2">
+            <Field label="Price Unit">
+              <Select value={draft.priceUnit ?? "flat"} onValueChange={(priceUnit) => updateDraft({ priceUnit: priceUnit as PricebookPriceUnit })}>
+                <SelectTrigger className="h-12 rounded-lg bg-card">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {priceUnitOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Crew Size (safety)">
+              <Select
+                value={draft.crewSize ? String(draft.crewSize) : "none"}
+                onValueChange={(value) => updateDraft({ crewSize: value === "none" ? undefined : (Number(value) as PricebookCrewSize) })}
+              >
+                <SelectTrigger className="h-12 rounded-lg bg-card">
+                  <SelectValue placeholder="Not set" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not set</SelectItem>
+                  {crewOptions.map((size) => (
+                    <SelectItem key={size} value={String(size)}>
+                      {size === 1 ? "1 worker" : `⚠️ ${size} workers`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Mode">
+              <Select value={draft.mode ?? undefined} onValueChange={(mode) => updateDraft({ mode: mode as PricebookMode })}>
+                <SelectTrigger className="h-12 rounded-lg bg-card">
+                  <SelectValue placeholder="Select mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  {modeOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Margin % (optional)">
+              <Input
+                value={draft.marginDecimal != null ? String(Math.round(draft.marginDecimal * 100)) : ""}
+                onChange={(event) => {
+                  const raw = event.target.value.trim();
+                  updateDraft({ marginDecimal: raw === "" ? undefined : numeric(raw) / 100 });
+                }}
+                placeholder="e.g. 52"
+                className="h-12 rounded-lg"
+              />
+            </Field>
+            <Field label="Price Note (optional)">
+              <Input value={draft.priceNote ?? ""} onChange={(event) => updateDraft({ priceNote: event.target.value })} placeholder='e.g. "$125–$175" or "+$125"' className="h-12 rounded-lg" />
+            </Field>
+          </div>
           <Field label="Item Description">
             <Textarea value={draft.description ?? ""} onChange={(event) => updateDraft({ description: event.target.value })} placeholder="Enter item description (optional)" className="min-h-24 resize-none rounded-lg p-6" />
           </Field>
-          <div className="grid gap-3 md:grid-cols-2">
+          <Field label="Internal Notes (optional)">
+            <Textarea value={draft.notes ?? ""} onChange={(event) => updateDraft({ notes: event.target.value })} placeholder='Crew/handling notes, e.g. "Wall anchoring included" or "NEVER solo"' className="min-h-20 resize-none rounded-lg p-6" />
+          </Field>
+          <div className="grid gap-3 md:grid-cols-3">
             <SwitchRow label="Add to Online Booking" checked={Boolean(draft.addToOnlineBooking)} onChange={(addToOnlineBooking) => updateDraft({ addToOnlineBooking })} />
             <SwitchRow label="Taxable" checked={Boolean(draft.taxable)} onChange={(taxable) => updateDraft({ taxable })} />
+            <SwitchRow label="Photos Required" checked={Boolean(draft.photoRequired)} onChange={(photoRequired) => updateDraft({ photoRequired })} />
           </div>
         </div>
         <DialogFooter className="mt-2 border-t border-border pt-5 sm:justify-between">
@@ -544,9 +676,12 @@ function newItemDraft(categoryId?: string): Partial<PricebookItem> {
     cost: 0,
     categoryId: categoryId ?? "",
     itemType: "Service",
+    priceUnit: "flat",
     description: "",
+    notes: "",
     addToOnlineBooking: false,
     taxable: false,
+    photoRequired: false,
   };
 }
 

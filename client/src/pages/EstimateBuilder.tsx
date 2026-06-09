@@ -20,7 +20,10 @@ import { getRouteEstimateToFacility } from "@/utils/distanceRouting";
 import { buildBestRecommendation } from "@/utils/recommendations";
 import { materialIcon } from "@/lib/materialIcons";
 import { createJobFromEstimate, getJobByEstimateId } from "@/lib/jobStorage";
+import { ServiceEstimatePanel } from "@/components/ServiceEstimatePanel";
+import { PhotoRequiredBanner } from "@/components/PhotoRequiredBanner";
 import type { EstimateWarning, ExtraFee, JobRouteEstimate, SavedEstimate } from "@/types/pricing";
+import type { EstimateMode } from "@/types/service";
 
 const loadOptions = [
   { label: "Minimum", value: "0" },
@@ -205,6 +208,8 @@ function mergeSavedExtraFees(savedFees: ExtraFee[]) {
 
 export default function EstimateBuilder() {
   const [, navigate] = useLocation();
+  const [mode, setMode] = useState<EstimateMode>("junk");
+  const [serviceLoadSeed, setServiceLoadSeed] = useState<SavedEstimate | null>(null);
   const [settings, setSettings] = useState(() => loadPricingSettings());
   const activeFacilities = useMemo(() => settings.disposalFacilities.filter((facility) => facility.isActive), [settings.disposalFacilities]);
   const activeVehicles = useMemo(() => settings.vehicles.filter((vehicle) => vehicle.isActive), [settings.vehicles]);
@@ -515,6 +520,16 @@ export default function EstimateBuilder() {
   };
 
   const loadSavedIntoBuilder = (estimate: SavedEstimate) => {
+    if (estimate.mode === "service") {
+      setCustomerName(estimate.customerName ?? "");
+      setJobAddress(estimate.jobAddress ?? "");
+      setNotes(estimate.notes ?? "");
+      setServiceLoadSeed(estimate);
+      setMode("service");
+      toast.success("Service estimate loaded into builder");
+      return;
+    }
+    setMode("junk");
     const material = activeMaterials.find((item) => item.id === estimate.materialRuleId) ?? activeMaterials.find((item) => item.materialCategory === estimate.materialType);
     setCustomerName(estimate.customerName ?? "");
     setJobAddress(estimate.jobAddress ?? "");
@@ -619,37 +634,89 @@ export default function EstimateBuilder() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-background px-4 py-5 md:px-6">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Calculator className="size-4" />
-          Internal pricing tool
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Calculator className="size-4" />
+              Internal pricing tool
+            </div>
+            <h1 className="mt-1 text-2xl font-bold text-foreground md:text-3xl">Estimate Builder</h1>
+            <p className="mt-1 text-muted-foreground">
+              {mode === "service"
+                ? "Build flat-rate assembly, handyman, appliance, and moving quotes from the Pricebook."
+                : "Build weight-aware junk removal quotes with payload and disposal checks."}
+            </p>
+          </div>
+          <div className="inline-flex rounded-lg border border-border bg-muted/40 p-1" role="tablist" aria-label="Estimate mode">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "junk"}
+              onClick={() => setMode("junk")}
+              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "junk" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Junk Removal
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "service"}
+              onClick={() => setMode("service")}
+              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "service" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Service / Task
+            </button>
+          </div>
         </div>
-        <h1 className="mt-1 text-2xl font-bold text-foreground md:text-3xl">Estimate Builder</h1>
-        <p className="mt-1 text-muted-foreground">Build weight-aware junk removal quotes with payload and disposal checks.</p>
       </header>
 
       <main className="px-4 py-6 md:px-6">
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Job Info</CardTitle>
+            <CardDescription>Shared customer context for saved estimates and copy-ready output.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <Field label="Customer name">
+              <Input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Optional" />
+            </Field>
+            <Field label="Job address">
+              <Input value={jobAddress} onChange={(event) => setJobAddress(event.target.value)} placeholder="Optional" />
+            </Field>
+            <div className="md:col-span-2">
+              <Field label="Notes">
+                <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Access notes, exclusions, special handling..." />
+              </Field>
+            </div>
+          </CardContent>
+        </Card>
+
+        {mode === "service" ? (
+          <div className="space-y-6">
+            <ServiceEstimatePanel
+              customerName={customerName}
+              jobAddress={jobAddress}
+              notes={notes}
+              onSaved={() => setSavedEstimates(loadSavedEstimates())}
+              loadSeed={serviceLoadSeed}
+            />
+            <div className="xl:max-w-[460px]">
+              <SavedEstimatesPanel
+                savedEstimates={savedEstimates}
+                selectedSavedId={selectedSavedId}
+                setSelectedSavedId={setSelectedSavedId}
+                selectedSavedEstimate={selectedSavedEstimate}
+                selectedEstimateJobId={selectedEstimateJob?.id}
+                onLoad={loadSavedIntoBuilder}
+                onDuplicate={duplicateEstimate}
+                onDelete={removeEstimate}
+                onConvert={convertEstimateToJob}
+              />
+            </div>
+          </div>
+        ) : (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
           <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Job Info</CardTitle>
-                <CardDescription>Optional customer context for saved estimates and copy-ready output.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-2">
-                <Field label="Customer name">
-                  <Input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Optional" />
-                </Field>
-                <Field label="Job address">
-                  <Input value={jobAddress} onChange={(event) => setJobAddress(event.target.value)} placeholder="Optional" />
-                </Field>
-                <div className="md:col-span-2">
-                  <Field label="Notes">
-                    <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Access notes, exclusions, special handling..." />
-                  </Field>
-                </div>
-              </CardContent>
-            </Card>
-
             <Card>
               <CardHeader>
                 <CardTitle>Load & Material</CardTitle>
@@ -852,6 +919,8 @@ export default function EstimateBuilder() {
 
                 <Separator />
 
+                {quoteReady && <PhotoRequiredBanner />}
+
                 {quoteReady && recommendation && heavyMode && (
                   <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
                     <div className="mb-3">
@@ -1003,52 +1072,92 @@ export default function EstimateBuilder() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Saved Estimates</CardTitle>
-                <CardDescription>{savedEstimates.length} saved locally in this browser.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {savedEstimates.slice(0, 8).map((estimate) => (
-                  <button
-                    key={estimate.id}
-                    onClick={() => setSelectedSavedId(estimate.id)}
-                    className={`w-full rounded-lg border p-3 text-left text-sm transition-colors ${
-                      selectedSavedId === estimate.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-semibold">{estimate.customerName || estimate.jobAddress || "Unnamed estimate"}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {estimate.materialName || estimate.materialType.replaceAll("_", " ")} · {new Date(estimate.createdAt).toLocaleDateString()}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-bold text-primary">{money(estimate.finalQuote)}</div>
-                        {estimate.warnings?.length ? <StatusBadge warnings={estimate.warnings} /> : null}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-                {savedEstimates.length === 0 && <p className="text-sm text-muted-foreground">No saved estimates yet.</p>}
-              </CardContent>
-            </Card>
-
-            {selectedSavedEstimate && (
-              <SavedEstimateDetail
-                estimate={selectedSavedEstimate}
-                convertedJobId={selectedEstimateJob?.id}
-                onLoad={() => loadSavedIntoBuilder(selectedSavedEstimate)}
-                onDuplicate={() => duplicateEstimate(selectedSavedEstimate)}
-                onDelete={() => removeEstimate(selectedSavedEstimate.id)}
-                onConvert={() => convertEstimateToJob(selectedSavedEstimate)}
-              />
-            )}
+            <SavedEstimatesPanel
+              savedEstimates={savedEstimates}
+              selectedSavedId={selectedSavedId}
+              setSelectedSavedId={setSelectedSavedId}
+              selectedSavedEstimate={selectedSavedEstimate}
+              selectedEstimateJobId={selectedEstimateJob?.id}
+              onLoad={loadSavedIntoBuilder}
+              onDuplicate={duplicateEstimate}
+              onDelete={removeEstimate}
+              onConvert={convertEstimateToJob}
+            />
           </aside>
         </div>
+        )}
       </main>
     </div>
+  );
+}
+
+function SavedEstimatesPanel({
+  savedEstimates,
+  selectedSavedId,
+  setSelectedSavedId,
+  selectedSavedEstimate,
+  selectedEstimateJobId,
+  onLoad,
+  onDuplicate,
+  onDelete,
+  onConvert,
+}: {
+  savedEstimates: SavedEstimate[];
+  selectedSavedId: string | null;
+  setSelectedSavedId: (id: string) => void;
+  selectedSavedEstimate: SavedEstimate | null;
+  selectedEstimateJobId?: string;
+  onLoad: (estimate: SavedEstimate) => void;
+  onDuplicate: (estimate: SavedEstimate) => void;
+  onDelete: (id: string) => void;
+  onConvert: (estimate: SavedEstimate) => void;
+}) {
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Saved Estimates</CardTitle>
+          <CardDescription>{savedEstimates.length} saved.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {savedEstimates.slice(0, 8).map((estimate) => (
+            <button
+              key={estimate.id}
+              onClick={() => setSelectedSavedId(estimate.id)}
+              className={`w-full rounded-lg border p-3 text-left text-sm transition-colors ${
+                selectedSavedId === estimate.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-semibold">{estimate.customerName || estimate.jobAddress || "Unnamed estimate"}</div>
+                  <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                    {estimate.mode === "service" && <Badge variant="outline" className="px-1.5 py-0 text-[10px]">Service</Badge>}
+                    {estimate.materialName || estimate.materialType.replaceAll("_", " ")} · {new Date(estimate.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-bold text-primary">{money(estimate.finalQuote)}</div>
+                  {estimate.warnings?.length ? <StatusBadge warnings={estimate.warnings} /> : null}
+                </div>
+              </div>
+            </button>
+          ))}
+          {savedEstimates.length === 0 && <p className="text-sm text-muted-foreground">No saved estimates yet.</p>}
+        </CardContent>
+      </Card>
+
+      {selectedSavedEstimate && (
+        <SavedEstimateDetail
+          estimate={selectedSavedEstimate}
+          convertedJobId={selectedEstimateJobId}
+          onLoad={() => onLoad(selectedSavedEstimate)}
+          onDuplicate={() => onDuplicate(selectedSavedEstimate)}
+          onDelete={() => onDelete(selectedSavedEstimate.id)}
+          onConvert={() => onConvert(selectedSavedEstimate)}
+        />
+      )}
+    </>
   );
 }
 

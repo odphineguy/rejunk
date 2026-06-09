@@ -801,6 +801,116 @@ export type Database = {
         }
         Relationships: []
       }
+      pricebook_categories: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          image_name: string | null
+          mode: string | null
+          name: string
+          sort_order: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id: string
+          image_name?: string | null
+          mode?: string | null
+          name: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          image_name?: string | null
+          mode?: string | null
+          name?: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pricebook_items: {
+        Row: {
+          add_to_online_booking: boolean
+          category_id: string | null
+          cost: number
+          created_at: string
+          crew_size: number | null
+          description: string
+          id: string
+          image_name: string | null
+          item_type: string
+          margin_decimal: number | null
+          mode: string | null
+          model_number: string | null
+          name: string
+          notes: string | null
+          photo_required: boolean
+          price: number
+          price_note: string | null
+          price_unit: string
+          taxable: boolean
+          updated_at: string
+        }
+        Insert: {
+          add_to_online_booking?: boolean
+          category_id?: string | null
+          cost?: number
+          created_at?: string
+          crew_size?: number | null
+          description?: string
+          id: string
+          image_name?: string | null
+          item_type?: string
+          margin_decimal?: number | null
+          mode?: string | null
+          model_number?: string | null
+          name: string
+          notes?: string | null
+          photo_required?: boolean
+          price?: number
+          price_note?: string | null
+          price_unit?: string
+          taxable?: boolean
+          updated_at?: string
+        }
+        Update: {
+          add_to_online_booking?: boolean
+          category_id?: string | null
+          cost?: number
+          created_at?: string
+          crew_size?: number | null
+          description?: string
+          id?: string
+          image_name?: string | null
+          item_type?: string
+          margin_decimal?: number | null
+          mode?: string | null
+          model_number?: string | null
+          name?: string
+          notes?: string | null
+          photo_required?: boolean
+          price?: number
+          price_note?: string | null
+          price_unit?: string
+          taxable?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricebook_items_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "pricebook_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pricing_defaults: {
         Row: {
           default_facility_rate_per_ton: number
