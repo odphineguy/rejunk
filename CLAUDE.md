@@ -4,91 +4,177 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this app is
 
-A junk-removal pricing and disposal-facility app for Arizona (despite the README, which is a generic
-"static frontend template" — ignore that framing). It does two things:
+A junk-removal **pricing + operations** app for a Phoenix, Arizona junk/moving/handyman business
+(despite the root `README` history calling it a "static template" — ignore that). It started as a
+facility map + quote calculator and has grown into a small operations platform. Today it has two jobs:
 
-1. **Facility map + list** (`/`) — shows Arizona disposal facilities (landfills, transfer stations,
-   recycling centers, scrap yards, etc.) on a Google Map with a filterable sidebar.
-2. **Estimate builder** (`/estimate-builder`) — computes a junk-removal quote from material type,
-   vehicle, facility, load volume/weight, labor, fuel, and target margin. Pricing inputs are editable
-   in **Pricing Settings** (`/settings`) and persisted to `localStorage`.
+1. **Quote accurately** so jobs aren't underpriced. Two pricing engines (junk-by-volume and
+   service-by-Pricebook) feed the **Estimate Builder** (`/estimate-builder`).
+2. **Run the operations** around those quotes — jobs, dispatch, schedule, clients, invoices, payments,
+   messages, employees, and a separate mobile **driver app** (`/driver`).
 
-There is **no backend database or API**. The Express server (`server/index.ts`) only serves the static
-build and proxies Google Maps. All app state lives in the browser (`localStorage`).
+It is built for **Sam**, a 17-year junk-removal operator who is **not a developer** — when explaining
+work, use plain language. The guiding pricing principle is **bias toward the floor**: never underprice.
+See `DECISIONS.md` (the *why* behind major choices, newest on top) before relitigating settled questions,
+and `rejunk-pricebook-v4.md` + `rejunk-operations-rules-v1.md` for the authoritative pricing/ops rules.
 
 ## Commands
 
 ```bash
-pnpm dev        # Vite dev server on :3000 (--host); includes maps + storage proxies as Vite middleware
+pnpm dev        # Vite dev server on :3000 (strictPort — MUST stay on 3000; Maps key is referrer-locked to it)
 pnpm build      # vite build → dist/public, then esbuild bundles server/index.ts → dist/index.js
-pnpm start      # NODE_ENV=production node dist/index.js (serves dist/public + maps proxy)
-pnpm check      # tsc --noEmit — the only typecheck/lint gate; run this before considering work done
+pnpm start      # NODE_ENV=production node dist/index.js (legacy Express path; see Deployment)
+pnpm check      # tsc --noEmit — the ONLY typecheck/lint gate; run before considering work done
 pnpm format     # prettier --write .
 ```
 
 Use **pnpm** (not npm). There is **no test runner wired up** — `vitest` is a dependency but there are no
-test files and no `test` script.
+test files and no `test` script. `pnpm check` is the gate.
+
+> Installing deps on this external volume may need `--store-dir /Users/abemacmini/Library/pnpm/store/v10`
+> due to a pnpm store-location mismatch.
 
 ## Architecture
 
-### The pricing engine is the core
-`client/src/utils/pricingCalculator.ts` — `calculateEstimate()` is the single source of truth for quote
-math. It takes an `EstimateCalculatorInput`, derives weight from volume × material density (or a manual
-weight override), computes labor / disposal / fuel / vehicle / extra-fee costs, then sets the final quote
-to the **max** of: margin-based quote, minimum-profit quote, volume benchmark, and minimum acceptable
-price. It also emits `EstimateWarning[]` (e.g. payload exceeded, heavy material, facility rejects material,
-stale facility verification). Heavy materials (concrete, tile, brick, dirt, rock, or density ≥ 700 lb/yd³)
-deliberately ignore the volume benchmark so they aren't underpriced.
+### Two pricing engines, one Estimate Builder
+The Estimate Builder switches on `EstimateMode = "junk" | "service"` (`client/src/types/service.ts`).
 
-All domain types live in `client/src/types/pricing.ts` — read this first when touching pricing logic.
+- **Junk mode** → `client/src/utils/pricingCalculator.ts` `calculateEstimate()` is the single source of
+  truth for volume/weight quote math. It derives weight from volume × material density (or a manual
+  override), computes labor / disposal / fuel / vehicle / extra-fee costs, then sets the quote to the
+  **max** of margin-based, minimum-profit, volume-benchmark, and minimum-acceptable price. It emits
+  `EstimateWarning[]` (payload exceeded, heavy material, facility rejects material, stale verification).
+  Heavy materials (concrete/tile/brick/dirt/rock, density ≥ 700 lb/yd³) deliberately ignore the volume
+  benchmark so they aren't underpriced. Domain types: `client/src/types/pricing.ts` — read first.
+- **Service mode** → `client/src/utils/serviceCalculator.ts` prices flat-rate assembly/handyman/moving
+  work off the **Pricebook** with hard floors ($125 single-worker minimum, $199 two-worker, stair
+  surcharges). Types: `client/src/types/service.ts`. Pricebook data: `client/src/types/pricebook.ts`,
+  `client/src/data/defaultPricebook.ts`.
 
-### Data flow / persistence
-- **Seed data**: `client/src/data/defaultPricing.ts` (vehicles, material rules, volume benchmarks,
-  defaults) and `client/src/data/facilities.ts` (the Arizona facility list + `facilityTypeColors` /
-  `facilityTypeLabels` maps used by the map markers).
-- **Persistence**: `client/src/utils/pricingStorage.ts` reads/writes two `localStorage` keys
-  (`junk_estimator_pricing_settings_v1`, `junk_estimator_saved_estimates_v1`). `loadPricingSettings()`
-  merges stored values over defaults so newly-added default fields survive. `savePricingSettings()`
-  dispatches a `pricing-settings-updated` window event — components listen for it to stay in sync.
-- There is a `Facility` type that extends `DisposalFacility` with legacy fields (`name`, `type`, `lat`,
-  `lng`, `pricing`, `acceptance`) for backward compatibility — both shapes coexist.
+`recommendations.ts` and `distanceRouting.ts` (under `utils/`) add facility/vehicle recommendation and
+distance logic that feed the builder.
+
+### Persistence: Supabase-backed, localStorage as warm cache  ← the big change
+This is **NOT** a localStorage-only app anymore. Backend is **Supabase** (Postgres + Auth + RLS), project
+ref `nglmgglrexxumjndhyzo`. There is **no Express/REST API** — the browser talks to the DB directly,
+guarded by row-level security. Two distinct persistence patterns coexist:
+
+1. **Supabase-backed modules** (the important data): `utils/pricingStorage.ts`, `lib/jobStorage.ts`,
+   `lib/pricebookStorage.ts`, `lib/dispatchOperations.ts`, `lib/driverStorage.ts`, all going through
+   `lib/dataStore.ts` (row ↔ type mapping) + `lib/supabase.ts`. The pattern:
+   - **Hydrate at startup**: `main.tsx` awaits `hydratePricingData()` + `hydrateJobs()` +
+     `hydratePricebook()` in a `Promise.race` against a **2.5s timeout** before first render. A slow/
+     unreachable backend can't block the UI — it falls back to the localStorage cache and finishes
+     hydrating in the background.
+   - **Read synchronously** from an in-memory cache (pages use `useState` initializers).
+   - **Writes are fire-and-forget**: update the cache + localStorage immediately, push to Supabase in the
+     background, then dispatch a `*-updated` window event so other components re-render.
+   - localStorage (keys `junk_estimator_*`) is now only a **warm cache / offline fallback**, plus a
+     one-time demo-seed promotion into an empty DB (e.g. `hydrateJobs`).
+2. **localStorage-only modules** (newer ops features, not yet on Supabase): `lib/clientStorage.ts`,
+   `employeeStorage.ts`, `eventStorage.ts`, `invoiceStorage.ts`, `messageStorage.ts`, `paymentStorage.ts`.
+   Same `*-updated` window-event convention, but no remote sync.
+
+**Cross-component sync is via window events**, not a store: `pricing-settings-updated`, `jobs-updated`,
+`pricebook-updated`, `clients-updated`, `invoices-updated`, `payments-updated`, `messages-updated`,
+`employees-updated`, `events-updated`, `driver-data-updated`. A page that reads cached data must also
+`addEventListener` for its event to stay in sync after background hydration lands.
+
+Seed data still lives in `client/src/data/` (`defaultPricing.ts`, `defaultPricebook.ts`, `defaultJobs.ts`,
+`facilities.ts`). `facilities.ts` is now only the **seed/offline fallback** — the live facility list (map,
+settings, estimator) is the Supabase-backed `loadPricingSettings().disposalFacilities`. The `Facility`
+type extends `DisposalFacility` with legacy display fields (`name`, `type`, `lat`, `lng`, …) for
+back-compat; both shapes coexist.
+
+### Auth
+There is **no login UI**. `lib/supabase.ts` `ensureSession()` does **transparent anonymous sign-in** so
+every visitor gets an `authenticated` session for RLS. This **requires the Anonymous provider to be
+enabled** in the Supabase dashboard (Auth → Providers); if it's off, the app silently falls back to
+local-only mode. `supabase` is `null` when env vars are absent, and callers treat null as "not configured".
 
 ### Routing & shell
-`client/src/App.tsx` uses **wouter** (not react-router) for client-side routing. Three real routes:
-`/` (Home), `/estimate-builder`, `/settings`; everything else → NotFound. Wrapped in `ErrorBoundary` →
-`ThemeProvider` (default light theme) → `TooltipProvider` → `Toaster` (sonner).
+`client/src/App.tsx` uses **wouter** (not react-router). Two route trees keyed on the URL:
+
+- **Main app** — wrapped in `<AppShell>` (`components/OperationsShell.tsx`, a left-sidebar shell grouped
+  Workspace / Operations / Admin): `/` = **Dashboard**, `/map` = facility map (`Home.tsx`),
+  `/estimate-builder`, `/jobs` (+ `/jobs/new`, `/jobs/:id`), `/dispatch`, `/schedule`, `/messages`,
+  `/clients`, `/employees`, `/invoices`, `/payments`, `/pricebook`, `/events`, `/settings`.
+- **Driver app** — any `/driver` or `/driver/*` route renders `<DriverRouter>` (no AppShell): a
+  mobile-first, assigned-job workflow. Driver job reads go through **masked Supabase RPCs**
+  (`get_driver_today`, `driver_update_job_status`, `driver_confirm_dispatch_called`, …) so pricing, cost,
+  margin, invoice, and payment data **never reach the driver client**. See `lib/driverStorage.ts`.
+
+Everything is wrapped `ErrorBoundary` → `ThemeProvider` (default light) → `TooltipProvider` → `Toaster`.
 
 ### Google Maps
-`client/src/components/Map.tsx` loads the Maps JS SDK. Two paths: if `VITE_GOOGLE_MAPS_API_KEY` is set it
-loads directly from Google with that key; otherwise it loads via the **`/maps-proxy`** path, which injects
-the server-side `GOOGLE_MAPS_API_KEY` so the key never reaches the client. The proxy exists in **two
-places** that must stay in sync: as Vite middleware (`vitePluginMapsProxy` in `vite.config.ts`) for dev,
-and as an Express route in `server/index.ts` for production. Markers are `AdvancedMarkerElement`s managed
-imperatively via refs (Google owns re-rendering, not React) — see `Home.tsx`'s `handleMapReady`. The map
-degrades gracefully to a list-only view if it can't load.
+`client/src/components/Map.tsx` loads the Maps JS SDK. If `VITE_GOOGLE_MAPS_API_KEY` is set it loads
+directly from Google; otherwise via the **`/maps-proxy`** path (injects the server-side
+`GOOGLE_MAPS_API_KEY` so it never reaches the client). The proxy exists in **two places that must stay in
+sync**: Vite middleware (`vitePluginMapsProxy` in `vite.config.ts`) for dev, and an Express route in
+`server/index.ts` for prod. Markers are `AdvancedMarkerElement`s managed imperatively via refs (Google
+owns re-rendering) — `Home.tsx` rebuilds them in a `useEffect([map, facilities])`. The map degrades to a
+list-only view if it can't load. **The Maps key is HTTP-referrer-locked** (localhost:3000 + the Vercel
+domain) and restricted to *Maps JavaScript API only* — hence `strictPort` on 3000, and why Geocoding/
+Distance Matrix calls return `REQUEST_DENIED` until enabled on the key.
 
 ### Path aliases
-`@/*` → `client/src/*`, `@shared/*` → `shared/*` (configured in both `tsconfig.json` and `vite.config.ts`).
+`@/*` → `client/src/*`, `@shared/*` → `shared/*` (in both `tsconfig.json` and `vite.config.ts`).
+
+## Database / migrations
+
+Schema + RLS live in `supabase/migrations/` (run in order); seed in `supabase/seed.sql`. `0001_init` set
+up profiles (role: owner/admin/estimator/crew), config tables (facilities, vehicles,
+material_pricing_rules, volume_benchmarks, pricing_defaults), and ops tables (customers, saved_estimates,
+jobs). `0003` relaxed config writes to any authenticated user; `0004` reworked the jobs snapshot; `0006`
+added the pricebook tables.
+
+⚠️ **The `202606070001`–`202606070003` driver/dispatch migrations are on disk but NOT applied to the live
+DB.** Driver tables (`job_stops`, `job_items`, `job_messages`, `job_issues`, `job_photos`, disposal
+events) and their RPCs exist only as files. **Do not blindly regenerate `client/src/types/database.types.ts`
+from the live DB** — it would drop the driver types the code imports. Generated types are hand-maintained
+to include them.
+
+## Deployment
+
+Production is a **static SPA on Vercel** (`vercel.json`: build `vite build`, output `dist/public`, SPA
+rewrite). The browser loads Google directly via `VITE_GOOGLE_MAPS_API_KEY` and talks to Supabase directly.
+The Express server (`server/index.ts`, `pnpm start`) is the **legacy/local path** — it still gets built and
+serves `dist/public` + the maps proxy, but the live site does not use it. After deploy, the Vercel domain
+must be added to the Google key's referrer allowlist. Live URL: **https://rejunk.vercel.app**.
+
+> Working convention: **commit locally, push only on explicit request** — `main` auto-deploys to the live
+> site. Live and local currently **share one Supabase DB** (no prod/test split yet).
 
 ## Conventions
 
-- **UI**: shadcn/ui components live in `client/src/components/ui/*` (Radix-based). Compose Tailwind v4
-  utilities; theming tokens are in `client/src/index.css`. Prefer existing primitives over new markup.
+- **UI**: shadcn/ui (Radix) primitives in `client/src/components/ui/*`; compose Tailwind v4 utilities;
+  theme tokens in `client/src/index.css`. Prefer existing primitives over new markup.
 - **Forms**: react-hook-form + zod (`@hookform/resolvers`).
-- The Estimate builder and Pricing Settings pages are large single-file pages (~800–900 lines each) that
-  hold most of their own state — expect to scroll, not to chase many small files.
+- **Large pages**: Estimate Builder, Pricing Settings, and most operations pages are big single-file pages
+  that hold their own state — expect to scroll, not to chase many small files.
+- **Money formatting**: `Intl.NumberFormat("en-US", { style: "currency", currency: "USD" })`.
 
 ## Manus tooling (build environment)
 
-This project was scaffolded by Manus. `vite.config.ts` adds dev-only middleware that writes browser logs
-to `.manus-logs/` and proxies asset storage via `/manus-storage` (backed by `BUILT_IN_FORGE_API_*` env
-vars). Per the README: **do not commit images/media into `client/public/` or `src/assets/`** — large local
-media causes deploy timeouts; upload assets and reference them via `/manus-storage/...` paths instead.
+Scaffolded by Manus. `vite.config.ts` adds dev-only middleware that writes browser logs to `.manus-logs/`
+and proxies asset storage via `/manus-storage` (backed by `BUILT_IN_FORGE_API_*`). **Do not commit
+images/media into `client/public/` or `src/assets/`** — large local media causes deploy timeouts; upload
+assets and reference them via `/manus-storage/...` paths. (Small SVGs/icons in `client/public/icons/` are
+the existing exception.)
 
 ## Environment variables
 
-- `GOOGLE_MAPS_API_KEY` (server, preferred) or `VITE_GOOGLE_MAPS_API_KEY` (client) — Google Maps. Server
-  key is safer; it's only used through the proxy.
+- `VITE_GOOGLE_MAPS_API_KEY` (client) or `GOOGLE_MAPS_API_KEY` (server, used only by the maps proxy).
+- `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` — Supabase client (anon key is publishable; protected by
+  RLS). Without these, the app runs local-only.
 - `BUILT_IN_FORGE_API_URL` / `BUILT_IN_FORGE_API_KEY` — Manus asset storage proxy (dev only).
 - `VITE_OAUTH_PORTAL_URL` / `VITE_APP_ID` — referenced by `client/src/const.ts` `getLoginUrl()`, but no
-  auth flow is currently wired into the app.
+  auth flow uses them.
+
+## Notes for agents
+
+- **`AGENTS.md` is a near-identical copy of this file for Codex.** Keep the two in sync when you change
+  architecture-level guidance here.
+- Reference docs worth reading before non-trivial work: `DECISIONS.md` (decision trail + rejected
+  alternatives), `rejunk-pricebook-v4.md` and `rejunk-operations-rules-v1.md` (pricing/ops source of
+  truth), and the `DRIVER_*` / `DISPATCH_*` / `HAUL_OR_CALL_WORKFLOW.md` notes for those features.
