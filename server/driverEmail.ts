@@ -1,8 +1,9 @@
 /**
  * Driver activation email, sent through Resend (RESEND_API_KEY).
- * Shared by the Express route (server/routes/driverActivation.ts), the Vite
- * dev middleware (vite.config.ts), and the Vercel function (api/driver/activate.ts)
- * so the same email goes out no matter which environment handles the request.
+ * Shared by the Express route (server/routes/driverActivation.ts) and the Vite
+ * dev middleware (vite.config.ts). The Vercel function (api/driver/activate.ts)
+ * carries its own COPY of this validation + template — Vercel can't import
+ * across api/ boundaries at runtime — so changes here must be mirrored there.
  */
 
 import { Resend } from "resend";
