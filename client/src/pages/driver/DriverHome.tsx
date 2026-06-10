@@ -6,7 +6,9 @@ import { JobStatusBadge } from "@/components/JobBadges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { DISPATCH_MESSAGES_EVENT, getThreads, getUnreadTotalFromCache, subscribeToMessages } from "@/lib/dispatchMessageStorage";
 import { getLocationPermissionState, isLocationReporting, startLocationReporting } from "@/lib/driverLocation";
+import { getStoredDriverSession } from "@/lib/driverSession";
 import { loadDriverToday, formatDriverAddress } from "@/lib/driverStorage";
 import { toDriverStatus } from "@/lib/jobStatus";
 import { jobOperationalMetrics, pluralize } from "@/lib/operationalMetrics";
@@ -85,11 +87,18 @@ export default function DriverHome() {
   const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [locationActive, setLocationActive] = useState(() => isLocationReporting());
   const [locationBannerDismissed, setLocationBannerDismissed] = useState(false);
+  const driverEmployeeId = getStoredDriverSession()?.employeeId;
+  const [unread, setUnread] = useState(() => (driverEmployeeId ? getUnreadTotalFromCache(driverEmployeeId) : 0));
 
   const refresh = async () => setToday(await loadDriverToday());
 
   useEffect(() => {
     void refresh();
+    // Hydrate threads so the Messages badge is accurate, then track changes.
+    if (driverEmployeeId) void getThreads(driverEmployeeId).then(() => setUnread(getUnreadTotalFromCache(driverEmployeeId)));
+    const updateUnread = () => setUnread(driverEmployeeId ? getUnreadTotalFromCache(driverEmployeeId) : 0);
+    window.addEventListener(DISPATCH_MESSAGES_EVENT, updateUnread);
+    const unsubMessages = subscribeToMessages(updateUnread);
     const updateOnline = () => setOnline(navigator.onLine);
     const updateData = () => void refresh();
     const updateLocation = () => setLocationActive(isLocationReporting());
@@ -111,8 +120,10 @@ export default function DriverHome() {
       window.removeEventListener("jobs-updated", updateData);
       window.removeEventListener("driver-data-updated", updateData);
       window.removeEventListener("driver-location-reporting-changed", updateLocation);
+      window.removeEventListener(DISPATCH_MESSAGES_EVENT, updateUnread);
+      unsubMessages();
     };
-  }, []);
+  }, [driverEmployeeId]);
 
   const stats = useMemo(() => {
     const jobs = [today?.activeJob, ...(today?.upcomingJobs ?? []), ...(today?.completedJobs ?? [])].filter(Boolean) as DriverJob[];
@@ -201,7 +212,17 @@ export default function DriverHome() {
       <nav className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto grid max-w-md grid-cols-3 gap-2 text-xs font-medium">
           <Link href="/driver" className="flex flex-col items-center gap-1 rounded-md bg-primary/10 py-2 text-primary"><CheckCircle2 className="size-5" />Today</Link>
-          <Link href="/driver/messages" className="flex flex-col items-center gap-1 rounded-md py-2 text-muted-foreground"><MessageSquare className="size-5" />Messages</Link>
+          <Link href="/driver/messages" className="flex flex-col items-center gap-1 rounded-md py-2 text-muted-foreground">
+            <span className="relative">
+              <MessageSquare className="size-5" />
+              {unread > 0 && (
+                <span className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+                  {unread > 99 ? "99+" : unread}
+                </span>
+              )}
+            </span>
+            Messages
+          </Link>
           <Link href="/driver/profile" className="flex flex-col items-center gap-1 rounded-md py-2 text-muted-foreground"><UserRound className="size-5" />Profile</Link>
         </div>
       </nav>

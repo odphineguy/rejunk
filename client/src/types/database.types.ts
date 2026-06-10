@@ -58,6 +58,109 @@ export type Database = {
           },
         ]
       }
+      dispatch_threads: {
+        Row: {
+          archived: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          job_id: string | null
+          thread_type: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          job_id?: string | null
+          thread_type: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          job_id?: string | null
+          thread_type?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      dispatch_thread_participants: {
+        Row: {
+          employee_id: string
+          id: string
+          joined_at: string
+          last_read_at: string | null
+          thread_id: string
+        }
+        Insert: {
+          employee_id: string
+          id?: string
+          joined_at?: string
+          last_read_at?: string | null
+          thread_id: string
+        }
+        Update: {
+          employee_id?: string
+          id?: string
+          joined_at?: string
+          last_read_at?: string | null
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dispatch_thread_participants_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dispatch_messages: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          sender_id: string
+          sender_name: string
+          thread_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          sender_id: string
+          sender_name: string
+          thread_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          sender_id?: string
+          sender_name?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dispatch_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       driver_activations: {
         Row: {
           activated_at: string | null

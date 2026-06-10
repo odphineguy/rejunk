@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { getThreadsFromCache } from "@/lib/dispatchMessageStorage";
 import {
   formatDriverAddress,
   confirmDispatchCalled,
@@ -102,6 +103,8 @@ export default function DriverJobDetail() {
   }, [params?.jobId]);
 
   const availableStatuses = useMemo(() => nextDriverStatuses(job?.status), [job?.status]);
+  // The job's dispatch thread exists once the first message has been sent.
+  const jobThreadId = job ? getThreadsFromCache().find((thread) => thread.jobId === job.id)?.id : undefined;
   const blockingIssue = useMemo(
     () => job?.issues.find((issue) => issue.requiresDispatchResponse && issue.issueStatus !== "resolved" && !issue.driverReleasedAt),
     [job?.issues],
@@ -436,6 +439,12 @@ export default function DriverJobDetail() {
         <Card id="message-dispatch">
           <CardHeader>
             <CardTitle className="text-base">Dispatch activity</CardTitle>
+            <Link
+              href={jobThreadId ? `/driver/messages?thread=${jobThreadId}` : "/driver/messages"}
+              className="text-sm font-medium text-[#2d5016] hover:underline"
+            >
+              Open full conversation →
+            </Link>
           </CardHeader>
           <CardContent className="space-y-3 p-4 pt-0">
             <div className="flex gap-2">

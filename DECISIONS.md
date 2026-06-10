@@ -10,6 +10,36 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
 
 ---
 
+## 2026-06-09 — Messages page repurposed: internal driver ↔ dispatch chat, not customer SMS
+
+**Decision**
+The dead customer-SMS Messages page (blocked on A2P 10DLC approval that never came) was fully
+rewritten as a live internal messaging system between dispatch (`/messages`) and drivers
+(`/driver/messages`), replacing the team's unorganized group text. Three thread types scope who
+sees what: **job** (assigned crew + dispatch; auto-created when a driver first messages from a
+job), **direct** (1:1 dispatch ↔ one driver), **broadcast** (dispatch → all active field techs).
+Tables `dispatch_threads` / `dispatch_thread_participants` / `dispatch_messages` (migration
+`202606090002`, applied live) with Supabase Realtime on threads + messages. Dispatch always
+displays as "Dispatch" (sender identity = the Owner/Manager employee). Unread = messages newer
+than the viewer's `last_read_at`. Job messages intentionally appear in BOTH the Messages thread
+and the DriverJobDetail activity log.
+
+**Rejected**
+- Customer-facing SMS (the page's original purpose) — still blocked on A2P 10DLC; internal comms
+  was the actual pain point. Customer notifications remain deferred.
+- Read receipts / typing indicators / attachments / push notifications — V1 keeps it simple;
+  photos already flow through the job photo system.
+- Building on the unapplied `job_messages` phase-1 tables — the migration had to be standalone, so
+  the thread system is its own additive schema; `sendJobMessage` writes both.
+
+**Constraints / Open risks**
+- Employees still live only in localStorage, so participant/sender ids are plain-text employee
+  record ids (no FK). A driver's phone doesn't have the office employee list — direct threads are
+  deduped on the driver-side participant so dispatch- and driver-created threads converge.
+- RLS is "any authenticated" like the rest of the app; the anonymous-session trust model applies.
+
+---
+
 ## 2026-06-09 — Driver activation: emailed key + 4-digit PIN, no passwords; live GPS map in Dispatch
 
 **Decision**

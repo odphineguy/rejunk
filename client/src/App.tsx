@@ -27,6 +27,7 @@ import DriverActivate from "./pages/driver/DriverActivate";
 import DriverHome from "./pages/driver/DriverHome";
 import DriverJobDetail from "./pages/driver/DriverJobDetail";
 import DriverLogin from "./pages/driver/DriverLogin";
+import DriverMessages from "./pages/driver/DriverMessages";
 
 
 function Router() {
@@ -82,7 +83,7 @@ function DriverRouter() {
       </Route>
       <Route path={"/driver/messages"}>
         <DriverSessionGate>
-          <PlaceholderPage title="Driver Messages" />
+          <DriverMessages />
         </DriverSessionGate>
       </Route>
       <Route path={"/driver/profile"}>

@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { clientName, getClients } from "@/lib/clientStorage";
+import { DISPATCH_MESSAGES_EVENT, getThreads, getUnreadTotalFromCache, subscribeToMessages } from "@/lib/dispatchMessageStorage";
 import { employeeName, getEmployees } from "@/lib/employeeStorage";
 import { eventAddress, getEvents } from "@/lib/eventStorage";
 import { getInvoices } from "@/lib/invoiceStorage";
@@ -165,6 +166,26 @@ function paymentRows(payments: PaymentRecord[]) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
+  const [unread, setUnread] = useState(() => getUnreadTotalFromCache());
+
+  useEffect(() => {
+    // Hydrate threads so the Messages badge is accurate, then track changes.
+    void getThreads().then(() => setUnread(getUnreadTotalFromCache()));
+    const updateUnread = () => setUnread(getUnreadTotalFromCache());
+    window.addEventListener(DISPATCH_MESSAGES_EVENT, updateUnread);
+    const unsubMessages = subscribeToMessages(updateUnread);
+    return () => {
+      window.removeEventListener(DISPATCH_MESSAGES_EVENT, updateUnread);
+      unsubMessages();
+    };
+  }, []);
+
+  const unreadBadge =
+    unread > 0 ? (
+      <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-xs font-bold text-white">
+        {unread > 99 ? "99+" : unread}
+      </span>
+    ) : null;
 
   return (
     <div className="min-h-screen bg-muted/20 md:flex md:h-screen md:overflow-hidden">
@@ -198,6 +219,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     >
                       <Icon className="size-4" />
                       {item.label}
+                      {item.href === "/messages" && unreadBadge}
                     </Link>
                   );
                 })}
@@ -252,6 +274,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   >
                     <Icon className="size-4" />
                     {item.label}
+                    {item.href === "/messages" && unreadBadge}
                   </Link>
                 );
               })}

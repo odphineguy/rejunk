@@ -72,13 +72,17 @@ guarded by row-level security. Two distinct persistence patterns coexist:
    - localStorage (keys `junk_estimator_*`) is now only a **warm cache / offline fallback**, plus a
      one-time demo-seed promotion into an empty DB (e.g. `hydrateJobs`).
 2. **localStorage-only modules** (newer ops features, not yet on Supabase):
-   `employeeStorage.ts`, `eventStorage.ts`, `invoiceStorage.ts`, `messageStorage.ts`, `paymentStorage.ts`.
+   `employeeStorage.ts`, `eventStorage.ts`, `invoiceStorage.ts`, `paymentStorage.ts`.
    Same `*-updated` window-event convention, but no remote sync.
+3. **Supabase-first with offline outbox**: `lib/dispatchMessageStorage.ts` (driver ↔ dispatch messaging,
+   keys `rejunk_dispatch_*_v1`) — cache-first writes, an outbox retries sends made while offline, and
+   **Supabase Realtime** pushes live inserts. Event: `dispatch-messages-updated`.
 
 **Cross-component sync is via window events**, not a store: `pricing-settings-updated`, `jobs-updated`,
-`pricebook-updated`, `clients-updated`, `invoices-updated`, `payments-updated`, `messages-updated`,
-`employees-updated`, `events-updated`, `driver-data-updated`. A page that reads cached data must also
-`addEventListener` for its event to stay in sync after background hydration lands.
+`pricebook-updated`, `clients-updated`, `invoices-updated`, `payments-updated`,
+`dispatch-messages-updated`, `employees-updated`, `events-updated`, `driver-data-updated`. A page that
+reads cached data must also `addEventListener` for its event to stay in sync after background hydration
+lands.
 
 Seed data still lives in `client/src/data/` (`defaultPricing.ts`, `defaultPricebook.ts`, `defaultJobs.ts`,
 `facilities.ts`). `facilities.ts` is now only the **seed/offline fallback** — the live facility list (map,
@@ -107,6 +111,19 @@ hashes interchangeable with the Express endpoints). Activated drivers report GPS
 "Show drivers" toggle fetches sessions and subscribes to **Supabase Realtime** on `driver_sessions`,
 rendering profile-colored markers (helpers in `Map.tsx`). Subcontractors never get activation ("SMS only").
 RLS exposes only the last 24h of location history; dispatch treats >5 min of silence as offline.
+
+### Driver ↔ dispatch messaging
+`/messages` (dispatch console) and `/driver/messages` (driver app) are a live internal chat replacing the
+team's group text — **not customer SMS** (the old A2P 10DLC customer-messaging page was deleted). Three
+thread types in `dispatch_threads` (+ `dispatch_thread_participants`, `dispatch_messages`; migration
+`202606090002`, applied live): **job** (auto-created the first time a driver messages from
+DriverJobDetail; `sendJobMessage` in `driverStorage.ts` mirrors into the thread AND the activity log —
+intentional), **direct** (1:1 dispatch ↔ driver, deduped per driver), **broadcast** (all active field
+techs). Dispatch sends as the Owner/Manager employee but always displays as "Dispatch". Unread counts =
+messages newer than the viewer's `last_read_at` participant row; badges on the sidebar Messages item and
+the driver bottom nav. All of it flows through `lib/dispatchMessageStorage.ts` (Realtime subscriptions,
+offline outbox). Employees still live only in localStorage, so participant/sender ids are plain-text
+employee record ids.
 
 ### Routing & shell
 `client/src/App.tsx` uses **wouter** (not react-router). Two route trees keyed on the URL:
@@ -153,6 +170,10 @@ to include them.
 `202606090001_driver_activation_live_map.sql` (driver activation + live GPS tables) **IS applied to the
 live DB** (2026-06-09). It is standalone/additive — no dependency on the phase-1/2 driver migrations — and
 also added `driver_sessions` to the `supabase_realtime` publication.
+
+`202606090002_dispatch_messages.sql` (driver ↔ dispatch messaging: `dispatch_threads`,
+`dispatch_thread_participants`, `dispatch_messages`) **IS applied to the live DB** (2026-06-09). Also
+standalone/additive; adds `dispatch_threads` + `dispatch_messages` to the `supabase_realtime` publication.
 
 ## Deployment
 

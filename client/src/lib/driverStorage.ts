@@ -1,3 +1,4 @@
+import { findOrCreateJobThread, sendMessage as sendThreadMessage } from "@/lib/dispatchMessageStorage";
 import { getStoredDriverSession } from "@/lib/driverSession";
 import { getEmployees, employeeName } from "@/lib/employeeStorage";
 import { getJobs, updateJob } from "@/lib/jobStorage";
@@ -404,17 +405,31 @@ export async function updateItemStatus(item: JobItem, status: JobItemStatus) {
   }
 }
 
+/** "JOB-1234 · Customer" — dispatch thread title for a job. */
+function jobThreadTitle(jobId: string): string {
+  const local = getJobs().find((job) => job.id === jobId);
+  if (local) return `${local.jobNumber} · ${local.customerName}`;
+  const cached = readJson<DriverTodayData | null>(DRIVER_CACHE_KEY, null);
+  const jobs = [cached?.activeJob, ...(cached?.upcomingJobs ?? []), ...(cached?.completedJobs ?? [])].filter(Boolean) as DriverJob[];
+  const job = jobs.find((item) => item.id === jobId);
+  return job ? `${job.jobNumber} · ${job.customerName}` : `Job ${jobId}`;
+}
+
 export async function sendJobMessage(jobId: string, message: string) {
   const trimmed = message.trim();
   if (!trimmed) return;
   const now = new Date().toISOString();
+  const driver = defaultDriverFromEmployees();
+  const senderId = driver?.employeeId ?? driver?.id ?? "driver";
   const row: JobMessage = {
     id: id("message"),
     jobId,
+    senderId,
     recipientScope: "dispatch",
     message: trimmed,
     createdAt: now,
   };
+  // Operational cache + activity log keep the DriverJobDetail card working...
   upsertOperational("messages", row);
   upsertOperational("activity", {
     id: id("activity"),
@@ -423,6 +438,11 @@ export async function sendJobMessage(jobId: string, message: string) {
     message: trimmed,
     createdAt: now,
   });
+
+  // ...and the same message lands in the job's dispatch thread so it shows up
+  // on the Messages page (auto-creating the thread on the first message).
+  const thread = await findOrCreateJobThread(jobId, jobThreadTitle(jobId), [senderId]);
+  await sendThreadMessage(thread.id, senderId, driver?.displayName ?? "Driver", trimmed, { jobId });
 
   if (supabase && await ensureSession()) {
     await (supabase as any).from("job_messages").insert({
