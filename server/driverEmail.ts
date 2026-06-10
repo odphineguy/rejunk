@@ -55,7 +55,7 @@ export function buildActivationEmailHtml(payload: ActivationEmailPayload) {
                blue), so the badge is the only fixed-color element. Accent color
                elsewhere is moss #155e3f — a true-green hue that Gmail's
                inversion turns mint instead of blue. -->
-          <img src="${DEFAULT_BASE_URL}/rejunk-email-logo.png" alt="Rejunk" height="66" style="height:66px;width:auto;border-radius:10px" />
+          <img src="${DEFAULT_BASE_URL}/rejunk-email-logo.png" alt="Rejunk" height="66" style="height:66px;width:auto" />
         </div>
         <div style="padding:28px 24px">
           <h1 style="margin:0 0 12px;font-size:20px">Activate Your Rejunk Driver App</h1>
