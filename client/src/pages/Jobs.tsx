@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  AlertTriangle,
   Briefcase,
   CalendarCheck,
   CheckCircle2,
@@ -9,7 +8,7 @@ import {
   Map,
   Search,
   Trash2,
-  Truck,
+  Wrench,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -37,7 +36,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getJobWarningsWithFacilityCheck } from "@/lib/jobIntelligence";
-import { getDispatchOperationalCache } from "@/lib/dispatchOperations";
 import { deleteJob, getActualFinancials, getJobs } from "@/lib/jobStorage";
 import { loadPricingSettings } from "@/utils/pricingStorage";
 import type { Job, JobStatus } from "@/types/jobs";
@@ -166,22 +164,6 @@ export default function Jobs() {
     [jobs]
   );
 
-  const exceptionQueue = useMemo(() => {
-    const cache = getDispatchOperationalCache();
-    return cache.issues
-      .filter(
-        issue =>
-          issue.requiresDispatchResponse && issue.issueStatus !== "resolved"
-      )
-      .map(issue => ({ issue, job: jobs.find(job => job.id === issue.jobId) }))
-      .filter(row => row.job)
-      .sort(
-        (a, b) =>
-          new Date(b.issue.createdAt).getTime() -
-          new Date(a.issue.createdAt).getTime()
-      );
-  }, [jobs]);
-
   const removeJob = (event: React.MouseEvent, jobId: string) => {
     event.stopPropagation();
     setJobs(deleteJob(jobId));
@@ -191,7 +173,7 @@ export default function Jobs() {
   return (
     <OperationsShell
       title="Jobs"
-      icon={Truck}
+      icon={Wrench}
       actions={
         <Button asChild variant="outline">
           <Link href="/dispatch">
@@ -209,7 +191,7 @@ export default function Jobs() {
             value={counts.scheduled}
             icon={CalendarCheck}
           />
-          <StatCard label="On My Way" value={counts.on_my_way} icon={Truck} />
+          <StatCard label="On My Way" value={counts.on_my_way} icon={Wrench} />
           <StatCard
             label="In Progress"
             value={counts.in_progress}
@@ -375,73 +357,6 @@ export default function Jobs() {
                 )}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
-
-        <Card className="border-red-200">
-          <CardContent className="space-y-4 p-4 md:p-6">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="flex items-center gap-2 text-lg font-bold">
-                  <AlertTriangle className="size-5 text-red-600" />
-                  Exception Queue
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  Haul or Call blockers and added-scope requests awaiting
-                  dispatch.
-                </p>
-              </div>
-              <Badge className="bg-red-100 text-red-700">
-                {exceptionQueue.length} open
-              </Badge>
-            </div>
-            <div className="grid gap-3 lg:grid-cols-2">
-              {exceptionQueue.map(({ issue, job }) => (
-                <div
-                  key={issue.id}
-                  className="rounded-lg border border-border bg-background p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-bold">{job?.customerName}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {issue.issueType.replaceAll("_", " ")} ·{" "}
-                        {formatDate(issue.createdAt)}
-                      </div>
-                    </div>
-                    <Badge variant="outline">
-                      {(issue.issueStatus ?? "awaiting_dispatch").replaceAll(
-                        "_",
-                        " "
-                      )}
-                    </Badge>
-                  </div>
-                  <p className="mt-3 text-sm">{issue.description}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {issue.driverCalledDispatchAt ? (
-                      <Badge className="bg-green-100 text-green-700">
-                        driver called
-                      </Badge>
-                    ) : (
-                      <Badge className="bg-amber-100 text-amber-800">
-                        call pending
-                      </Badge>
-                    )}
-                    <Button
-                      size="sm"
-                      onClick={() => job && navigate(`/jobs/${job.id}`)}
-                    >
-                      Resolve
-                    </Button>
-                  </div>
-                </div>
-              ))}
-              {exceptionQueue.length === 0 && (
-                <div className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
-                  No open exceptions.
-                </div>
-              )}
-            </div>
           </CardContent>
         </Card>
       </div>

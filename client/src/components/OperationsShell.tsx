@@ -18,7 +18,6 @@ import {
   Search,
   Settings,
   SquareArrowOutUpRight,
-  Truck,
   UserPlus,
   UsersRound,
   Wrench,
@@ -61,7 +60,7 @@ const navGroups = [
   {
     label: "Operations",
     items: [
-      { href: "/jobs", label: "Jobs", icon: Truck },
+      { href: "/jobs", label: "Jobs", icon: Wrench },
       { href: "/dispatch", label: "Dispatch Center", icon: MapIcon },
       { href: "/map", label: "Map Facility", icon: MapIcon },
       { href: "/estimate-builder", label: "Estimates", icon: Calculator },

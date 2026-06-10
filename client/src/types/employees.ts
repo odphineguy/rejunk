@@ -40,6 +40,8 @@ export interface EmployeeRecord {
   status: EmployeeStatus;
   profileColor: ProfileColor;
   profilePictureName?: string;
+  /** Downscaled base64 data URL — blob URLs don't survive a reload, so the image itself is stored. */
+  profilePictureDataUrl?: string;
   notes?: string;
   attachments: EmployeeAttachment[];
   createdAt: string;

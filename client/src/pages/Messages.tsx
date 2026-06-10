@@ -12,8 +12,8 @@ import {
   Plus,
   Search,
   Send,
-  Truck,
   UserRound,
+  Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -105,7 +105,7 @@ function ThreadAvatar({ thread, employees }: { thread: DispatchThread; employees
   if (thread.threadType === "job") {
     return (
       <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
-        <Truck className="size-5" />
+        <Wrench className="size-5" />
       </span>
     );
   }

@@ -695,6 +695,38 @@ function EmployeeDetailsPanel({
   );
 }
 
+/**
+ * Reads an image file into a downscaled (max 256px) JPEG data URL so the
+ * picture survives reloads in localStorage. Blob URLs are session-scoped and
+ * full-size base64 would blow the storage quota — this avoids both.
+ */
+function fileToAvatarDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read the file"));
+    reader.onload = () => {
+      const image = new Image();
+      image.onload = () => {
+        const max = 256;
+        const scale = Math.min(1, max / Math.max(image.width, image.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) {
+          resolve(reader.result as string);
+          return;
+        }
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      image.onerror = () => reject(new Error("Could not decode the image"));
+      image.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function EmployeeTypePanel({
   employee,
   updateEmployee,
@@ -709,8 +741,12 @@ function EmployeeTypePanel({
       <SectionTitle icon={Info}>Employee Type</SectionTitle>
       <div className="mb-6 flex flex-col gap-4 rounded-lg bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-4">
-          <div className="flex size-16 shrink-0 items-center justify-center rounded-lg bg-muted">
-            <ImageIcon className="size-6 text-[#8a9180]" />
+          <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
+            {employee.profilePictureDataUrl ? (
+              <img src={employee.profilePictureDataUrl} alt="Profile" className="size-full object-cover" />
+            ) : (
+              <ImageIcon className="size-6 text-[#8a9180]" />
+            )}
           </div>
           <div className="min-w-0">
             <div className="font-semibold">Profile Picture</div>
@@ -723,11 +759,21 @@ function EmployeeTypePanel({
           accept="image/png,image/jpeg"
           className="hidden"
           onChange={(event) => {
-            const file = event.target.files?.[0];
+            const input = event.currentTarget;
+            const file = input.files?.[0];
             if (!file) return;
-            updateEmployee({ profilePictureName: file.name });
-            toast.success("Profile picture selected");
-            event.currentTarget.value = "";
+            if (file.size > 10 * 1024 * 1024) {
+              toast.error("Image must be 10MB or smaller");
+              input.value = "";
+              return;
+            }
+            void fileToAvatarDataUrl(file)
+              .then((profilePictureDataUrl) => {
+                updateEmployee({ profilePictureName: file.name, profilePictureDataUrl });
+                toast.success("Profile picture saved");
+              })
+              .catch(() => toast.error("Could not read that image — try a different file"));
+            input.value = "";
           }}
         />
         <Button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]">

@@ -244,7 +244,7 @@ function ClientsList() {
             <div className="flex flex-wrap gap-3">
               <FilterSelect
                 value="Tags"
-                options={["Tags", "Autopilot", "Referral", "Website"]}
+                options={["Tags", "Rejunk", "Referral", "Website"]}
               />
               <FilterSelect
                 value="Name"

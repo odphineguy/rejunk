@@ -9,6 +9,8 @@ export interface PaymentRecord {
   paidAt: string;
   jobId?: string;
   invoiceId?: string;
+  /** Client this payment belongs to; older records fall back to a customerName lookup. */
+  clientId?: string;
   createdAt: string;
   updatedAt: string;
 }

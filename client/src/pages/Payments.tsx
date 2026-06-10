@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { clientName, getClients } from "@/lib/clientStorage";
 import { deletePayment, getPayments } from "@/lib/paymentStorage";
 import type { PaymentRecord } from "@/types/payments";
 
@@ -27,14 +28,29 @@ function paymentTotal(payment: Pick<PaymentRecord, "baseAmount" | "tip">) {
 
 export default function Payments() {
   const [payments, setPayments] = useState<PaymentRecord[]>(() => getPayments());
+  const [clients, setClients] = useState(() => getClients());
   const [query, setQuery] = useState("");
   const [pageSize, setPageSize] = useState("10");
 
   useEffect(() => {
     const refresh = () => setPayments(getPayments());
+    const refreshClients = () => setClients(getClients());
     window.addEventListener("payments-updated", refresh);
-    return () => window.removeEventListener("payments-updated", refresh);
+    window.addEventListener("clients-updated", refreshClients);
+    return () => {
+      window.removeEventListener("payments-updated", refresh);
+      window.removeEventListener("clients-updated", refreshClients);
+    };
   }, []);
+
+  // Older payment records have no clientId — fall back to a name lookup.
+  const clientIdFor = useMemo(() => {
+    const byName = new Map(
+      clients.map((client) => [clientName(client).toLowerCase(), client.id])
+    );
+    return (payment: PaymentRecord) =>
+      payment.clientId ?? byName.get(payment.customerName.trim().toLowerCase());
+  }, [clients]);
 
   const filteredPayments = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -64,9 +80,11 @@ export default function Payments() {
   return (
     <>
       <div className="border-b border-border bg-background px-4 py-5 md:px-8">
-        <div className="flex items-center gap-2 text-base">
+        <div className="flex items-center gap-2">
           <Banknote className="size-5 text-foreground" />
-          <span className="font-medium text-foreground">Payments</span>
+          <span className="font-display text-xl font-bold tracking-tight text-foreground">
+            Payments
+          </span>
         </div>
       </div>
 
@@ -115,7 +133,13 @@ export default function Payments() {
                 {filteredPayments.map((payment, index) => (
                   <TableRow key={payment.id} className={index % 2 === 1 ? "bg-muted/20" : undefined}>
                     <TableCell className="px-5 font-medium">
-                      <span className="text-[#155e3f] underline underline-offset-2">{payment.customerName}</span>
+                      {clientIdFor(payment) ? (
+                        <Link href={`/clients/${clientIdFor(payment)}`} className="text-[#155e3f] underline underline-offset-2">
+                          {payment.customerName}
+                        </Link>
+                      ) : (
+                        <span>{payment.customerName}</span>
+                      )}
                     </TableCell>
                     <TableCell>{payment.method}</TableCell>
                     <TableCell>{money.format(payment.baseAmount)}</TableCell>

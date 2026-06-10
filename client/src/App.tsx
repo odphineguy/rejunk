@@ -21,6 +21,22 @@ import Payments from "./pages/Payments";
 import Pricebook from "./pages/Pricebook";
 import Schedule from "./pages/Schedule";
 import Settings from "./pages/Settings";
+import AffiliateSettings from "./pages/settings/AffiliateSettings";
+import CalendarSettings from "./pages/settings/CalendarSettings";
+import CompanySettings from "./pages/settings/CompanySettings";
+import ContactFormSettings from "./pages/settings/ContactFormSettings";
+import EmailTemplates from "./pages/settings/EmailTemplates";
+import InvoiceSettings from "./pages/settings/InvoiceSettings";
+import JobSettings from "./pages/settings/JobSettings";
+import OnlineBooking from "./pages/settings/OnlineBooking";
+import PhoneNumbers from "./pages/settings/PhoneNumbers";
+import PhoneSettings from "./pages/settings/PhoneSettings";
+import ProfileSettings from "./pages/settings/ProfileSettings";
+import RejunkSubscription from "./pages/settings/RejunkSubscription";
+import ReviewSettings from "./pages/settings/ReviewSettings";
+import SmsNotifications from "./pages/settings/SmsNotifications";
+import TaxRates from "./pages/settings/TaxRates";
+import TipSettings from "./pages/settings/TipSettings";
 import { DriverSessionGate } from "./components/DriverSessionGate";
 import DriverActivate from "./pages/driver/DriverActivate";
 import DriverHome from "./pages/driver/DriverHome";
@@ -56,6 +72,22 @@ function Router() {
       <Route path={"/events/new"} component={Events} />
       <Route path={"/events/:eventId"} component={Events} />
       <Route path={"/events"} component={Events} />
+      <Route path={"/settings/company"} component={CompanySettings} />
+      <Route path={"/settings/profile"} component={ProfileSettings} />
+      <Route path={"/settings/online-booking"} component={OnlineBooking} />
+      <Route path={"/settings/invoices"} component={InvoiceSettings} />
+      <Route path={"/settings/tips"} component={TipSettings} />
+      <Route path={"/settings/tax-rates"} component={TaxRates} />
+      <Route path={"/settings/phone"} component={PhoneSettings} />
+      <Route path={"/settings/phone-numbers"} component={PhoneNumbers} />
+      <Route path={"/settings/jobs"} component={JobSettings} />
+      <Route path={"/settings/sms"} component={SmsNotifications} />
+      <Route path={"/settings/email-templates"} component={EmailTemplates} />
+      <Route path={"/settings/calendar"} component={CalendarSettings} />
+      <Route path={"/settings/contact-form"} component={ContactFormSettings} />
+      <Route path={"/settings/affiliate"} component={AffiliateSettings} />
+      <Route path={"/settings/reviews"} component={ReviewSettings} />
+      <Route path={"/settings/subscription"} component={RejunkSubscription} />
       <Route path={"/settings"} component={Settings} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
