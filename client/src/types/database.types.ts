@@ -211,6 +211,9 @@ export type Database = {
           activation_id: string | null
           created_at: string
           display_name: string | null
+          downtime_reason: string | null
+          downtime_started_at: string | null
+          downtime_vehicle_id: string | null
           employee_id: string
           id: string
           is_online: boolean
@@ -218,12 +221,16 @@ export type Database = {
           last_lat: number | null
           last_lng: number | null
           last_seen_at: string | null
+          meal_break_started_at: string | null
           session_token: string | null
         }
         Insert: {
           activation_id?: string | null
           created_at?: string
           display_name?: string | null
+          downtime_reason?: string | null
+          downtime_started_at?: string | null
+          downtime_vehicle_id?: string | null
           employee_id: string
           id?: string
           is_online?: boolean
@@ -231,12 +238,16 @@ export type Database = {
           last_lat?: number | null
           last_lng?: number | null
           last_seen_at?: string | null
+          meal_break_started_at?: string | null
           session_token?: string | null
         }
         Update: {
           activation_id?: string | null
           created_at?: string
           display_name?: string | null
+          downtime_reason?: string | null
+          downtime_started_at?: string | null
+          downtime_vehicle_id?: string | null
           employee_id?: string
           id?: string
           is_online?: boolean
@@ -244,6 +255,7 @@ export type Database = {
           last_lat?: number | null
           last_lng?: number | null
           last_seen_at?: string | null
+          meal_break_started_at?: string | null
           session_token?: string | null
         }
         Relationships: [

@@ -207,6 +207,37 @@ export async function loginWithPin(pin: string): Promise<StoredDriverSession> {
   return session;
 }
 
+/** Profile page PIN change: verify the current PIN, then store the new hash. */
+export async function updateDriverPin(currentPin: string, newPin: string): Promise<void> {
+  if (!/^\d{4}$/.test(newPin)) throw new Error("Your new PIN needs to be exactly 4 digits.");
+  const stored = getStoredDriverSession();
+  const identity = getDriverIdentity();
+  const employeeId = stored?.employeeId ?? identity?.employeeId;
+  if (!employeeId) throw new Error("This phone hasn't been activated yet.");
+  if (!supabase || !(await ensureSession())) {
+    throw new Error("Can't reach the server right now. Check your connection and try again.");
+  }
+
+  const { data: activation, error } = await supabase
+    .from("driver_activations")
+    .select("id, pin_hash")
+    .eq("employee_id", employeeId)
+    .eq("status", "activated")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error("Can't reach the server right now. Check your connection and try again.");
+  if (!activation?.pin_hash) throw new Error("Your access was reset. Ask your dispatcher to resend your activation.");
+  if (!(await verifyPin(currentPin, activation.pin_hash))) throw new Error("That current PIN is incorrect.");
+
+  const pinHash = await hashPin(newPin);
+  const { error: updateError } = await supabase
+    .from("driver_activations")
+    .update({ pin_hash: pinHash })
+    .eq("id", activation.id);
+  if (updateError) throw new Error("Something went wrong updating your PIN. Try again.");
+}
+
 async function createSessionRow(
   employeeId: string,
   sessionToken: string,

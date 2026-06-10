@@ -91,6 +91,12 @@ function agoShort(iso: string) {
   return `${Math.round(minutes / 60)}h ago`;
 }
 
+function elapsedShort(iso: string) {
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (minutes < 60) return `${minutes} min`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
 function markerColor(status: Job["status"], openIssueCount: number) {
   if (openIssueCount > 0 || status === "issue") return "#dc2626";
   if (status === "completed") return "#16a34a";
@@ -100,6 +106,7 @@ function markerColor(status: Job["status"], openIssueCount: number) {
   if (status === "arrived") return "#0891b2";
   if (status === "in_progress" || status === "loaded" || status === "dumping")
     return "#f97316";
+  if (status === "paused") return "#71717a";
   if (status === "delayed") return "#ca8a04";
   return "#7c3aed";
 }
@@ -431,11 +438,15 @@ export default function DispatchCenter() {
   }, [showDrivers]);
 
   const driverStatusText = (detail: DriverDetail) => {
+    if (detail.session.downtimeStartedAt)
+      return `vehicle down${detail.session.downtimeReason ? ` (${detail.session.downtimeReason.replaceAll("_", " ")})` : ""}`;
+    if (detail.session.mealBreakStartedAt) return "on break";
     if (!detail.online) return "offline";
     if (!detail.job) return "idle";
     const status = detail.job.job.status;
     if (status.startsWith("en_route") || status === "on_my_way") return "en route";
     if (["arrived", "in_progress", "loaded", "dumping"].includes(status)) return "on job";
+    if (status === "paused") return "paused";
     return "assigned";
   };
 
@@ -493,6 +504,7 @@ export default function DispatchCenter() {
         hex: detail.hex,
         initial: detail.name.charAt(0).toUpperCase() || "D",
         online: detail.online,
+        badge: session.downtimeStartedAt ? "downtime" : session.mealBreakStartedAt ? "meal_break" : undefined,
       });
 
       const existing = driverMarkers.current.get(session.employeeId);
@@ -750,6 +762,20 @@ export default function DispatchCenter() {
                             ? ` · ${detail.job.job.customerName}`
                             : " · No job assigned"}
                         </div>
+                        {detail.session.mealBreakStartedAt && (
+                          <div className="mt-1 font-medium text-amber-700">
+                            🍔 On break · {elapsedShort(detail.session.mealBreakStartedAt)}
+                          </div>
+                        )}
+                        {detail.session.downtimeStartedAt && (
+                          <div className="mt-1 font-medium text-red-700">
+                            🔧 Vehicle down
+                            {detail.session.downtimeReason
+                              ? ` (${detail.session.downtimeReason.replaceAll("_", " ")})`
+                              : ""}{" "}
+                            · {elapsedShort(detail.session.downtimeStartedAt)}
+                          </div>
+                        )}
                       </button>
                     ))}
                   {!driversCollapsed && driverDetails.length === 0 && (

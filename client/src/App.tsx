@@ -21,13 +21,13 @@ import Payments from "./pages/Payments";
 import Pricebook from "./pages/Pricebook";
 import Schedule from "./pages/Schedule";
 import Settings from "./pages/Settings";
-import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { DriverSessionGate } from "./components/DriverSessionGate";
 import DriverActivate from "./pages/driver/DriverActivate";
 import DriverHome from "./pages/driver/DriverHome";
 import DriverJobDetail from "./pages/driver/DriverJobDetail";
 import DriverLogin from "./pages/driver/DriverLogin";
 import DriverMessages from "./pages/driver/DriverMessages";
+import DriverProfile from "./pages/driver/DriverProfile";
 
 
 function Router() {
@@ -88,7 +88,7 @@ function DriverRouter() {
       </Route>
       <Route path={"/driver/profile"}>
         <DriverSessionGate>
-          <PlaceholderPage title="Driver Profile" />
+          <DriverProfile />
         </DriverSessionGate>
       </Route>
       <Route component={NotFound} />

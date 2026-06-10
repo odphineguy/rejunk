@@ -4,12 +4,15 @@ import { getEmployees, employeeName } from "@/lib/employeeStorage";
 import { getJobs, updateJob } from "@/lib/jobStorage";
 import { canTransitionJobStatus, statusActivityMessage, toDriverStatus } from "@/lib/jobStatus";
 import { ensureSession, supabase } from "@/lib/supabase";
+import { loadPricingSettings } from "@/utils/pricingStorage";
 import type { EmployeeRecord } from "@/types/employees";
 import type { DriverJobStatus, Job } from "@/types/jobs";
 import type {
   DriverJob,
   DriverProfile,
   DriverTodayData,
+  DriverWorkdayStatus,
+  VehicleDowntimeReason,
   JobActivity,
   JobDisposalEvent,
   JobDisposalEventStatus,
@@ -243,7 +246,7 @@ export function toDriverJob(job: Job, cache = readJson(OPERATIONAL_CACHE_KEY, em
 
 function todayBuckets(jobs: DriverJob[], driver: DriverProfile | null): DriverTodayData {
   const sorted = [...jobs].sort((a, b) => new Date(a.scheduledStart ?? a.updatedAt).getTime() - new Date(b.scheduledStart ?? b.updatedAt).getTime());
-  const activeStatuses = new Set(["en_route", "arrived", "in_progress", "loaded", "en_route_to_next_stop", "en_route_to_disposal", "dumping", "delayed", "issue"]);
+  const activeStatuses = new Set(["en_route", "arrived", "in_progress", "paused", "loaded", "en_route_to_next_stop", "en_route_to_disposal", "dumping", "delayed", "issue"]);
   const activeJob = sorted.find((job) => activeStatuses.has(toDriverStatus(job.status))) ?? null;
   return {
     driver,
@@ -638,6 +641,121 @@ export async function updateDisposalEventStatus(event: JobDisposalEvent, status:
       note: `Disposal Trip ${event.sequenceNumber} marked ${status.replaceAll("_", " ")}.`,
     });
   }
+}
+
+/**
+ * Driver diverts a disposal trip to a different facility (closed, load
+ * rejected, ...). Updates the local disposal event and notes it in the
+ * activity log; dispatch sees the change via the shared jobs/driver data.
+ */
+export async function updateDisposalEventFacility(event: JobDisposalEvent, facilityId: string) {
+  const facility = loadPricingSettings().disposalFacilities.find((item) => item.id === facilityId);
+  if (!facility) throw new Error("That facility is not in the facility list.");
+  const now = new Date().toISOString();
+  const updated: JobDisposalEvent = {
+    ...event,
+    facilityId: facility.id,
+    facilityName: facility.facilityName,
+    facilityAddress: [facility.address, facility.city].filter(Boolean).join(", "),
+    updatedAt: now,
+  };
+  const cache = readJson(OPERATIONAL_CACHE_KEY, emptyOperationalCache());
+  writeJson(OPERATIONAL_CACHE_KEY, {
+    ...cache,
+    disposalEvents: [updated, ...(cache.disposalEvents ?? []).filter((item) => item.id !== event.id)],
+    activity: [
+      {
+        id: id("activity"),
+        jobId: event.jobId,
+        eventType: "status_change",
+        message: `Disposal Trip ${event.sequenceNumber} diverted to ${facility.facilityName}.`,
+        metadata: { disposalEventId: event.id, facilityId: facility.id },
+        createdAt: now,
+      },
+      ...cache.activity,
+    ],
+  });
+  window.dispatchEvent(new Event("driver-data-updated"));
+
+  if (supabase && await ensureSession()) {
+    await (supabase as any)
+      .from("job_disposal_events")
+      .update({ facility_id: facility.id, facility_name: facility.facilityName })
+      .eq("id", event.id);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Workday status: meal break + vehicle downtime on the driver_sessions row.
+// Per-driver (not per-job); dispatch sees changes live via Supabase Realtime.
+// ---------------------------------------------------------------------------
+
+const WORKDAY_KEY = "rejunk_driver_workday_v1";
+export const DRIVER_WORKDAY_EVENT = "driver-workday-updated";
+
+export function getCachedWorkdayStatus(): DriverWorkdayStatus {
+  return readJson<DriverWorkdayStatus>(WORKDAY_KEY, {});
+}
+
+/** Pulls the live flags from driver_sessions so a reinstalled/second device agrees. */
+export async function fetchWorkdayStatus(): Promise<DriverWorkdayStatus> {
+  const session = getStoredDriverSession();
+  if (!session || !supabase || !(await ensureSession())) return getCachedWorkdayStatus();
+  const { data, error } = await supabase
+    .from("driver_sessions")
+    .select("meal_break_started_at, downtime_started_at, downtime_vehicle_id, downtime_reason")
+    .eq("id", session.sessionId)
+    .maybeSingle();
+  if (error || !data) return getCachedWorkdayStatus();
+  const status: DriverWorkdayStatus = {
+    mealBreakStartedAt: data.meal_break_started_at ?? undefined,
+    downtimeStartedAt: data.downtime_started_at ?? undefined,
+    downtimeVehicleId: data.downtime_vehicle_id ?? undefined,
+    downtimeReason: data.downtime_reason ?? undefined,
+  };
+  writeJson(WORKDAY_KEY, status);
+  return status;
+}
+
+async function writeWorkdayStatus(patch: Partial<DriverWorkdayStatus>) {
+  const next = { ...getCachedWorkdayStatus(), ...patch };
+  writeJson(WORKDAY_KEY, next);
+  window.dispatchEvent(new Event(DRIVER_WORKDAY_EVENT));
+
+  const session = getStoredDriverSession();
+  if (session && supabase && (await ensureSession())) {
+    await supabase
+      .from("driver_sessions")
+      .update({
+        meal_break_started_at: next.mealBreakStartedAt ?? null,
+        downtime_started_at: next.downtimeStartedAt ?? null,
+        downtime_vehicle_id: next.downtimeVehicleId ?? null,
+        downtime_reason: next.downtimeReason ?? null,
+        last_seen_at: new Date().toISOString(),
+      })
+      .eq("id", session.sessionId);
+  }
+  return next;
+}
+
+export async function startMealBreak() {
+  return writeWorkdayStatus({ mealBreakStartedAt: new Date().toISOString() });
+}
+
+export async function endMealBreak() {
+  return writeWorkdayStatus({ mealBreakStartedAt: undefined });
+}
+
+export async function startVehicleDowntime(vehicleId?: string, reason?: VehicleDowntimeReason | string) {
+  return writeWorkdayStatus({
+    downtimeStartedAt: new Date().toISOString(),
+    downtimeVehicleId: vehicleId,
+    downtimeReason: reason,
+  });
+}
+
+export async function endVehicleDowntime() {
+  return writeWorkdayStatus({ downtimeStartedAt: undefined, downtimeVehicleId: undefined, downtimeReason: undefined });
 }
 
 export function formatDriverAddress(job: DriverJob) {

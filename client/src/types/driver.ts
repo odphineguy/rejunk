@@ -287,7 +287,21 @@ export interface DriverSession {
   lastLng?: number;
   lastHeading?: number;
   isOnline: boolean;
+  mealBreakStartedAt?: string;
+  downtimeStartedAt?: string;
+  downtimeVehicleId?: string;
+  downtimeReason?: string;
   createdAt: string;
+}
+
+export type VehicleDowntimeReason = "mechanical" | "flat_tire" | "accident" | "other";
+
+/** Meal break / vehicle downtime flags carried on the driver's live session row. */
+export interface DriverWorkdayStatus {
+  mealBreakStartedAt?: string;
+  downtimeStartedAt?: string;
+  downtimeVehicleId?: string;
+  downtimeReason?: VehicleDowntimeReason | string;
 }
 
 /** Stored in localStorage under `rejunk_driver_session` on the driver's phone. */

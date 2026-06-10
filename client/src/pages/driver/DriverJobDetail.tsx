@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useRoute } from "wouter";
-import { AlertTriangle, ArrowLeft, Camera, CheckCircle2, FileWarning, MessageSquare, Navigation, Phone, Send, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Camera, MessageSquare, Navigation, Phone, Send, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { JobStatusBadge } from "@/components/JobBadges";
@@ -9,49 +9,24 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { getThreadsFromCache } from "@/lib/dispatchMessageStorage";
 import {
   formatDriverAddress,
   confirmDispatchCalled,
   getDriverJob,
-  reportJobIssue,
   sendJobMessage,
-  updateDisposalEventStatus,
+  updateDisposalEventFacility,
   updateDriverJobStatus,
   updateItemStatus,
   updateStopStatus,
   uploadJobPhoto,
 } from "@/lib/driverStorage";
-import { nextDriverStatuses, operationalStatusLabels, toDriverStatus } from "@/lib/jobStatus";
+import { toDriverStatus } from "@/lib/jobStatus";
 import { customerStops, disposalEvents } from "@/lib/operationalMetrics";
-import type { DriverJob, JobIssueSeverity, JobIssueType, JobPhotoType, JobPhotoVisibility } from "@/types/driver";
+import { loadPricingSettings } from "@/utils/pricingStorage";
+import type { DriverJob, JobPhotoType, JobPhotoVisibility } from "@/types/driver";
 import type { DriverJobStatus } from "@/types/jobs";
-
-const issueTypes: JobIssueType[] = [
-  "customer_not_home",
-  "gate_locked",
-  "access_blocked",
-  "unable_to_locate",
-  "customer_not_ready",
-  "unsafe_to_service",
-  "scope_dispute",
-  "disposal_access_problem",
-  "other_service_blocker",
-  "access_problem",
-  "additional_items",
-  "item_not_listed",
-  "heavy_item",
-  "oversized_item",
-  "damage",
-  "vehicle_problem",
-  "running_late",
-  "disposal_problem",
-  "unsafe_condition",
-  "other",
-];
 
 const photoTypes: JobPhotoType[] = ["before", "progress", "after", "damage", "issue", "receipt", "equipment", "other"];
 
@@ -71,19 +46,92 @@ function time(value?: string) {
   return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
 }
 
+/** Short scannable facility code: "27th Ave Transfer Station" → "27A", "Sky Harbor" → "SH". */
+function facilityCode(name?: string) {
+  if (!name) return "TBD";
+  const numberMatch = name.match(/(\d{1,3})\s*(?:th|st|nd|rd)?\s*([A-Za-z])?/);
+  if (numberMatch?.[1]) return `${numberMatch[1]}${(numberMatch[2] ?? "").toUpperCase()}`.slice(0, 3);
+  const initials = name
+    .split(/\s+/)
+    .filter((word) => /^[A-Za-z]/.test(word))
+    .map((word) => word[0].toUpperCase());
+  return initials.slice(0, 3).join("") || name.slice(0, 3).toUpperCase();
+}
+
+/** 3-letter waste-stream code from the job's material category. */
+const WASTE_STREAM_CODES: Record<string, string> = {
+  household_junk: "MSW",
+  furniture: "MSW",
+  appliances: "APL",
+  mattresses: "MAT",
+  tires: "TIR",
+  mixed_c_and_d: "CND",
+  clean_concrete: "CON",
+  clean_tile: "TIL",
+  brick: "BRK",
+  dirt: "DRT",
+  rock: "RCK",
+  sod: "GRN",
+  stone: "STN",
+  asphalt: "ASP",
+  pavers: "PVR",
+  heavy_clean_debris: "HVY",
+  green_waste: "GRN",
+  metal: "MTL",
+  cardboard: "OCC",
+  hazardous_excluded: "HAZ",
+};
+
+function wasteStreamCode(materialType?: string) {
+  if (!materialType) return "MSW";
+  return WASTE_STREAM_CODES[materialType] ?? (materialType.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase() || "MSW");
+}
+
+type StripAction = { label: string; to: DriverJobStatus; variant?: "default" | "outline" };
+
+/** The driver's whole flow: On My Way → Start My Time → Pause/Complete → Resume. */
+function stripFor(status: DriverJobStatus): { actions: StripAction[]; info?: string } {
+  switch (status) {
+    case "assigned":
+      return { actions: [{ label: "On My Way", to: "en_route" }] };
+    case "en_route":
+    case "arrived":
+      return { actions: [{ label: "Start My Time", to: "in_progress" }] };
+    case "in_progress":
+    case "loaded":
+    case "en_route_to_next_stop":
+    case "en_route_to_disposal":
+    case "dumping":
+      return {
+        actions: [
+          { label: "Pause", to: "paused", variant: "outline" },
+          { label: "Complete", to: "completed" },
+        ],
+      };
+    case "paused":
+      return { actions: [{ label: "Resume", to: "in_progress" }] };
+    case "delayed":
+      return { info: "This job is marked delayed.", actions: [{ label: "Back to Work", to: "in_progress" }] };
+    case "issue":
+      return { info: "An issue is open on this job.", actions: [{ label: "Back to Work", to: "in_progress" }] };
+    default:
+      return { actions: [] };
+  }
+}
+
 export default function DriverJobDetail() {
   const [, params] = useRoute("/driver/jobs/:jobId");
   const [job, setJob] = useState<DriverJob | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
-  const [issueType, setIssueType] = useState<JobIssueType>("additional_items");
-  const [issueSeverity, setIssueSeverity] = useState<JobIssueSeverity>("medium");
-  const [issueDescription, setIssueDescription] = useState("");
   const [photoType, setPhotoType] = useState<JobPhotoType>("before");
   const [photoVisibility, setPhotoVisibility] = useState<JobPhotoVisibility>("internal");
   const [photoCaption, setPhotoCaption] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [changingFacilityFor, setChangingFacilityFor] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const facilities = useMemo(() => loadPricingSettings().disposalFacilities.filter((facility) => facility.isActive), []);
 
   const refresh = async () => {
     if (!params?.jobId) return;
@@ -102,36 +150,24 @@ export default function DriverJobDetail() {
     };
   }, [params?.jobId]);
 
-  const availableStatuses = useMemo(() => nextDriverStatuses(job?.status), [job?.status]);
+  const status = toDriverStatus(job?.status);
   // The job's dispatch thread exists once the first message has been sent.
   const jobThreadId = job ? getThreadsFromCache().find((thread) => thread.jobId === job.id)?.id : undefined;
   const blockingIssue = useMemo(
     () => job?.issues.find((issue) => issue.requiresDispatchResponse && issue.issueStatus !== "resolved" && !issue.driverReleasedAt),
     [job?.issues],
   );
-  const primaryAction = useMemo(() => {
-    if (!job || blockingIssue) return null;
-    const status = toDriverStatus(job.status);
-    const next = availableStatuses[0];
-    if (!next) return null;
-    const labels: Partial<Record<DriverJobStatus, string>> = {
-      en_route: "Start Trip",
-      arrived: "Arrived",
-      in_progress: "Start Work",
-      loaded: "Mark Loaded",
-      en_route_to_next_stop: "Go to Next Stop",
-      en_route_to_disposal: "Go to Disposal",
-      dumping: "Begin Dumping",
-      completed: status === "dumping" ? "Complete Disposal" : "Complete Job",
-    };
-    return { status: next, label: labels[next] ?? operationalStatusLabels[next] };
-  }, [availableStatuses, blockingIssue, job]);
+  const strip = useMemo(() => {
+    const base = stripFor(status);
+    // A blocking issue freezes the flow until dispatch releases the driver.
+    return blockingIssue ? { ...base, actions: [] } : base;
+  }, [status, blockingIssue]);
 
-  const changeStatus = async (status: DriverJobStatus) => {
+  const changeStatus = async (next: DriverJobStatus, buttonLabel: string) => {
     if (!job) return;
     try {
-      await updateDriverJobStatus(job.id, status);
-      toast.success(`Status updated to ${operationalStatusLabels[status]}`);
+      await updateDriverJobStatus(job.id, next);
+      toast.success(buttonLabel === "Complete" ? "Job completed" : `${buttonLabel} — got it`);
       await refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Status update failed");
@@ -146,21 +182,17 @@ export default function DriverJobDetail() {
     await refresh();
   };
 
-  const submitIssue = async () => {
-    if (!job || !issueDescription.trim()) {
-      toast.error("Add a short issue description");
-      return;
+  const changeFacility = async (eventId: string, facilityId: string) => {
+    const event = job?.disposalEvents.find((item) => item.id === eventId);
+    if (!event) return;
+    try {
+      await updateDisposalEventFacility(event, facilityId);
+      toast.success("Disposal facility updated");
+      setChangingFacilityFor(null);
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Facility change failed");
     }
-    await reportJobIssue({
-      jobId: job.id,
-      issueType,
-      severity: issueSeverity,
-      description: issueDescription,
-      requiresDispatchResponse: true,
-    });
-    setIssueDescription("");
-    toast.success("Issue sent to dispatch");
-    await refresh();
   };
 
   const handlePhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -237,11 +269,8 @@ export default function DriverJobDetail() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Next action</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 p-4 pt-0">
+        {(blockingIssue || strip.actions.length > 0 || strip.info) && (
+          <div className="space-y-3">
             {blockingIssue && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-950">
                 <div className="flex gap-2 font-bold">
@@ -260,24 +289,25 @@ export default function DriverJobDetail() {
                 </div>
               </div>
             )}
-            {primaryAction ? (
-              <Button className="h-14 w-full text-base" onClick={() => void changeStatus(primaryAction.status)}>
-                {primaryAction.label}
-              </Button>
-            ) : (
-              <p className="text-sm text-muted-foreground">{toDriverStatus(job.status) === "completed" ? "This job is complete." : "Waiting for dispatch resolution."}</p>
+            {!blockingIssue && strip.info && (
+              <p className="px-1 text-sm text-muted-foreground">{strip.info}</p>
             )}
-            {!blockingIssue && (
-              <div className="flex flex-wrap gap-2">
-                {availableStatuses.filter((status) => status !== primaryAction?.status && status !== "canceled").map((status) => (
-                  <Button key={status} variant={status === "issue" ? "destructive" : "outline"} className="h-11" onClick={() => void changeStatus(status)}>
-                    {status === "issue" ? "Report Problem" : operationalStatusLabels[status]}
+            {strip.actions.length > 0 && (
+              <div className={strip.actions.length > 1 ? "grid grid-cols-2 gap-2" : ""}>
+                {strip.actions.map((action) => (
+                  <Button
+                    key={action.to}
+                    variant={action.variant ?? "default"}
+                    className="h-14 w-full text-base"
+                    onClick={() => void changeStatus(action.to, action.label)}
+                  >
+                    {action.label}
                   </Button>
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        )}
 
         <Card>
           <CardHeader>
@@ -312,22 +342,38 @@ export default function DriverJobDetail() {
             <CardContent className="space-y-3 p-4 pt-0">
               {disposalEvents(job.disposalEvents).map((event) => (
                 <div key={event.id} className="rounded-lg border border-border bg-background p-3">
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="text-xs font-semibold uppercase text-muted-foreground">Disposal trip {event.sequenceNumber}</div>
+                  <div className="mt-2 space-y-1 text-sm">
                     <div>
-                      <div className="text-xs font-semibold uppercase text-muted-foreground">Disposal trip {event.sequenceNumber}</div>
-                      <div className="mt-1 font-semibold">{event.facilityName || "Facility TBD"}</div>
-                      {event.facilityAddress && <div className="text-sm text-muted-foreground">{event.facilityAddress}</div>}
-                      {event.notes && <div className="mt-2 text-sm">{event.notes}</div>}
+                      <span className="text-muted-foreground">Facility: </span>
+                      <span className="font-semibold">{facilityCode(event.facilityName)} · {event.facilityName || "Facility TBD"}</span>
                     </div>
-                    <Badge variant="outline">{label(event.status)}</Badge>
+                    {event.facilityAddress && <div className="text-muted-foreground">{event.facilityAddress}</div>}
+                    <div>
+                      <span className="text-muted-foreground">Waste stream: </span>
+                      <span className="font-semibold">{wasteStreamCode(event.materialType)}</span>
+                      {event.materialType && <span className="text-muted-foreground"> · {label(event.materialType)}</span>}
+                    </div>
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <Button variant="outline" className="h-11" onClick={() => void updateDisposalEventStatus(event, "en_route").then(refresh)}>Route to Facility</Button>
-                    <Button variant="outline" className="h-11" onClick={() => void updateDisposalEventStatus(event, "arrived").then(refresh)}>Arrived</Button>
-                    <Button variant="outline" className="h-11" onClick={() => void updateDisposalEventStatus(event, "unloading").then(refresh)}>Begin Unloading</Button>
-                    <Button className="h-11" onClick={() => void updateDisposalEventStatus(event, "completed").then(refresh)}>Complete Disposal</Button>
-                    <Button variant="destructive" className="col-span-2 h-11" onClick={() => void updateDisposalEventStatus(event, "rejected").then(refresh)}>Report Facility Rejection</Button>
-                  </div>
+                  {changingFacilityFor === event.id ? (
+                    <div className="mt-3 space-y-2">
+                      <Select onValueChange={(facilityId) => void changeFacility(event.id, facilityId)}>
+                        <SelectTrigger className="h-11"><SelectValue placeholder="Pick the new facility" /></SelectTrigger>
+                        <SelectContent>
+                          {facilities.map((facility) => (
+                            <SelectItem key={facility.id} value={facility.id}>
+                              {facilityCode(facility.facilityName)} · {facility.facilityName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button variant="ghost" className="h-9 w-full" onClick={() => setChangingFacilityFor(null)}>Cancel</Button>
+                    </div>
+                  ) : (
+                    <Button variant="outline" className="mt-3 h-11 w-full" onClick={() => setChangingFacilityFor(event.id)}>
+                      Change facility
+                    </Button>
+                  )}
                 </div>
               ))}
             </CardContent>
@@ -404,41 +450,9 @@ export default function DriverJobDetail() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base"><FileWarning className="size-4" />Report issue</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 p-4 pt-0">
-            <div className="grid grid-cols-2 gap-2">
-              <Select value={issueType} onValueChange={(value) => setIssueType(value as JobIssueType)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{issueTypes.map((type) => <SelectItem key={type} value={type}>{label(type)}</SelectItem>)}</SelectContent>
-              </Select>
-              <Select value={issueSeverity} onValueChange={(value) => setIssueSeverity(value as JobIssueSeverity)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">low</SelectItem>
-                  <SelectItem value="medium">medium</SelectItem>
-                  <SelectItem value="high">high</SelectItem>
-                  <SelectItem value="urgent">urgent</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Textarea value={issueDescription} onChange={(event) => setIssueDescription(event.target.value)} placeholder="What should dispatch know?" rows={3} />
-            <Button className="h-12 w-full" variant="destructive" onClick={() => void submitIssue()}>Send Issue</Button>
-            {job.issues.map((issue) => (
-              <div key={issue.id} className="rounded-md border border-border bg-background p-3 text-sm">
-                <div className="font-semibold">{label(issue.issueType)} · {issue.severity}</div>
-                <div className="mt-1 text-muted-foreground">{issue.description}</div>
-                {issue.addedScopeStatus && <Badge className="mt-2" variant="outline">{label(issue.addedScopeStatus)}</Badge>}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
         <Card id="message-dispatch">
           <CardHeader>
-            <CardTitle className="text-base">Dispatch activity</CardTitle>
+            <CardTitle className="text-base">Message Dispatch</CardTitle>
             <Link
               href={jobThreadId ? `/driver/messages?thread=${jobThreadId}` : "/driver/messages"}
               className="text-sm font-medium text-[#2d5016] hover:underline"
@@ -446,19 +460,10 @@ export default function DriverJobDetail() {
               Open full conversation →
             </Link>
           </CardHeader>
-          <CardContent className="space-y-3 p-4 pt-0">
+          <CardContent className="p-4 pt-0">
             <div className="flex gap-2">
               <Input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Message dispatch" />
               <Button size="icon" onClick={() => void submitMessage()} aria-label="Send message"><Send className="size-4" /></Button>
-            </div>
-            <div className="space-y-2">
-              {job.activity.map((entry) => (
-                <div key={entry.id} className="rounded-md bg-muted p-3 text-sm">
-                  <div className="font-medium">{entry.message || label(entry.eventType)}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{time(entry.createdAt)}</div>
-                </div>
-              ))}
-              {job.activity.length === 0 && <p className="text-sm text-muted-foreground">No activity yet.</p>}
             </div>
           </CardContent>
         </Card>

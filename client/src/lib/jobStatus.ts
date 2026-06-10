@@ -5,6 +5,7 @@ export const driverJobStatuses: DriverJobStatus[] = [
   "en_route",
   "arrived",
   "in_progress",
+  "paused",
   "loaded",
   "en_route_to_next_stop",
   "en_route_to_disposal",
@@ -20,6 +21,7 @@ export const operationalStatusLabels: Record<DriverJobStatus, string> = {
   en_route: "En Route",
   arrived: "Arrived",
   in_progress: "In Progress",
+  paused: "Paused",
   loaded: "Loaded",
   en_route_to_next_stop: "To Next Stop",
   en_route_to_disposal: "To Disposal",
@@ -39,18 +41,23 @@ export const legacyToDriverStatus: Record<string, DriverJobStatus> = {
   canceled: "canceled",
 };
 
+// The driver UI only walks assigned → en_route → in_progress ⇄ paused →
+// completed; the intermediate states (loaded, en_route_to_*, dumping) remain
+// for dispatch-side tracking, so they still allow pause/complete in case
+// dispatch put a job there.
 const allowedTransitions: Record<DriverJobStatus, DriverJobStatus[]> = {
   assigned: ["en_route", "delayed", "issue"],
-  en_route: ["arrived", "delayed", "issue"],
+  en_route: ["arrived", "in_progress", "delayed", "issue"],
   arrived: ["in_progress", "delayed", "issue"],
-  in_progress: ["loaded", "completed", "delayed", "issue"],
-  loaded: ["en_route_to_next_stop", "en_route_to_disposal", "completed", "delayed", "issue"],
-  en_route_to_next_stop: ["arrived", "delayed", "issue"],
-  en_route_to_disposal: ["dumping", "delayed", "issue"],
-  dumping: ["completed", "delayed", "issue"],
+  in_progress: ["paused", "loaded", "completed", "delayed", "issue"],
+  paused: ["in_progress", "completed", "issue"],
+  loaded: ["en_route_to_next_stop", "en_route_to_disposal", "paused", "completed", "delayed", "issue"],
+  en_route_to_next_stop: ["arrived", "paused", "completed", "delayed", "issue"],
+  en_route_to_disposal: ["dumping", "paused", "completed", "delayed", "issue"],
+  dumping: ["completed", "paused", "delayed", "issue"],
   completed: [],
   delayed: ["en_route", "arrived", "in_progress", "loaded", "issue"],
-  issue: [],
+  issue: ["in_progress"],
   canceled: [],
 };
 

@@ -5,6 +5,7 @@ export type DriverJobStatus =
   | "en_route"
   | "arrived"
   | "in_progress"
+  | "paused"
   | "loaded"
   | "en_route_to_next_stop"
   | "en_route_to_disposal"

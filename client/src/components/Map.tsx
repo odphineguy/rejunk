@@ -127,15 +127,44 @@ export function loadMapScript() {
 // Driver markers (live GPS layer on the Dispatch Center map)
 // ---------------------------------------------------------------------------
 
-/** Colored circle with the driver's first initial; faded at 50% when offline. */
-export function createDriverMarkerContent({ hex, initial, online }: { hex: string; initial: string; online: boolean }) {
+/**
+ * Colored circle with the driver's first initial; faded at 50% when offline.
+ * `badge` overlays a 🍔 (meal break) or 🔧 (vehicle downtime) on the marker —
+ * downtime also turns the ring red so a down vehicle stands out at a glance.
+ */
+export function createDriverMarkerContent({
+  hex,
+  initial,
+  online,
+  badge,
+}: {
+  hex: string;
+  initial: string;
+  online: boolean;
+  badge?: "meal_break" | "downtime";
+}) {
   const element = document.createElement("div");
   element.className =
-    "flex size-10 items-center justify-center rounded-full border-2 border-white text-sm font-bold text-white shadow-lg";
+    "relative flex size-10 items-center justify-center rounded-full border-2 border-white text-sm font-bold text-white shadow-lg";
   element.style.background = hex;
   element.style.opacity = online ? "1" : "0.5";
   element.style.transition = "opacity 300ms ease";
   element.textContent = initial;
+  if (badge) {
+    if (badge === "downtime") element.style.borderColor = "#dc2626";
+    const overlay = document.createElement("span");
+    overlay.textContent = badge === "meal_break" ? "🍔" : "🔧";
+    overlay.style.position = "absolute";
+    overlay.style.top = "-9px";
+    overlay.style.right = "-9px";
+    overlay.style.fontSize = "14px";
+    overlay.style.lineHeight = "1";
+    overlay.style.background = "white";
+    overlay.style.borderRadius = "9999px";
+    overlay.style.padding = "1px";
+    overlay.style.boxShadow = "0 1px 2px rgba(0,0,0,0.3)";
+    element.appendChild(overlay);
+  }
   return element;
 }
 

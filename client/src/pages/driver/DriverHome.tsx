@@ -1,18 +1,38 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { AlertCircle, CheckCircle2, Clock, MapPinned, MessageSquare, Navigation, RefreshCw, UserRound, WifiOff, X } from "lucide-react";
+import { AlertCircle, Clock, MapPinned, Navigation, RefreshCw, Sandwich, UserRound, WifiOff, Wrench, X } from "lucide-react";
+import { toast } from "sonner";
 
+import { DriverBottomNav } from "@/components/DriverBottomNav";
 import { JobStatusBadge } from "@/components/JobBadges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { DISPATCH_MESSAGES_EVENT, getThreads, getUnreadTotalFromCache, subscribeToMessages } from "@/lib/dispatchMessageStorage";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getLocationPermissionState, isLocationReporting, startLocationReporting } from "@/lib/driverLocation";
-import { getStoredDriverSession } from "@/lib/driverSession";
-import { loadDriverToday, formatDriverAddress } from "@/lib/driverStorage";
+import {
+  DRIVER_WORKDAY_EVENT,
+  endMealBreak,
+  endVehicleDowntime,
+  fetchWorkdayStatus,
+  formatDriverAddress,
+  getCachedWorkdayStatus,
+  loadDriverToday,
+  startMealBreak,
+  startVehicleDowntime,
+} from "@/lib/driverStorage";
 import { toDriverStatus } from "@/lib/jobStatus";
 import { jobOperationalMetrics, pluralize } from "@/lib/operationalMetrics";
-import type { DriverJob, DriverTodayData } from "@/types/driver";
+import { loadPricingSettings } from "@/utils/pricingStorage";
+import { cn } from "@/lib/utils";
+import type { DriverJob, DriverTodayData, DriverWorkdayStatus, VehicleDowntimeReason } from "@/types/driver";
+
+const DOWNTIME_REASONS: { value: VehicleDowntimeReason; label: string }[] = [
+  { value: "mechanical", label: "Mechanical" },
+  { value: "flat_tire", label: "Flat tire" },
+  { value: "accident", label: "Accident" },
+  { value: "other", label: "Other" },
+];
 
 function formatWindow(start?: string, end?: string) {
   const format = (value: string) => new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
@@ -24,6 +44,13 @@ function formatWindow(start?: string, end?: string) {
 function syncLabel(value?: string) {
   if (!value) return "Not synced yet";
   return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+}
+
+function elapsedLabel(since?: string) {
+  if (!since) return "";
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(since).getTime()) / 60000));
+  if (minutes < 60) return `${minutes} min`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
 function navigationUrl(job: DriverJob) {
@@ -87,26 +114,31 @@ export default function DriverHome() {
   const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [locationActive, setLocationActive] = useState(() => isLocationReporting());
   const [locationBannerDismissed, setLocationBannerDismissed] = useState(false);
-  const driverEmployeeId = getStoredDriverSession()?.employeeId;
-  const [unread, setUnread] = useState(() => (driverEmployeeId ? getUnreadTotalFromCache(driverEmployeeId) : 0));
+  const [workday, setWorkday] = useState<DriverWorkdayStatus>(() => getCachedWorkdayStatus());
+  const [downtimePromptOpen, setDowntimePromptOpen] = useState(false);
+  const [downtimeVehicleId, setDowntimeVehicleId] = useState<string>("");
+  const [downtimeReason, setDowntimeReason] = useState<VehicleDowntimeReason>("mechanical");
+  const [, setClockTick] = useState(0);
+
+  const vehicles = useMemo(() => loadPricingSettings().vehicles.filter((vehicle) => vehicle.isActive !== false), []);
 
   const refresh = async () => setToday(await loadDriverToday());
 
   useEffect(() => {
     void refresh();
-    // Hydrate threads so the Messages badge is accurate, then track changes.
-    if (driverEmployeeId) void getThreads(driverEmployeeId).then(() => setUnread(getUnreadTotalFromCache(driverEmployeeId)));
-    const updateUnread = () => setUnread(driverEmployeeId ? getUnreadTotalFromCache(driverEmployeeId) : 0);
-    window.addEventListener(DISPATCH_MESSAGES_EVENT, updateUnread);
-    const unsubMessages = subscribeToMessages(updateUnread);
+    void fetchWorkdayStatus().then(setWorkday);
     const updateOnline = () => setOnline(navigator.onLine);
     const updateData = () => void refresh();
     const updateLocation = () => setLocationActive(isLocationReporting());
+    const updateWorkday = () => setWorkday(getCachedWorkdayStatus());
     window.addEventListener("online", updateOnline);
     window.addEventListener("offline", updateOnline);
     window.addEventListener("jobs-updated", updateData);
     window.addEventListener("driver-data-updated", updateData);
     window.addEventListener("driver-location-reporting-changed", updateLocation);
+    window.addEventListener(DRIVER_WORKDAY_EVENT, updateWorkday);
+    // Keeps the meal break / downtime elapsed labels honest.
+    const tick = window.setInterval(() => setClockTick((value) => value + 1), 60_000);
 
     // Resume GPS reporting if the driver already granted permission during
     // activation (the prompt itself only ever shows on the activation flow).
@@ -120,10 +152,10 @@ export default function DriverHome() {
       window.removeEventListener("jobs-updated", updateData);
       window.removeEventListener("driver-data-updated", updateData);
       window.removeEventListener("driver-location-reporting-changed", updateLocation);
-      window.removeEventListener(DISPATCH_MESSAGES_EVENT, updateUnread);
-      unsubMessages();
+      window.removeEventListener(DRIVER_WORKDAY_EVENT, updateWorkday);
+      window.clearInterval(tick);
     };
-  }, [driverEmployeeId]);
+  }, []);
 
   const stats = useMemo(() => {
     const jobs = [today?.activeJob, ...(today?.upcomingJobs ?? []), ...(today?.completedJobs ?? [])].filter(Boolean) as DriverJob[];
@@ -134,18 +166,49 @@ export default function DriverHome() {
     };
   }, [today]);
 
+  const toggleMealBreak = async () => {
+    try {
+      const next = workday.mealBreakStartedAt ? await endMealBreak() : await startMealBreak();
+      setWorkday(next);
+    } catch {
+      toast.error("Couldn't update your break right now.");
+    }
+  };
+
+  const openDowntimePrompt = () => {
+    setDowntimeVehicleId(today?.activeJob?.vehicleId ?? vehicles[0]?.id ?? "");
+    setDowntimeReason("mechanical");
+    setDowntimePromptOpen(true);
+  };
+
+  const beginDowntime = async () => {
+    try {
+      const next = await startVehicleDowntime(downtimeVehicleId || undefined, downtimeReason);
+      setWorkday(next);
+      setDowntimePromptOpen(false);
+    } catch {
+      toast.error("Couldn't report the downtime right now.");
+    }
+  };
+
+  const finishDowntime = async () => {
+    try {
+      setWorkday(await endVehicleDowntime());
+    } catch {
+      toast.error("Couldn't update the downtime right now.");
+    }
+  };
+
   if (!today) {
     return <div className="min-h-dvh bg-background p-4 text-sm text-muted-foreground">Loading today...</div>;
   }
 
   return (
     <div className="min-h-dvh bg-muted/30 pb-24">
-      <header className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-4 backdrop-blur">
-        <div className="mx-auto flex max-w-md items-center justify-between gap-3">
-          <div>
-            <div className="text-sm text-muted-foreground">Driver</div>
-            <h1 className="text-2xl font-bold">Today</h1>
-          </div>
+      <header className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
+        <div className="mx-auto grid max-w-md grid-cols-[2.25rem_1fr_2.25rem] items-center">
+          <span />
+          <img src="/rejunk-logo.svg" alt="Rejunk" className="mx-auto h-10 w-auto max-w-[140px]" />
           <Button variant="outline" size="icon" onClick={() => void refresh()} aria-label="Refresh jobs">
             <RefreshCw className="size-4" />
           </Button>
@@ -189,6 +252,74 @@ export default function DriverHome() {
           </div>
         </section>
 
+        <section className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => void toggleMealBreak()}
+              className={cn(
+                "flex h-16 flex-col items-center justify-center gap-1 rounded-lg border text-sm font-semibold transition-colors",
+                workday.mealBreakStartedAt
+                  ? "border-amber-300 bg-amber-100 text-amber-900"
+                  : "border-border bg-background text-foreground hover:bg-muted",
+              )}
+            >
+              <span className="flex items-center gap-1.5">
+                {workday.mealBreakStartedAt ? <span aria-hidden>🍔</span> : <Sandwich className="size-4" />}
+                {workday.mealBreakStartedAt ? "End Break" : "Meal Break"}
+              </span>
+              {workday.mealBreakStartedAt && (
+                <span className="text-xs font-normal">On break · {elapsedLabel(workday.mealBreakStartedAt)}</span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => (workday.downtimeStartedAt ? void finishDowntime() : openDowntimePrompt())}
+              className={cn(
+                "flex h-16 flex-col items-center justify-center gap-1 rounded-lg border text-sm font-semibold transition-colors",
+                workday.downtimeStartedAt
+                  ? "border-red-300 bg-red-100 text-red-900"
+                  : "border-border bg-background text-foreground hover:bg-muted",
+              )}
+            >
+              <span className="flex items-center gap-1.5">
+                <Wrench className="size-4" />
+                {workday.downtimeStartedAt ? "End Downtime" : "Downtime"}
+              </span>
+              {workday.downtimeStartedAt && (
+                <span className="text-xs font-normal">
+                  Vehicle down · {elapsedLabel(workday.downtimeStartedAt)}
+                </span>
+              )}
+            </button>
+          </div>
+          {downtimePromptOpen && !workday.downtimeStartedAt && (
+            <div className="space-y-2 rounded-lg border border-border bg-background p-3">
+              <div className="text-sm font-semibold">Which vehicle is down?</div>
+              <Select value={downtimeVehicleId} onValueChange={setDowntimeVehicleId}>
+                <SelectTrigger className="h-11"><SelectValue placeholder="Pick a vehicle" /></SelectTrigger>
+                <SelectContent>
+                  {vehicles.map((vehicle) => (
+                    <SelectItem key={vehicle.id} value={vehicle.id}>{vehicle.vehicleName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={downtimeReason} onValueChange={(value) => setDowntimeReason(value as VehicleDowntimeReason)}>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {DOWNTIME_REASONS.map((reason) => (
+                    <SelectItem key={reason.value} value={reason.value}>{reason.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="ghost" className="h-11" onClick={() => setDowntimePromptOpen(false)}>Cancel</Button>
+                <Button className="h-11" onClick={() => void beginDowntime()}>Start Downtime</Button>
+              </div>
+            </div>
+          )}
+        </section>
+
         {today.activeJob && (
           <section className="space-y-3">
             <h2 className="text-sm font-semibold uppercase text-muted-foreground">Active job</h2>
@@ -209,23 +340,7 @@ export default function DriverHome() {
         </section>
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 px-4 py-3 backdrop-blur">
-        <div className="mx-auto grid max-w-md grid-cols-3 gap-2 text-xs font-medium">
-          <Link href="/driver" className="flex flex-col items-center gap-1 rounded-md bg-primary/10 py-2 text-primary"><CheckCircle2 className="size-5" />Today</Link>
-          <Link href="/driver/messages" className="flex flex-col items-center gap-1 rounded-md py-2 text-muted-foreground">
-            <span className="relative">
-              <MessageSquare className="size-5" />
-              {unread > 0 && (
-                <span className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
-                  {unread > 99 ? "99+" : unread}
-                </span>
-              )}
-            </span>
-            Messages
-          </Link>
-          <Link href="/driver/profile" className="flex flex-col items-center gap-1 rounded-md py-2 text-muted-foreground"><UserRound className="size-5" />Profile</Link>
-        </div>
-      </nav>
+      <DriverBottomNav active="today" />
     </div>
   );
 }

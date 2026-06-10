@@ -10,6 +10,38 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
 
 ---
 
+## 2026-06-09 — Driver app simplified: five buttons, no micro-step tracking
+
+**Decision**
+The driver job page dropped the enterprise-grade status machine. Drivers see one linear flow —
+**On My Way → Start My Time → Pause/Complete → Resume** (`paused` is a new `DriverJobStatus`) —
+rendered as a compact status strip instead of the old "Next Action" card. The Report Issue and
+Dispatch Activity cards were deleted: driver → dispatch problems go through messaging (the Msg
+button / job thread), and status-change history is dispatch-side noise. Disposal collapsed to an
+info display (facility short-code + waste-stream code) with a single "Change facility" picker for
+diverts. DriverHome got a centered Rejunk logo header plus **Meal Break** and **Vehicle Downtime**
+toggles that write to `driver_sessions` (migration `202606090003`, applied live), so the dispatch
+map shows 🍔 / 🔧 overlays in real time for free. `/driver/profile` replaced its placeholder:
+personal info, PIN change (verifies the current PIN against `driver_activations`), current
+vehicle, app info, sign out.
+
+**Rejected**
+- Keeping a separate issue-report form — redundant with messaging; one path for problems.
+- Per-trip disposal step buttons (Route/Arrived/Unloading/Complete/Reject) — dispatch-level
+  tracking the driver never used; the driver only needs WHERE to dump and a way to divert.
+- Removing the intermediate statuses (`loaded`, `en_route_to_disposal`, `dumping`, ...) from the
+  type — they stay for dispatch-side tracking; the driver UI just never offers them, and jobs
+  parked in them by dispatch still show Pause/Complete.
+
+**Constraints / Open risks**
+- Meal break is per-driver, downtime is per-vehicle, pause is per-job — three different scopes,
+  deliberately: break/downtime live on `driver_sessions`, pause on the job.
+- `jobs.status` is unconstrained text in the DB, so `paused` needed no jobs-table migration.
+- Blocking issues (dispatch hold) still freeze the status strip until released — that safety
+  behavior survived the simplification.
+
+---
+
 ## 2026-06-09 — Messages page repurposed: internal driver ↔ dispatch chat, not customer SMS
 
 **Decision**

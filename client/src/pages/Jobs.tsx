@@ -57,6 +57,7 @@ const statusTabs: Array<"all" | JobStatus> = [
   "en_route",
   "arrived",
   "in_progress",
+  "paused",
   "loaded",
   "delayed",
   "issue",

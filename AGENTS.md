@@ -112,6 +112,20 @@ hashes interchangeable with the Express endpoints). Activated drivers report GPS
 rendering profile-colored markers (helpers in `Map.tsx`). Subcontractors never get activation ("SMS only").
 RLS exposes only the last 24h of location history; dispatch treats >5 min of silence as offline.
 
+### Driver UX: simplified status flow, workday toggles, profile
+The driver job page (`pages/driver/DriverJobDetail.tsx`) is deliberately simple: a status strip with one
+linear flow — assigned → en_route ("On My Way") → in_progress ("Start My Time") ⇄ paused → completed.
+`paused` is a real `DriverJobStatus`; the richer intermediate statuses (`loaded`, `en_route_to_disposal`,
+`dumping`, …) remain in the type for dispatch-side use but the driver UI never offers them. There is no
+issue-report form and no activity feed on the driver side — problems go through messaging (the job
+thread), and a blocking issue still freezes the strip until dispatch releases the driver. Disposal shows a
+facility short-code + waste-stream code with a "Change facility" picker (`updateDisposalEventFacility`).
+DriverHome has **Meal Break** / **Vehicle Downtime** toggles (per-driver / per-vehicle, NOT per-job)
+stored on `driver_sessions` (workday helpers in `lib/driverStorage.ts`, event `driver-workday-updated`);
+the dispatch map overlays 🍔 / 🔧 on driver markers and the Drivers panel shows elapsed time.
+`/driver/profile` (`DriverProfile.tsx`) handles PIN change (`updateDriverPin` in `driverSession.ts`) and
+sign-out; the bottom nav is the shared `components/DriverBottomNav.tsx`.
+
 ### Driver ↔ dispatch messaging
 `/messages` (dispatch console) and `/driver/messages` (driver app) are a live internal chat replacing the
 team's group text — **not customer SMS** (the old A2P 10DLC customer-messaging page was deleted). Three
@@ -174,6 +188,10 @@ also added `driver_sessions` to the `supabase_realtime` publication.
 `202606090002_dispatch_messages.sql` (driver ↔ dispatch messaging: `dispatch_threads`,
 `dispatch_thread_participants`, `dispatch_messages`) **IS applied to the live DB** (2026-06-09). Also
 standalone/additive; adds `dispatch_threads` + `dispatch_messages` to the `supabase_realtime` publication.
+
+`202606090003_driver_workday_status.sql` (meal break + vehicle downtime columns on `driver_sessions`)
+**IS applied to the live DB** (2026-06-09). Additive only; the new `paused` job status needed no DB change
+because `jobs.status` is unconstrained text.
 
 ## Deployment
 

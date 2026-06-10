@@ -48,6 +48,10 @@ type SessionRow = {
   last_lng: number | null;
   last_heading: number | null;
   is_online: boolean;
+  meal_break_started_at?: string | null;
+  downtime_started_at?: string | null;
+  downtime_vehicle_id?: string | null;
+  downtime_reason?: string | null;
   session_token?: string | null;
   created_at: string;
 };
@@ -78,6 +82,10 @@ export function mapSessionRow(row: SessionRow): DriverSession {
     lastLng: row.last_lng ?? undefined,
     lastHeading: row.last_heading ?? undefined,
     isOnline: row.is_online,
+    mealBreakStartedAt: row.meal_break_started_at ?? undefined,
+    downtimeStartedAt: row.downtime_started_at ?? undefined,
+    downtimeVehicleId: row.downtime_vehicle_id ?? undefined,
+    downtimeReason: row.downtime_reason ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -107,7 +115,7 @@ export async function fetchDriverAppStatuses(): Promise<Record<string, DriverApp
       .order("created_at", { ascending: false }),
     supabase
       .from("driver_sessions")
-      .select("id, employee_id, activation_id, display_name, last_seen_at, last_lat, last_lng, last_heading, is_online, created_at")
+      .select("id, employee_id, activation_id, display_name, last_seen_at, last_lat, last_lng, last_heading, is_online, meal_break_started_at, downtime_started_at, downtime_vehicle_id, downtime_reason, created_at")
       .not("session_token", "is", null)
       .order("created_at", { ascending: false }),
   ]);
@@ -130,7 +138,7 @@ export async function fetchLiveDriverSessions(): Promise<DriverSession[]> {
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from("driver_sessions")
-    .select("id, employee_id, activation_id, display_name, last_seen_at, last_lat, last_lng, last_heading, is_online, created_at")
+    .select("id, employee_id, activation_id, display_name, last_seen_at, last_lat, last_lng, last_heading, is_online, meal_break_started_at, downtime_started_at, downtime_vehicle_id, downtime_reason, created_at")
     .not("session_token", "is", null)
     .or(`is_online.eq.true,last_seen_at.gte.${oneHourAgo}`)
     .order("created_at", { ascending: false });
