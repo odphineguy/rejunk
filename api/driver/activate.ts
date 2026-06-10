@@ -53,15 +53,13 @@ function buildActivationEmailHtml(payload: ActivationEmailPayload) {
   <body style="margin:0;padding:0;background:#f4f6f3;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#1c1c1c">
     <div style="max-width:520px;margin:0 auto;padding:24px 16px">
       <div style="background:#ffffff;border-radius:12px;border:1px solid #e2e6df;overflow:hidden">
-        <div style="padding:24px 24px 4px;text-align:center">
-          <!-- The logo badge has its pine background baked into the PNG, and the
-               header around it is left uncolored on purpose: Gmail dark mode
-               re-lightens fixed dark backgrounds (pine's teal hue turns icy
-               blue), so the badge is the only fixed-color element. Accent color
-               elsewhere is moss #155e3f — a true-green hue that Gmail's
-               inversion turns mint instead of blue. -->
-          <img src="${DEFAULT_BASE_URL}/rejunk-email-logo.png" alt="Rejunk" height="96" style="height:96px;width:auto" />
-        </div>
+        <!-- The header band is an IMAGE (pine bg + lime logo baked in), not a
+             CSS background: Gmail dark mode re-lightens fixed dark backgrounds
+             (pine's teal hue turns icy blue) but never recolors images, so the
+             band stays on-brand edge to edge in both modes. Accent color
+             elsewhere is moss #155e3f — a true-green hue that Gmail's
+             inversion turns mint instead of blue. -->
+        <img src="${DEFAULT_BASE_URL}/rejunk-email-header.png" alt="Rejunk" width="520" style="display:block;width:100%;height:auto" />
         <div style="padding:28px 24px">
           <h1 style="margin:0 0 12px;font-size:20px">Activate Your Rejunk Driver App</h1>
           <p style="margin:0 0 16px;font-size:15px;line-height:1.5">Hi ${greetingName}, your dispatcher set you up with the Rejunk driver app. Use this activation key to get started:</p>
