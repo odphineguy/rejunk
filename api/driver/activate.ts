@@ -21,8 +21,9 @@ interface ActivationEmailPayload {
   expiresAt?: string;
 }
 
-// Unverified domains can only send from Resend's shared sender. Set RESEND_FROM
-// once the rejunk domain is verified in Resend.
+// Production sends from dispatch@dispatchai.help via RESEND_FROM (domain
+// verified in Resend 2026-06-10; set in Vercel env + local .env). This default
+// is only the fallback when RESEND_FROM is missing.
 const DEFAULT_FROM = "Rejunk Dispatch <onboarding@resend.dev>";
 const DEFAULT_BASE_URL = "https://rejunk.vercel.app";
 
