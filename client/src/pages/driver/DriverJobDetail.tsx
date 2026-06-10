@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useRoute } from "wouter";
-import { AlertTriangle, ArrowLeft, Camera, MessageSquare, Navigation, Phone, Send, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Camera, Check, MessageSquare, Navigation, Phone, Send, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { JobStatusBadge } from "@/components/JobBadges";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -89,7 +88,8 @@ function wasteStreamCode(materialType?: string) {
 
 type StripAction = { label: string; to: DriverJobStatus; variant?: "default" | "outline" };
 
-/** The driver's whole flow: On My Way → Start My Time → Pause/Complete → Resume. */
+/** The driver's whole flow: On My Way → Start My Time → Pause/Complete → Resume.
+ *  No Arrived tap — Start My Time covers it (en_route → in_progress directly). */
 function stripFor(status: DriverJobStatus): { actions: StripAction[]; info?: string } {
   switch (status) {
     case "assigned":
@@ -162,6 +162,20 @@ export default function DriverJobDetail() {
     // A blocking issue freezes the flow until dispatch releases the driver.
     return blockingIssue ? { ...base, actions: [] } : base;
   }, [status, blockingIssue]);
+
+  const stops = useMemo(() => (job ? customerStops(job.stops) : []), [job]);
+  // The address already shows at the top, so single-stop jobs get no stop list.
+  const showStops = stops.length > 1;
+  // "Green Waste" shouldn't appear as service type AND item AND stop name —
+  // if the items or stops already carry it, the items section is where it lives.
+  const serviceTypeDuplicated = useMemo(() => {
+    if (!job?.serviceType) return false;
+    const value = job.serviceType.toLowerCase();
+    return (
+      job.items.some((item) => item.name.toLowerCase() === value) ||
+      job.stops.some((stop) => stop.name.toLowerCase() === value)
+    );
+  }, [job]);
 
   const changeStatus = async (next: DriverJobStatus, buttonLabel: string) => {
     if (!job) return;
@@ -239,18 +253,17 @@ export default function DriverJobDetail() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-md space-y-4 px-4 py-4">
+      <main className="mx-auto max-w-md px-4 py-4">
         <Card>
           <CardContent className="space-y-4 p-4">
             <div>
-              <div className="text-sm font-medium text-muted-foreground">{job.serviceType}</div>
-              <div className="mt-1 text-xl font-bold">{formatWindow(job.scheduledStart, job.scheduledEnd)}</div>
-              <div className="mt-2 text-sm">{formatDriverAddress(job)}</div>
+              {!serviceTypeDuplicated && job.serviceType && (
+                <div className="text-sm font-medium text-muted-foreground">{job.serviceType}</div>
+              )}
+              <div className="text-xl font-bold">{formatWindow(job.scheduledStart, job.scheduledEnd)}</div>
+              <div className="mt-1 text-sm">{formatDriverAddress(job)}</div>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
-              <span>{job.vehicleName || "Vehicle TBD"}</span>
-              <span>{job.assignedCrew.map((crew) => crew.displayName).join(", ") || "Crew TBD"}</span>
-            </div>
+
             <div className="grid grid-cols-3 gap-2">
               <Button asChild variant="outline" className="h-12">
                 <a href={`https://maps.apple.com/?daddr=${encodeURIComponent(formatDriverAddress(job))}`}>
@@ -266,11 +279,7 @@ export default function DriverJobDetail() {
                 <MessageSquare className="size-4" />Msg
               </Button>
             </div>
-          </CardContent>
-        </Card>
 
-        {(blockingIssue || strip.actions.length > 0 || strip.info) && (
-          <div className="space-y-3">
             {blockingIssue && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-950">
                 <div className="flex gap-2 font-bold">
@@ -290,7 +299,7 @@ export default function DriverJobDetail() {
               </div>
             )}
             {!blockingIssue && strip.info && (
-              <p className="px-1 text-sm text-muted-foreground">{strip.info}</p>
+              <p className="text-sm text-muted-foreground">{strip.info}</p>
             )}
             {strip.actions.length > 0 && (
               <div className={strip.actions.length > 1 ? "grid grid-cols-2 gap-2" : ""}>
@@ -306,164 +315,146 @@ export default function DriverJobDetail() {
                 ))}
               </div>
             )}
-          </div>
-        )}
 
-        <Card>
-          <CardHeader>
-              <CardTitle className="text-base">Service Locations</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 p-4 pt-0">
-            {customerStops(job.stops).map((stop) => (
-              <div key={stop.id} className="rounded-lg border border-border bg-background p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-xs font-semibold uppercase text-muted-foreground">Service location {stop.stopOrder} · {label(stop.stopType)}</div>
-                    <div className="mt-1 font-semibold">{stop.name}</div>
-                    <div className="text-sm text-muted-foreground">{[stop.address, stop.city, stop.zip].filter(Boolean).join(", ")}</div>
-                    {stop.instructions && <div className="mt-2 text-sm">{stop.instructions}</div>}
+            {showStops && (
+              <div className="space-y-2 border-t border-border pt-4">
+                <div className="text-xs font-semibold uppercase text-muted-foreground">Stops</div>
+                {stops.map((stop) => (
+                  <div key={stop.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background p-3 text-sm">
+                    <div className="min-w-0">
+                      <div className="font-semibold">{stop.stopOrder} · {label(stop.stopType)}</div>
+                      <div className="truncate text-muted-foreground">{[stop.address, stop.city].filter(Boolean).join(", ") || stop.name}</div>
+                      {stop.instructions && <div className="mt-1 text-xs">{stop.instructions}</div>}
+                    </div>
+                    {stop.status === "completed" ? (
+                      <span className="flex shrink-0 items-center gap-1 text-sm font-medium text-green-700"><Check className="size-4" />Done</span>
+                    ) : (
+                      <Button
+                        className="h-10 shrink-0"
+                        disabled={Boolean(blockingIssue)}
+                        onClick={() => void updateStopStatus(stop, "completed").then(refresh).catch((error) => toast.error(error instanceof Error ? error.message : "Stop update failed"))}
+                      >
+                        Complete
+                      </Button>
+                    )}
                   </div>
-                  <Badge variant="outline">{label(stop.status)}</Badge>
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <Button variant="outline" className="h-11" onClick={() => void updateStopStatus(stop, "arrived").then(refresh)}>Arrived</Button>
-                  <Button className="h-11" disabled={Boolean(blockingIssue)} onClick={() => void updateStopStatus(stop, "completed").then(refresh).catch((error) => toast.error(error instanceof Error ? error.message : "Stop update failed"))}>Complete</Button>
-                </div>
+                ))}
               </div>
-            ))}
-          </CardContent>
-        </Card>
+            )}
 
-        {job.disposalEvents.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Disposal</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 p-4 pt-0">
-              {disposalEvents(job.disposalEvents).map((event) => (
-                <div key={event.id} className="rounded-lg border border-border bg-background p-3">
-                  <div className="text-xs font-semibold uppercase text-muted-foreground">Disposal trip {event.sequenceNumber}</div>
-                  <div className="mt-2 space-y-1 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Facility: </span>
-                      <span className="font-semibold">{facilityCode(event.facilityName)} · {event.facilityName || "Facility TBD"}</span>
+            {job.items.length > 0 && (
+              <div className="space-y-2 border-t border-border pt-4">
+                {job.items.length > 1 && <div className="text-xs font-semibold uppercase text-muted-foreground">Items</div>}
+                {job.items.map((item) => (
+                  <label key={item.id} className="flex items-start gap-3 rounded-lg border border-border bg-background p-3">
+                    <Checkbox
+                      checked={["loaded", "delivered", "completed"].includes(item.status)}
+                      onCheckedChange={(checked) => void updateItemStatus(item, checked ? "loaded" : "pending").then(refresh)}
+                      className="mt-1"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-semibold">{item.quantity}x {item.name}</span>
+                      <span className="block text-sm text-muted-foreground">
+                        {[item.heavy && "heavy", item.oversized && "oversized", item.fragile && "fragile", item.disassemblyRequired && "disassembly"].filter(Boolean).join(", ") || "standard item"}
+                      </span>
+                      {item.instructions && <span className="mt-1 block text-sm">{item.instructions}</span>}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {job.disposalEvents.length > 0 && (
+              <div className="space-y-3 border-t border-border pt-4">
+                {disposalEvents(job.disposalEvents).map((event) => (
+                  <div key={event.id} className="text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="text-muted-foreground">Disposal: </span>
+                        <span className="font-semibold">{facilityCode(event.facilityName)} · {event.facilityName || "Facility TBD"}</span>
+                      </div>
+                      {changingFacilityFor !== event.id && (
+                        <Button variant="outline" size="sm" className="h-9 shrink-0" onClick={() => setChangingFacilityFor(event.id)}>
+                          Change
+                        </Button>
+                      )}
                     </div>
-                    {event.facilityAddress && <div className="text-muted-foreground">{event.facilityAddress}</div>}
-                    <div>
-                      <span className="text-muted-foreground">Waste stream: </span>
+                    <div className="mt-1">
+                      <span className="text-muted-foreground">Stream: </span>
                       <span className="font-semibold">{wasteStreamCode(event.materialType)}</span>
-                      {event.materialType && <span className="text-muted-foreground"> · {label(event.materialType)}</span>}
                     </div>
+                    {changingFacilityFor === event.id && (
+                      <div className="mt-2 space-y-2">
+                        <Select onValueChange={(facilityId) => void changeFacility(event.id, facilityId)}>
+                          <SelectTrigger className="h-11"><SelectValue placeholder="Pick the new facility" /></SelectTrigger>
+                          <SelectContent>
+                            {facilities.map((facility) => (
+                              <SelectItem key={facility.id} value={facility.id}>
+                                {facilityCode(facility.facilityName)} · {facility.facilityName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button variant="ghost" className="h-9 w-full" onClick={() => setChangingFacilityFor(null)}>Cancel</Button>
+                      </div>
+                    )}
                   </div>
-                  {changingFacilityFor === event.id ? (
-                    <div className="mt-3 space-y-2">
-                      <Select onValueChange={(facilityId) => void changeFacility(event.id, facilityId)}>
-                        <SelectTrigger className="h-11"><SelectValue placeholder="Pick the new facility" /></SelectTrigger>
-                        <SelectContent>
-                          {facilities.map((facility) => (
-                            <SelectItem key={facility.id} value={facility.id}>
-                              {facilityCode(facility.facilityName)} · {facility.facilityName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button variant="ghost" className="h-9 w-full" onClick={() => setChangingFacilityFor(null)}>Cancel</Button>
-                    </div>
-                  ) : (
-                    <Button variant="outline" className="mt-3 h-11 w-full" onClick={() => setChangingFacilityFor(event.id)}>
-                      Change facility
-                    </Button>
-                  )}
+                ))}
+              </div>
+            )}
+
+            {(job.notes || job.internalNotes) && (
+              <div className="space-y-2 border-t border-border pt-4 text-sm">
+                {job.notes && <p>{job.notes}</p>}
+                {job.internalNotes && <p className="rounded-md bg-amber-50 p-3 text-amber-950">{job.internalNotes}</p>}
+              </div>
+            )}
+
+            <div className="space-y-3 border-t border-border pt-4">
+              <div className="grid grid-cols-2 gap-2">
+                <Select value={photoType} onValueChange={(value) => setPhotoType(value as JobPhotoType)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{photoTypes.map((type) => <SelectItem key={type} value={type}>{label(type)}</SelectItem>)}</SelectContent>
+                </Select>
+                <Select value={photoVisibility} onValueChange={(value) => setPhotoVisibility(value as JobPhotoVisibility)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="internal">internal</SelectItem>
+                    <SelectItem value="customer_ready">customer ready</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Input value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="Caption optional" />
+              <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => void handlePhoto(event)} />
+              <Button className="h-12 w-full" onClick={() => fileRef.current?.click()} disabled={uploading}>
+                {uploading ? <Upload className="size-4 animate-pulse" /> : <Camera className="size-4" />}
+                {uploading ? "Uploading..." : "Capture or upload photo"}
+              </Button>
+              {job.photos.length > 0 && (
+                <div className="grid grid-cols-3 gap-2">
+                  {job.photos.map((photo) => (
+                    <a key={photo.id} href={photo.publicUrl || "#"} className="aspect-square overflow-hidden rounded-md border bg-muted" title={`${label(photo.photoType)} · ${time(photo.createdAt)}`}>
+                      {photo.publicUrl ? <img src={photo.publicUrl} alt={photo.caption || label(photo.photoType)} className="h-full w-full object-cover" /> : <div className="p-2 text-xs">{label(photo.photoType)}</div>}
+                    </a>
+                  ))}
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Items</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 p-4 pt-0">
-            {job.items.map((item) => (
-              <label key={item.id} className="flex items-start gap-3 rounded-lg border border-border bg-background p-3">
-                <Checkbox
-                  checked={["loaded", "delivered", "completed"].includes(item.status)}
-                  onCheckedChange={(checked) => void updateItemStatus(item, checked ? "loaded" : "pending").then(refresh)}
-                  className="mt-1"
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block font-semibold">{item.quantity}x {item.name}</span>
-                  <span className="block text-sm text-muted-foreground">
-                    {[item.heavy && "heavy", item.oversized && "oversized", item.fragile && "fragile", item.disassemblyRequired && "disassembly"].filter(Boolean).join(", ") || "standard item"}
-                  </span>
-                  {item.instructions && <span className="mt-1 block text-sm">{item.instructions}</span>}
-                </span>
-              </label>
-            ))}
-          </CardContent>
-        </Card>
-
-        {(job.notes || job.internalNotes) && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Instructions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 p-4 pt-0 text-sm">
-              {job.notes && <p>{job.notes}</p>}
-              {job.internalNotes && <p className="rounded-md bg-amber-50 p-3 text-amber-950">{job.internalNotes}</p>}
-            </CardContent>
-          </Card>
-        )}
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Photos</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 p-4 pt-0">
-            <div className="grid grid-cols-2 gap-2">
-              <Select value={photoType} onValueChange={(value) => setPhotoType(value as JobPhotoType)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{photoTypes.map((type) => <SelectItem key={type} value={type}>{label(type)}</SelectItem>)}</SelectContent>
-              </Select>
-              <Select value={photoVisibility} onValueChange={(value) => setPhotoVisibility(value as JobPhotoVisibility)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="internal">internal</SelectItem>
-                  <SelectItem value="customer_ready">customer ready</SelectItem>
-                </SelectContent>
-              </Select>
+              )}
             </div>
-            <Input value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="Caption optional" />
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => void handlePhoto(event)} />
-            <Button className="h-12 w-full" onClick={() => fileRef.current?.click()} disabled={uploading}>
-              {uploading ? <Upload className="size-4 animate-pulse" /> : <Camera className="size-4" />}
-              {uploading ? "Uploading..." : "Capture or upload photo"}
-            </Button>
-            <div className="grid grid-cols-3 gap-2">
-              {job.photos.map((photo) => (
-                <a key={photo.id} href={photo.publicUrl || "#"} className="aspect-square overflow-hidden rounded-md border bg-muted" title={`${label(photo.photoType)} · ${time(photo.createdAt)}`}>
-                  {photo.publicUrl ? <img src={photo.publicUrl} alt={photo.caption || label(photo.photoType)} className="h-full w-full object-cover" /> : <div className="p-2 text-xs">{label(photo.photoType)}</div>}
-                </a>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card id="message-dispatch">
-          <CardHeader>
-            <CardTitle className="text-base">Message Dispatch</CardTitle>
-            <Link
-              href={jobThreadId ? `/driver/messages?thread=${jobThreadId}` : "/driver/messages"}
-              className="text-sm font-medium text-[#2d5016] hover:underline"
-            >
-              Open full conversation →
-            </Link>
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="flex gap-2">
-              <Input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Message dispatch" />
-              <Button size="icon" onClick={() => void submitMessage()} aria-label="Send message"><Send className="size-4" /></Button>
+            <div id="message-dispatch" className="space-y-2 border-t border-border pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-semibold uppercase text-muted-foreground">Message dispatch</div>
+                <Link
+                  href={jobThreadId ? `/driver/messages?thread=${jobThreadId}` : "/driver/messages"}
+                  className="text-sm font-medium text-[#2d5016] hover:underline"
+                >
+                  Open full conversation →
+                </Link>
+              </div>
+              <div className="flex gap-2">
+                <Input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Message dispatch" />
+                <Button size="icon" onClick={() => void submitMessage()} aria-label="Send message"><Send className="size-4" /></Button>
+              </div>
             </div>
           </CardContent>
         </Card>
