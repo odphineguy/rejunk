@@ -14,7 +14,7 @@ export const facilityTypeLabels: Record<FacilityType, string> = {
 
 export const facilityTypeColors: Record<FacilityType, string> = {
   landfill: "#8b6f47",
-  transfer_station: "#2d5016",
+  transfer_station: "#155e3f",
   recycling_center: "#3c8f5f",
   specialty_facility: "#c97c5c",
   scrap_yard: "#59636e",

@@ -449,7 +449,7 @@ export default function DriverJobDetail() {
                 <div className="text-xs font-semibold uppercase text-muted-foreground">Message dispatch</div>
                 <Link
                   href={jobThreadId ? `/driver/messages?thread=${jobThreadId}` : "/driver/messages"}
-                  className="text-sm font-medium text-[#2d5016] hover:underline"
+                  className="text-sm font-medium text-[#155e3f] hover:underline"
                 >
                   Open full conversation →
                 </Link>

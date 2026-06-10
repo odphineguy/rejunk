@@ -92,7 +92,7 @@ function EventsHeader({ crumb, actions }: { crumb?: string; actions?: ReactNode 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2 text-base">
           <CalendarDays className="size-5 text-foreground" />
-          <Link href="/events" className="text-foreground hover:text-[#2d5016]">
+          <Link href="/events" className="text-foreground hover:text-[#155e3f]">
             Events
           </Link>
           {crumb && (
@@ -138,7 +138,7 @@ function EventsList() {
     <>
       <EventsHeader
         actions={
-          <Button asChild className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
+          <Button asChild className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]">
             <Link href="/events/new">
               <Plus className="size-4" />
               Create Event
@@ -153,7 +153,7 @@ function EventsList() {
               <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-foreground" />
               <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search..." className="h-12 rounded-lg pl-10 pr-10" />
               {query && (
-                <button type="button" onClick={() => setQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#7180a8]" aria-label="Clear event search">
+                <button type="button" onClick={() => setQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8a9180]" aria-label="Clear event search">
                   <X className="size-4" />
                 </button>
               )}
@@ -198,7 +198,7 @@ function EventsList() {
                     <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
                       <Button variant="ghost" size="icon" asChild aria-label={`Open ${item.title}`}>
                         <Link href={`/events/${item.id}`}>
-                          <MoreHorizontal className="size-4 text-[#7180a8]" />
+                          <MoreHorizontal className="size-4 text-[#8a9180]" />
                         </Link>
                       </Button>
                       <Button variant="ghost" size="icon" onClick={(event) => removeEvent(event, item.id)} aria-label={`Delete ${item.title}`}>
@@ -276,7 +276,7 @@ function EventEditor({ mode, eventId }: { mode?: "new"; eventId?: string }) {
         crumb={isNew ? "New Event" : event.title || "Event Details"}
         actions={
           <>
-            <Button onClick={persistEvent} className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
+            <Button onClick={persistEvent} className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]">
               {isNew ? <Plus className="size-4" /> : <Save className="size-4" />}
               {isNew ? "Create Event" : "Save"}
             </Button>
@@ -305,7 +305,7 @@ function EventEditor({ mode, eventId }: { mode?: "new"; eventId?: string }) {
               <div className="flex items-center gap-3">
                 <span className="text-sm font-semibold">Private</span>
                 <Switch checked={event.private ?? true} onCheckedChange={(isPrivate) => updateEvent({ private: isPrivate })} />
-                <span className="text-sm text-[#7180a8]">Only shown to you</span>
+                <span className="text-sm text-[#8a9180]">Only shown to you</span>
               </div>
               <TextField label="Title" value={event.title ?? ""} placeholder="Enter event title" onChange={(title) => updateEvent({ title })} />
               <div>
@@ -404,7 +404,7 @@ function TextField({
       <FieldLabel>{label}</FieldLabel>
       <div className="relative">
         <Input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className={cn("h-12 rounded-lg", Icon && "pr-11")} />
-        {Icon && <Icon className="absolute right-4 top-1/2 size-4 -translate-y-1/2 text-[#7180a8]" />}
+        {Icon && <Icon className="absolute right-4 top-1/2 size-4 -translate-y-1/2 text-[#8a9180]" />}
       </div>
     </div>
   );
@@ -438,7 +438,7 @@ function MapPreview() {
           <span className="bg-card px-5 py-3 font-bold">Map</span>
           <span className="bg-muted px-5 py-3 text-muted-foreground">Satellite</span>
         </div>
-        <div className="absolute bottom-2 left-3 font-bold text-[#2d5016]">Google</div>
+        <div className="absolute bottom-2 left-3 font-bold text-[#155e3f]">Google</div>
         <div className="absolute right-3 top-3 flex size-10 items-center justify-center rounded-md bg-card shadow-sm">
           <Plus className="size-5 rotate-45" />
         </div>

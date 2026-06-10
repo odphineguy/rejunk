@@ -186,7 +186,7 @@ function MobileAppCell({
     );
   }
   return (
-    <Button size="sm" variant="outline" className="border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]" onClick={() => onActivate(request)}>
+    <Button size="sm" variant="outline" className="border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]" onClick={() => onActivate(request)}>
       Activate
     </Button>
   );
@@ -246,7 +246,7 @@ function ActivateDriverFlow({ request, onClose }: { request: ActivationRequest |
             <AlertDialogCancel disabled={sending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               disabled={sending}
-              className="bg-[#2d5016] text-white hover:bg-[#234011]"
+              className="bg-[#155e3f] text-white hover:bg-[#0c4a30]"
               onClick={(event) => {
                 event.preventDefault();
                 void confirmActivation();
@@ -340,7 +340,7 @@ function AppAccessPanel({ employee }: { employee: EmployeeRecord }) {
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
-              className="rounded-lg border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]"
+              className="rounded-lg border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]"
               onClick={() =>
                 setActivationRequest({ employee, hasActiveSession: Boolean(session && activation?.status === "activated") })
               }
@@ -401,7 +401,7 @@ function EmployeesHeader({ crumb, actions }: { crumb?: string; actions?: ReactNo
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2 text-base">
           <UsersRound className="size-5 text-foreground" />
-          <Link href="/employees" className="text-foreground hover:text-[#2d5016]">
+          <Link href="/employees" className="text-foreground hover:text-[#155e3f]">
             Employees
           </Link>
           {crumb && (
@@ -467,7 +467,7 @@ function EmployeeList() {
                 Create Subcontractor
               </Link>
             </Button>
-            <Button asChild className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
+            <Button asChild className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]">
               <Link href="/employees/new">
                 <Plus className="size-4" />
                 Create Employee
@@ -483,7 +483,7 @@ function EmployeeList() {
               <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-foreground" />
               <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search..." className="h-12 rounded-lg pl-10 pr-10" />
               {query && (
-                <button type="button" onClick={() => setQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#7180a8]" aria-label="Clear employee search">
+                <button type="button" onClick={() => setQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8a9180]" aria-label="Clear employee search">
                   <X className="size-4" />
                 </button>
               )}
@@ -542,7 +542,7 @@ function EmployeeList() {
                     <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
                       <Button variant="ghost" size="icon" asChild aria-label={`Open ${employeeName(employee)}`}>
                         <Link href={`/employees/${employee.id}`}>
-                          <MoreHorizontal className="size-4 text-[#7180a8]" />
+                          <MoreHorizontal className="size-4 text-[#8a9180]" />
                         </Link>
                       </Button>
                       <Button variant="ghost" size="icon" onClick={(event) => removeEmployee(event, employee.id)} aria-label={`Delete ${employeeName(employee)}`}>
@@ -555,7 +555,7 @@ function EmployeeList() {
                   <TableRow>
                     <TableCell colSpan={9} className="h-72 text-center">
                       <div className="flex flex-col items-center justify-center gap-4">
-                        <BriefcaseBusiness className="size-8 text-[#2d5016]" />
+                        <BriefcaseBusiness className="size-8 text-[#155e3f]" />
                         <span className="text-sm text-muted-foreground">No employees match that search.</span>
                       </div>
                     </TableCell>
@@ -628,7 +628,7 @@ function EmployeeEditor({ mode, employeeId }: { mode?: "new"; employeeId?: strin
         crumb={isNew ? (employee.type === "subcontractor" ? "New Subcontractor" : "New Employee") : employeeName(employee as EmployeeRecord)}
         actions={
           <>
-            <Button onClick={persistEmployee} className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
+            <Button onClick={persistEmployee} className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]">
               {isNew ? <Plus className="size-4" /> : <Save className="size-4" />}
               {isNew ? `Create ${employee.type === "subcontractor" ? "Subcontractor" : "Employee"}` : "Save"}
             </Button>
@@ -710,11 +710,11 @@ function EmployeeTypePanel({
       <div className="mb-6 flex flex-col gap-4 rounded-lg bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-4">
           <div className="flex size-16 shrink-0 items-center justify-center rounded-lg bg-muted">
-            <ImageIcon className="size-6 text-[#7180a8]" />
+            <ImageIcon className="size-6 text-[#8a9180]" />
           </div>
           <div className="min-w-0">
             <div className="font-semibold">Profile Picture</div>
-            <div className="mt-1 truncate text-xs text-[#7180a8]">{employee.profilePictureName || "JPG or PNG, file size no more than 10MB"}</div>
+            <div className="mt-1 truncate text-xs text-[#8a9180]">{employee.profilePictureName || "JPG or PNG, file size no more than 10MB"}</div>
           </div>
         </div>
         <Input
@@ -730,7 +730,7 @@ function EmployeeTypePanel({
             event.currentTarget.value = "";
           }}
         />
-        <Button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
+        <Button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]">
           <Upload className="size-4" />
           Upload
         </Button>
@@ -748,9 +748,9 @@ function EmployeeTypePanel({
         />
       </div>
 
-      <div className="mt-6 rounded-lg border border-[#2d5016] bg-[#2d5016]/5 p-5 text-sm leading-6">
+      <div className="mt-6 rounded-lg border border-[#155e3f] bg-[#155e3f]/5 p-5 text-sm leading-6">
         <div className="flex gap-3">
-          <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-[#2d5016] text-white">
+          <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-[#155e3f] text-white">
             <Info className="size-3" />
           </span>
           <div>
@@ -810,7 +810,7 @@ function EmployeeAttachments({
             event.currentTarget.value = "";
           }}
         />
-        <Button type="button" variant="outline" onClick={() => attachmentInputRef.current?.click()} className="rounded-lg border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]">
+        <Button type="button" variant="outline" onClick={() => attachmentInputRef.current?.click()} className="rounded-lg border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]">
           <Upload className="size-4" />
           Upload Files
         </Button>
@@ -820,10 +820,10 @@ function EmployeeAttachments({
           employee.attachments.map((attachment) => (
             <div key={attachment.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-4">
               <div className="flex min-w-0 items-center gap-3">
-                <FileText className="size-5 shrink-0 text-[#7180a8]" />
+                <FileText className="size-5 shrink-0 text-[#8a9180]" />
                 <div className="min-w-0">
                   <div className="truncate font-medium">{attachment.name}</div>
-                  <div className="text-xs text-[#7180a8]">{formatFileSize(attachment.size)}</div>
+                  <div className="text-xs text-[#8a9180]">{formatFileSize(attachment.size)}</div>
                 </div>
               </div>
               <Button variant="ghost" size="icon" onClick={() => removeAttachment(attachment.id)} aria-label={`Remove ${attachment.name}`}>
@@ -832,7 +832,7 @@ function EmployeeAttachments({
             </div>
           ))
         ) : (
-          <p className="text-sm text-[#7180a8]">No files uploaded.</p>
+          <p className="text-sm text-[#8a9180]">No files uploaded.</p>
         )}
       </div>
     </Panel>
@@ -850,7 +850,7 @@ function ProfileColorPicker({ value, onChange, compact = false }: { value: Profi
               key={color.value}
               type="button"
               onClick={() => onChange(color.value)}
-              className={cn("flex size-8 items-center justify-center rounded-md ring-offset-2 transition", color.className, value === color.value && "ring-2 ring-[#2d5016]")}
+              className={cn("flex size-8 items-center justify-center rounded-md ring-offset-2 transition", color.className, value === color.value && "ring-2 ring-[#155e3f]")}
               aria-label={`Use ${color.label} profile color`}
             >
               {value === color.value && <Check className="size-4 text-white" />}
@@ -925,7 +925,7 @@ function TextField({
       <FieldLabel>{label}</FieldLabel>
       <div className="relative">
         <Input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className="h-12 rounded-lg pr-11" />
-        <Icon className="absolute right-4 top-1/2 size-4 -translate-y-1/2 text-[#7180a8]" />
+        <Icon className="absolute right-4 top-1/2 size-4 -translate-y-1/2 text-[#8a9180]" />
       </div>
     </div>
   );

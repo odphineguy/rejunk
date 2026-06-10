@@ -65,16 +65,16 @@ export default function DriverLogin() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-muted/30">
-      <header className="border-b border-border bg-[#2d5016] px-4 py-4">
+      <header className="border-b border-[var(--pine-line)] bg-[#052a2b] px-4 py-4">
         <div className="mx-auto flex max-w-md items-center justify-center">
-          <img src="/rejunk-logo.svg" alt="Rejunk" className="h-12" />
+          <img src="/rejunk.png" alt="Rejunk" className="h-12 w-auto" />
         </div>
       </header>
 
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-6 px-4 py-8">
         <section className="space-y-5 rounded-lg border border-border bg-background p-6 shadow-sm">
           <div className="space-y-2 text-center">
-            <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#2d5016]/10 text-[#2d5016]">
+            <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#155e3f]/10 text-[#155e3f]">
               <LockKeyhole className="size-6" />
             </span>
             <h1 className="text-xl font-bold">
@@ -120,7 +120,7 @@ export default function DriverLogin() {
           )}
 
           {!identity && (
-            <Button className="h-12 w-full bg-[#2d5016] text-white hover:bg-[#234011]" onClick={() => navigate("/driver/activate")}>
+            <Button className="h-12 w-full bg-[#155e3f] text-white hover:bg-[#0c4a30]" onClick={() => navigate("/driver/activate")}>
               I have an activation key
             </Button>
           )}

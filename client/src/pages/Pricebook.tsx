@@ -172,7 +172,7 @@ export default function Pricebook() {
               <Plus className="size-4" />
               Create Category
             </Button>
-            <Button className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]" onClick={() => setEditingItem(newItemDraft(pricebook.categories[0]?.id))}>
+            <Button className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]" onClick={() => setEditingItem(newItemDraft(pricebook.categories[0]?.id))}>
               <Plus className="size-4" />
               Create Item
             </Button>
@@ -187,7 +187,7 @@ export default function Pricebook() {
               <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-foreground" />
               <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search..." className="h-12 rounded-lg pl-10 pr-10" />
               {query && (
-                <button type="button" onClick={() => setQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#7180a8]" aria-label="Clear pricebook search">
+                <button type="button" onClick={() => setQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8a9180]" aria-label="Clear pricebook search">
                   <X className="size-4" />
                 </button>
               )}
@@ -278,7 +278,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
       onClick={onClick}
       className={cn(
         "min-w-28 border-b-4 border-transparent px-4 py-4 text-left text-base font-medium transition-colors",
-        active ? "border-[#2d5016] text-[#2d5016]" : "text-foreground hover:text-[#2d5016]",
+        active ? "border-[#155e3f] text-[#155e3f]" : "text-foreground hover:text-[#155e3f]",
       )}
     >
       {children}
@@ -289,7 +289,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 function ImagePlaceholder({ label }: { label: string }) {
   return (
     <div className="flex size-12 items-center justify-center rounded-lg bg-muted" aria-label={label}>
-      <FileImage className="size-5 text-[#7180a8]" />
+      <FileImage className="size-5 text-[#8a9180]" />
     </div>
   );
 }
@@ -345,7 +345,7 @@ function ItemsTable({
                 <Trash2 className="size-4 text-red-500" />
               </Button>
               <Button variant="ghost" size="icon" onClick={() => onEdit(item)} aria-label={`Edit ${item.name}`}>
-                <Edit3 className="size-4 text-[#7180a8]" />
+                <Edit3 className="size-4 text-[#8a9180]" />
               </Button>
             </TableCell>
           </TableRow>
@@ -387,7 +387,7 @@ function CategoriesTable({
                 <Trash2 className="size-4 text-red-500" />
               </Button>
               <Button variant="ghost" size="icon" onClick={() => onEdit(category)} aria-label={`Edit ${category.name}`}>
-                <Edit3 className="size-4 text-[#7180a8]" />
+                <Edit3 className="size-4 text-[#8a9180]" />
               </Button>
             </TableCell>
           </TableRow>
@@ -405,7 +405,7 @@ function UploadRow({ onSelect }: { onSelect: (fileName: string) => void }) {
         <ImagePlaceholder label="Upload preview" />
         <div>
           <div className="font-semibold">Upload Image</div>
-          <div className="mt-1 text-xs text-[#7180a8]">JPG or PNG, file size no more than 5MB</div>
+          <div className="mt-1 text-xs text-[#8a9180]">JPG or PNG, file size no more than 5MB</div>
         </div>
       </div>
       <Input
@@ -420,7 +420,7 @@ function UploadRow({ onSelect }: { onSelect: (fileName: string) => void }) {
           event.currentTarget.value = "";
         }}
       />
-      <Button type="button" onClick={() => inputRef.current?.click()} className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
+      <Button type="button" onClick={() => inputRef.current?.click()} className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]">
         <Upload className="size-4" />
         Select
       </Button>
@@ -582,7 +582,7 @@ function ItemDialog({
             <XCircle className="size-4" />
             Cancel
           </Button>
-          <Button onClick={() => onSave(draft)} className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
+          <Button onClick={() => onSave(draft)} className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]">
             {isEditing ? <Save className="size-4" /> : <Plus className="size-4" />}
             {isEditing ? "Save" : "Create Item"}
           </Button>
@@ -635,7 +635,7 @@ function CategoryDialog({
             <XCircle className="size-4" />
             Cancel
           </Button>
-          <Button onClick={() => onSave(draft)} className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
+          <Button onClick={() => onSave(draft)} className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]">
             {isEditing ? <CheckCircle2 className="size-4" /> : <Plus className="size-4" />}
             {isEditing ? "Submit" : "Create Category"}
           </Button>

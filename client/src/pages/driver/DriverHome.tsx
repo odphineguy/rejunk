@@ -205,11 +205,17 @@ export default function DriverHome() {
 
   return (
     <div className="min-h-dvh bg-muted/30 pb-24">
-      <header className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
+      <header className="sticky top-0 z-10 border-b border-[var(--pine-line)] bg-[#052a2b] px-4 py-3">
         <div className="mx-auto grid max-w-md grid-cols-[2.25rem_1fr_2.25rem] items-center">
           <span />
-          <img src="/rejunk-logo.svg" alt="Rejunk" className="mx-auto h-20 w-auto max-w-[280px]" />
-          <Button variant="outline" size="icon" onClick={() => void refresh()} aria-label="Refresh jobs">
+          <img src="/rejunk.png" alt="Rejunk" className="mx-auto h-16 w-auto max-w-[280px]" />
+          <Button
+            variant="outline"
+            size="icon"
+            className="border-[var(--pine-line)] bg-white/5 text-[#cfe3d8] hover:bg-white/10 hover:text-white"
+            onClick={() => void refresh()}
+            aria-label="Refresh jobs"
+          >
             <RefreshCw className="size-4" />
           </Button>
         </div>
@@ -217,7 +223,7 @@ export default function DriverHome() {
 
       <main className="mx-auto max-w-md space-y-5 px-4 py-5">
         {locationActive && !locationBannerDismissed && (
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-[#2d5016]/30 bg-[#2d5016]/5 px-3 py-2 text-sm text-[#2d5016]">
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-[#155e3f]/30 bg-[#155e3f]/5 px-3 py-2 text-sm text-[#155e3f]">
             <span>📍 Location sharing active</span>
             <button type="button" onClick={() => setLocationBannerDismissed(true)} aria-label="Dismiss location banner">
               <X className="size-4" />

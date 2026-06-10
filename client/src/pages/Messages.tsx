@@ -111,13 +111,13 @@ function ThreadAvatar({ thread, employees }: { thread: DispatchThread; employees
   }
   if (thread.threadType === "broadcast") {
     return (
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#eef4e8] text-[#2d5016]">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#e8f5e4] text-[#155e3f]">
         <Megaphone className="size-5" />
       </span>
     );
   }
   const driver = directThreadDriver(thread, employees);
-  return <PersonAvatar name={driver ? employeeName(driver) : thread.title} color={driver ? profileColorHex(driver.profileColor) : "#2d5016"} />;
+  return <PersonAvatar name={driver ? employeeName(driver) : thread.title} color={driver ? profileColorHex(driver.profileColor) : "#155e3f"} />;
 }
 
 function PersonAvatar({ name, color, size = "size-10" }: { name: string; color: string; size?: string }) {
@@ -250,7 +250,7 @@ export default function Messages() {
             <MessageSquare className="size-5" />
             Messages
           </div>
-          <Button onClick={() => setNewMessageOpen(true)} className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
+          <Button onClick={() => setNewMessageOpen(true)} className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]">
             <Plus className="size-4" />
             New Message
           </Button>
@@ -271,7 +271,7 @@ export default function Messages() {
                 onClick={() => setActiveId(thread.id)}
                 className={cn(
                   "w-full rounded-md border border-border p-3 text-left transition-colors",
-                  activeThread?.id === thread.id ? "bg-[#eef4e8]" : "bg-card hover:bg-muted/40",
+                  activeThread?.id === thread.id ? "bg-[#e8f5e4]" : "bg-card hover:bg-muted/40",
                 )}
               >
                 <div className="flex items-center gap-3">
@@ -288,7 +288,7 @@ export default function Messages() {
                       <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
                         {thread.lastMessage ? `${thread.lastMessage.senderName}: ${thread.lastMessage.body}` : "No messages yet"}
                       </span>
-                      {thread.unreadCount > 0 && <span className="size-2.5 shrink-0 rounded-full bg-[#2d5016]" aria-label={`${thread.unreadCount} unread`} />}
+                      {thread.unreadCount > 0 && <span className="size-2.5 shrink-0 rounded-full bg-[#155e3f]" aria-label={`${thread.unreadCount} unread`} />}
                     </div>
                   </div>
                 </div>
@@ -310,7 +310,7 @@ export default function Messages() {
                   <h1 className="truncate text-lg font-bold">{activeThread.title}</h1>
                   <ThreadTypeBadge thread={activeThread} />
                   {activeThread.threadType === "job" && activeThread.jobId && (
-                    <Link href={`/jobs/${activeThread.jobId}`} className="flex shrink-0 items-center gap-1 text-sm font-medium text-[#2d5016] hover:underline">
+                    <Link href={`/jobs/${activeThread.jobId}`} className="flex shrink-0 items-center gap-1 text-sm font-medium text-[#155e3f] hover:underline">
                       Open job <ExternalLink className="size-3.5" />
                     </Link>
                   )}
@@ -348,7 +348,7 @@ export default function Messages() {
                               <div className="mb-1 flex items-center gap-2">
                                 <PersonAvatar
                                   name={message.senderName}
-                                  color={sender ? profileColorHex(sender.profileColor) : "#2d5016"}
+                                  color={sender ? profileColorHex(sender.profileColor) : "#155e3f"}
                                   size="size-6"
                                 />
                                 <span className="text-sm font-semibold">{message.senderName}</span>
@@ -357,7 +357,7 @@ export default function Messages() {
                             <div
                               className={cn(
                                 "max-w-[75%] rounded-lg px-4 py-3 text-sm leading-relaxed",
-                                outgoing ? "bg-[#eef4e8] text-foreground" : "border border-border bg-card",
+                                outgoing ? "bg-[#e8f5e4] text-foreground" : "border border-border bg-card",
                               )}
                             >
                               {message.body}
@@ -384,7 +384,7 @@ export default function Messages() {
                     placeholder="Write a message (⌘ or Windows + Enter to send)"
                     className="h-12 rounded-lg pr-12"
                   />
-                  <button type="button" onClick={() => void sendDraft()} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#2d5016]" aria-label="Send message">
+                  <button type="button" onClick={() => void sendDraft()} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#155e3f]" aria-label="Send message">
                     <ArrowUp className="size-5 fill-current" />
                   </button>
                 </div>
@@ -488,7 +488,7 @@ function NewMessageDialog({
               onClick={() => setMode("direct")}
               className={cn(
                 "flex items-center justify-center gap-2 rounded-lg border px-3 py-3 text-sm font-medium",
-                mode === "direct" ? "border-[#2d5016] bg-[#eef4e8] text-[#2d5016]" : "border-border bg-card hover:bg-muted/40",
+                mode === "direct" ? "border-[#155e3f] bg-[#e8f5e4] text-[#155e3f]" : "border-border bg-card hover:bg-muted/40",
               )}
             >
               <UserRound className="size-4" />
@@ -499,7 +499,7 @@ function NewMessageDialog({
               onClick={() => setMode("broadcast")}
               className={cn(
                 "flex items-center justify-center gap-2 rounded-lg border px-3 py-3 text-sm font-medium",
-                mode === "broadcast" ? "border-[#2d5016] bg-[#eef4e8] text-[#2d5016]" : "border-border bg-card hover:bg-muted/40",
+                mode === "broadcast" ? "border-[#155e3f] bg-[#e8f5e4] text-[#155e3f]" : "border-border bg-card hover:bg-muted/40",
               )}
             >
               <Megaphone className="size-4" />
@@ -531,7 +531,7 @@ function NewMessageDialog({
             </div>
           )}
 
-          <Button onClick={() => void create()} disabled={creating} className="h-11 w-full rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
+          <Button onClick={() => void create()} disabled={creating} className="h-11 w-full rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]">
             <Send className="size-4" />
             {creating ? "Starting..." : "Start Conversation"}
           </Button>
@@ -606,7 +606,7 @@ function JobContext({ thread, employees }: { thread: DispatchThread; employees: 
           <CrewDots names={crewNames} employees={employees} />
         </ContextRow>
       </div>
-      <Button asChild className="mt-5 h-10 w-full rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
+      <Button asChild className="mt-5 h-10 w-full rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]">
         <Link href={`/jobs/${job.id}`}>Open Job</Link>
       </Button>
     </div>
@@ -668,7 +668,7 @@ function DriverContext({ thread, employees }: { thread: DispatchThread; employee
       <div className="mt-4 space-y-4">
         <ContextRow label="Phone">
           {driver.phone ? (
-            <a href={`tel:${driver.phone}`} className="flex items-center gap-2 text-[#2d5016] hover:underline">
+            <a href={`tel:${driver.phone}`} className="flex items-center gap-2 text-[#155e3f] hover:underline">
               <Phone className="size-4" />
               {driver.phone}
             </a>
@@ -679,7 +679,7 @@ function DriverContext({ thread, employees }: { thread: DispatchThread; employee
         <ContextRow label="Email">{driver.email || "Not provided"}</ContextRow>
         <ContextRow label="Current job">
           {currentJob ? (
-            <Link href={`/jobs/${currentJob.id}`} className="text-[#2d5016] hover:underline">
+            <Link href={`/jobs/${currentJob.id}`} className="text-[#155e3f] hover:underline">
               {currentJob.jobNumber} · {currentJob.customerName}
             </Link>
           ) : (
@@ -698,7 +698,7 @@ function BroadcastContext({ thread, employees }: { thread: DispatchThread; emplo
   return (
     <div className="rounded-lg border border-border bg-card p-5">
       <div className="flex items-center gap-2 border-b border-border pb-4 font-bold">
-        <Megaphone className="size-4 text-[#2d5016]" />
+        <Megaphone className="size-4 text-[#155e3f]" />
         Broadcast
       </div>
       <div className="mt-4 space-y-4">

@@ -27,12 +27,14 @@ export function DriverBottomNav({ active }: { active: "today" | "messages" | "pr
 
   const itemClass = (key: "today" | "messages" | "profile") =>
     cn(
-      "flex flex-col items-center gap-1 rounded-md py-2",
-      active === key ? "bg-primary/10 text-primary" : "text-muted-foreground",
+      "flex flex-col items-center gap-1 rounded-[10px] border border-transparent py-2 transition-colors",
+      active === key
+        ? "border-[rgba(131,226,130,0.28)] bg-[rgba(131,226,130,0.14)] text-[var(--moss)]"
+        : "text-[var(--pine-text)]",
     );
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 px-4 py-3 backdrop-blur">
+    <nav className="sidebar-pine fixed inset-x-0 bottom-0 border-t border-[var(--pine-line)] px-4 py-3">
       <div className="mx-auto grid max-w-md grid-cols-3 gap-2 text-xs font-medium">
         <Link href="/driver" className={itemClass("today")}><CheckCircle2 className="size-5" />Today</Link>
         <Link href="/driver/messages" className={itemClass("messages")}>

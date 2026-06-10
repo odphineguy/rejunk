@@ -176,7 +176,7 @@ function SettingsTile({ card }: { card: SettingsCard }) {
   const Icon = card.icon;
   const disabled = card.href.startsWith("/settings/") && card.href !== "/settings";
   const className =
-    "group flex min-h-[98px] items-center gap-4 rounded-lg border border-border bg-card px-6 py-5 text-left shadow-sm transition-colors hover:border-[#2d5016]/40 hover:bg-muted/20";
+    "group flex min-h-[98px] items-center gap-4 rounded-lg border border-border bg-card px-6 py-5 text-left shadow-sm transition-colors hover:border-[#155e3f]/40 hover:bg-muted/20";
 
   const content = (
     <>

@@ -46,13 +46,13 @@ function ThreadIcon({ thread }: { thread: DispatchThread }) {
   }
   if (thread.threadType === "broadcast") {
     return (
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#eef4e8] text-[#2d5016]">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#e8f5e4] text-[#155e3f]">
         <Megaphone className="size-5" />
       </span>
     );
   }
   return (
-    <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#2d5016] text-sm font-bold text-white">D</span>
+    <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#155e3f] text-sm font-bold text-white">D</span>
   );
 }
 
@@ -186,7 +186,7 @@ export default function DriverMessages() {
           {activeThread.threadType === "job" && activeThread.jobId && (
             <Link
               href={`/driver/jobs/${activeThread.jobId}`}
-              className="mb-3 block rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-[#2d5016]"
+              className="mb-3 block rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-[#155e3f]"
             >
               {activeThread.title} — open job →
             </Link>
@@ -201,7 +201,7 @@ export default function DriverMessages() {
                   <div
                     className={cn(
                       "max-w-[80%] rounded-lg px-3.5 py-2.5 text-sm leading-relaxed",
-                      outgoing ? "bg-[#eef4e8]" : "border border-border bg-background",
+                      outgoing ? "bg-[#e8f5e4]" : "border border-border bg-background",
                     )}
                   >
                     {message.body}
@@ -226,7 +226,7 @@ export default function DriverMessages() {
               placeholder="Message"
               className="h-11"
             />
-            <Button size="icon" className="size-11 shrink-0 bg-[#2d5016] text-white hover:bg-[#234011]" onClick={() => void sendDraft()} aria-label="Send message">
+            <Button size="icon" className="size-11 shrink-0 bg-[#155e3f] text-white hover:bg-[#0c4a30]" onClick={() => void sendDraft()} aria-label="Send message">
               <Send className="size-4" />
             </Button>
           </div>
@@ -277,7 +277,7 @@ export default function DriverMessages() {
                   <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
                     {thread.lastMessage ? `${thread.lastMessage.senderName}: ${thread.lastMessage.body}` : "No messages yet"}
                   </span>
-                  {thread.unreadCount > 0 && <span className="size-2.5 shrink-0 rounded-full bg-[#2d5016]" aria-label={`${thread.unreadCount} unread`} />}
+                  {thread.unreadCount > 0 && <span className="size-2.5 shrink-0 rounded-full bg-[#155e3f]" aria-label={`${thread.unreadCount} unread`} />}
                 </div>
               </div>
             </div>
@@ -294,7 +294,7 @@ export default function DriverMessages() {
       <button
         type="button"
         onClick={() => void messageDispatch()}
-        className="fixed bottom-6 right-5 flex size-14 items-center justify-center rounded-full bg-[#2d5016] text-white shadow-lg hover:bg-[#234011]"
+        className="fixed bottom-6 right-5 flex size-14 items-center justify-center rounded-full bg-[#155e3f] text-white shadow-lg hover:bg-[#0c4a30]"
         aria-label="Message Dispatch"
       >
         <MessageSquarePlus className="size-6" />

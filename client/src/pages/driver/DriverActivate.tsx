@@ -116,9 +116,9 @@ export default function DriverActivate() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-muted/30">
-      <header className="border-b border-border bg-[#2d5016] px-4 py-4">
+      <header className="border-b border-[var(--pine-line)] bg-[#052a2b] px-4 py-4">
         <div className="mx-auto flex max-w-md items-center justify-center">
-          <img src="/rejunk-logo.svg" alt="Rejunk" className="h-12" />
+          <img src="/rejunk.png" alt="Rejunk" className="h-12 w-auto" />
         </div>
       </header>
 
@@ -126,7 +126,7 @@ export default function DriverActivate() {
         {step === "key" && (
           <section className="space-y-5 rounded-lg border border-border bg-background p-6 shadow-sm">
             <div className="space-y-2 text-center">
-              <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#2d5016]/10 text-[#2d5016]">
+              <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#155e3f]/10 text-[#155e3f]">
                 <KeyRound className="size-6" />
               </span>
               <h1 className="text-xl font-bold">Enter your activation key</h1>
@@ -147,7 +147,7 @@ export default function DriverActivate() {
             </div>
             {error && <p className="text-center text-sm font-medium text-destructive">{error}</p>}
             <Button
-              className="h-12 w-full bg-[#2d5016] text-white hover:bg-[#234011]"
+              className="h-12 w-full bg-[#155e3f] text-white hover:bg-[#0c4a30]"
               disabled={activationKey.length !== KEY_LENGTH || busy}
               onClick={() => void submitKey(activationKey)}
             >
@@ -160,7 +160,7 @@ export default function DriverActivate() {
         {step === "pin" && (
           <section className="space-y-5 rounded-lg border border-border bg-background p-6 shadow-sm">
             <div className="space-y-2 text-center">
-              <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#2d5016]/10 text-[#2d5016]">
+              <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#155e3f]/10 text-[#155e3f]">
                 <LockKeyhole className="size-6" />
               </span>
               <h1 className="text-xl font-bold">{confirming ? "Confirm your PIN" : "Set your PIN"}</h1>
@@ -217,7 +217,7 @@ export default function DriverActivate() {
         {step === "location" && (
           <section className="space-y-5 rounded-lg border border-border bg-background p-6 shadow-sm">
             <div className="space-y-2 text-center">
-              <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#2d5016]/10 text-[#2d5016]">
+              <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#155e3f]/10 text-[#155e3f]">
                 <MapPin className="size-6" />
               </span>
               <h1 className="text-xl font-bold">Allow location access</h1>
@@ -226,7 +226,7 @@ export default function DriverActivate() {
               </p>
             </div>
             {error && <p className="text-center text-sm font-medium text-destructive">{error}</p>}
-            <Button className="h-12 w-full bg-[#2d5016] text-white hover:bg-[#234011]" disabled={busy} onClick={requestLocation}>
+            <Button className="h-12 w-full bg-[#155e3f] text-white hover:bg-[#0c4a30]" disabled={busy} onClick={requestLocation}>
               {busy ? <Loader2 className="size-4 animate-spin" /> : <MapPin className="size-4" />}
               Allow location access
             </Button>
@@ -260,7 +260,7 @@ export default function DriverActivate() {
                 </p>
               )}
             </div>
-            <Button className="h-12 w-full bg-[#2d5016] text-white hover:bg-[#234011]" onClick={() => navigate("/driver")}>
+            <Button className="h-12 w-full bg-[#155e3f] text-white hover:bg-[#0c4a30]" onClick={() => navigate("/driver")}>
               Go to My Jobs
             </Button>
           </section>

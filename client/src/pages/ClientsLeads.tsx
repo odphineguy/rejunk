@@ -133,7 +133,7 @@ function PageHeader({
           <UsersRound className="size-5 text-foreground" />
           <Link
             href="/clients"
-            className="text-foreground hover:text-[#2d5016]"
+            className="text-foreground hover:text-[#155e3f]"
           >
             Clients & Leads
           </Link>
@@ -195,21 +195,21 @@ function ClientsList() {
           <>
             <Button
               variant="outline"
-              className="rounded-lg border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]"
+              className="rounded-lg border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]"
             >
               <Import className="size-4" />
               Import Clients
             </Button>
             <Button
               variant="outline"
-              className="rounded-lg border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]"
+              className="rounded-lg border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]"
             >
               <Upload className="size-4" />
               Export Clients
             </Button>
             <Button
               asChild
-              className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]"
+              className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]"
             >
               <Link href="/clients/new">
                 <Plus className="size-4" />
@@ -234,7 +234,7 @@ function ClientsList() {
                 <button
                   type="button"
                   onClick={() => setQuery("")}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#7180a8]"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8a9180]"
                   aria-label="Clear client search"
                 >
                   x
@@ -274,7 +274,7 @@ function ClientsList() {
                 className={cn(
                   "min-w-20 border-b-4 border-transparent px-4 py-4 text-left text-base font-medium capitalize transition-colors",
                   activeTab === tab
-                    ? "border-[#2d5016] text-[#2d5016]"
+                    ? "border-[#155e3f] text-[#155e3f]"
                     : "text-foreground hover:text-primary"
                 )}
               >
@@ -350,7 +350,7 @@ function ClientsList() {
                         aria-label={`Edit ${clientName(client)}`}
                       >
                         <Link href={`/clients/${client.id}`}>
-                          <Edit3 className="size-4 text-[#7180a8]" />
+                          <Edit3 className="size-4 text-[#8a9180]" />
                         </Link>
                       </Button>
                     </TableCell>
@@ -364,10 +364,10 @@ function ClientsList() {
                     >
                       <div className="flex flex-col items-center justify-center gap-6 text-base">
                         <div className="flex items-center gap-2">
-                          <FolderOpen className="size-5 text-[#2d5016]" />
+                          <FolderOpen className="size-5 text-[#155e3f]" />
                           There are no leads found. Please add some!
                         </div>
-                        <Button className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]">
+                        <Button className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]">
                           <Download className="size-4" />
                           Import Clients
                         </Button>
@@ -459,7 +459,7 @@ function ClientEditor({ mode }: { mode: "new" }) {
         actions={
           <Button
             onClick={createClient}
-            className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]"
+            className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]"
           >
             <Plus className="size-4" />
             Create Client
@@ -531,7 +531,7 @@ function ClientDetails({ clientId }: { clientId: string }) {
           <>
             <Button
               onClick={persistClient}
-              className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]"
+              className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]"
             >
               <Save className="size-4" />
               Save
@@ -592,20 +592,20 @@ function ClientDetails({ clientId }: { clientId: string }) {
               <>
                 <Button
                   variant="outline"
-                  className="rounded-full border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]"
+                  className="rounded-full border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]"
                 >
                   Send Card Request
                 </Button>
                 <Button
                   variant="outline"
-                  className="rounded-full border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]"
+                  className="rounded-full border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]"
                 >
                   Add Card
                 </Button>
               </>
             }
           >
-            <p className="text-sm text-[#7180a8]">No saved cards</p>
+            <p className="text-sm text-[#8a9180]">No saved cards</p>
           </DetailSection>
           <DetailSection
             icon={Wrench}
@@ -613,13 +613,13 @@ function ClientDetails({ clientId }: { clientId: string }) {
             actions={
               <Button
                 variant="outline"
-                className="rounded-full border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]"
+                className="rounded-full border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]"
               >
                 Create Job
               </Button>
             }
           >
-            <p className="text-sm text-[#7180a8]">No jobs added.</p>
+            <p className="text-sm text-[#8a9180]">No jobs added.</p>
           </DetailSection>
           <DetailSection
             icon={FileText}
@@ -627,13 +627,13 @@ function ClientDetails({ clientId }: { clientId: string }) {
             actions={
               <Button
                 variant="outline"
-                className="rounded-full border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]"
+                className="rounded-full border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]"
               >
                 Create Invoice
               </Button>
             }
           >
-            <p className="text-sm text-[#7180a8]">No invoices added.</p>
+            <p className="text-sm text-[#8a9180]">No invoices added.</p>
           </DetailSection>
           <DetailSection
             icon={FileText}
@@ -641,13 +641,13 @@ function ClientDetails({ clientId }: { clientId: string }) {
             actions={
               <Button
                 variant="outline"
-                className="rounded-full border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]"
+                className="rounded-full border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]"
               >
                 Create Estimate
               </Button>
             }
           >
-            <p className="text-sm text-[#7180a8]">No estimates added.</p>
+            <p className="text-sm text-[#8a9180]">No estimates added.</p>
           </DetailSection>
           <MoreFields draft={client} updateDraft={updateClient} />
           <DetailSection
@@ -656,13 +656,13 @@ function ClientDetails({ clientId }: { clientId: string }) {
             actions={
               <Button
                 variant="outline"
-                className="rounded-full border-[#2d5016] text-[#2d5016] hover:text-[#2d5016]"
+                className="rounded-full border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]"
               >
                 Upload
               </Button>
             }
           >
-            <p className="text-sm text-[#7180a8]">No attachments uploaded.</p>
+            <p className="text-sm text-[#8a9180]">No attachments uploaded.</p>
           </DetailSection>
         </div>
       </div>
@@ -916,14 +916,14 @@ function ContactLog({
           <Button
             onClick={submit}
             disabled={!text.trim()}
-            className="rounded-lg bg-[#2d5016] text-white hover:bg-[#234011]"
+            className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]"
           >
             <Plus className="size-4" />
             Add note
           </Button>
         </div>
         {ordered.length === 0 && !hasLegacy ? (
-          <p className="text-sm text-[#7180a8]">No contact logged yet.</p>
+          <p className="text-sm text-[#8a9180]">No contact logged yet.</p>
         ) : (
           <ul className="space-y-3">
             {ordered.map(entry => (
@@ -931,7 +931,7 @@ function ContactLog({
                 key={entry.id}
                 className="rounded-lg border border-border bg-muted/30 p-3"
               >
-                <div className="mb-1 text-xs font-medium text-[#7180a8]">
+                <div className="mb-1 text-xs font-medium text-[#8a9180]">
                   {formatLogTimestamp(entry.createdAt)}
                   {entry.author ? ` · ${entry.author}` : ""}
                 </div>
@@ -942,7 +942,7 @@ function ContactLog({
             ))}
             {hasLegacy && (
               <li className="rounded-lg border border-dashed border-border bg-muted/20 p-3">
-                <div className="mb-1 text-xs font-medium text-[#7180a8]">
+                <div className="mb-1 text-xs font-medium text-[#8a9180]">
                   {legacyDate ? formatLogTimestamp(legacyDate) : "Earlier"} ·
                   earlier note
                 </div>
@@ -1077,7 +1077,7 @@ function TextField({
           placeholder={placeholder}
           className="h-12 rounded-lg pr-11"
         />
-        <Icon className="absolute right-4 top-1/2 size-4 -translate-y-1/2 text-[#7180a8]" />
+        <Icon className="absolute right-4 top-1/2 size-4 -translate-y-1/2 text-[#8a9180]" />
       </div>
     </div>
   );

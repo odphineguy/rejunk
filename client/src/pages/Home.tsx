@@ -9,7 +9,7 @@ import { AlertCircle, Map as MapIcon, MapPin } from "lucide-react";
 
 /**
  * Design Philosophy: Eco-Conscious Organic
- * - Forest green primary color (#2d5016) for buttons and interactive elements
+ * - Forest green primary color (#155e3f) for buttons and interactive elements
  * - Warm earth brown (#8b6f47) for secondary accents
  * - Rounded corners (16px) for organic feel
  * - Smooth 300ms animations with ease-out timing

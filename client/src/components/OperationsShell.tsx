@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Bell,
@@ -33,7 +33,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { clientName, getClients } from "@/lib/clientStorage";
 import { DISPATCH_MESSAGES_EVENT, getThreads, getUnreadTotalFromCache, subscribeToMessages } from "@/lib/dispatchMessageStorage";
 import { employeeName, getEmployees } from "@/lib/employeeStorage";
@@ -167,18 +166,30 @@ function paymentRows(payments: PaymentRecord[]) {
 export function AppShell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [unread, setUnread] = useState(() => getUnreadTotalFromCache());
+  const [shellJobs, setShellJobs] = useState<Job[]>(() => getJobs());
 
   useEffect(() => {
     // Hydrate threads so the Messages badge is accurate, then track changes.
     void getThreads().then(() => setUnread(getUnreadTotalFromCache()));
     const updateUnread = () => setUnread(getUnreadTotalFromCache());
+    const updateJobs = () => setShellJobs(getJobs());
     window.addEventListener(DISPATCH_MESSAGES_EVENT, updateUnread);
+    window.addEventListener("jobs-updated", updateJobs);
     const unsubMessages = subscribeToMessages(updateUnread);
     return () => {
       window.removeEventListener(DISPATCH_MESSAGES_EVENT, updateUnread);
+      window.removeEventListener("jobs-updated", updateJobs);
       unsubMessages();
     };
   }, []);
+
+  const onRouteJobs = shellJobs.filter(
+    job => job.status === "on_my_way" || job.status === "in_progress"
+  ).length;
+  const activeJobs = shellJobs.filter(job =>
+    ["scheduled", "on_my_way", "in_progress"].includes(job.status)
+  ).length;
+  const crewPct = activeJobs > 0 ? Math.round((onRouteJobs / activeJobs) * 100) : 0;
 
   const unreadBadge =
     unread > 0 ? (
@@ -188,19 +199,31 @@ export function AppShell({ children }: { children: ReactNode }) {
     ) : null;
 
   return (
-    <div className="min-h-screen bg-muted/20 md:flex md:h-screen md:overflow-hidden">
-      <aside className="hidden w-[248px] shrink-0 border-r border-border bg-card md:flex md:h-screen md:flex-col">
-        <Link href="/" className="flex h-20 items-center px-6">
-          <img src="/rejunk-whites.png" alt="reJunk" className="h-20 w-auto" />
+    <div className="min-h-screen bg-background md:flex md:h-screen md:overflow-hidden">
+      <aside className="sidebar-pine hidden w-[268px] shrink-0 md:flex md:h-screen md:flex-col">
+        <Link
+          href="/"
+          className="block border-b border-[var(--pine-line)] px-5 pb-4 pt-5"
+        >
+          <img src="/rejunk.png" alt="Rejunk" className="h-14 w-auto rounded-xl" />
+          <div className="mt-2 px-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--pine-text-dim)]">
+            Field Ops Platform
+          </div>
         </Link>
 
-        <nav className="flex-1 space-y-6 overflow-y-auto border-t border-border px-4 py-6">
-          {navGroups.map(group => (
-            <div key={group.label} className="space-y-2">
-              <div className="px-2 text-xs font-medium text-muted-foreground">
+        <nav className="flex-1 overflow-y-auto px-3.5 py-3">
+          {navGroups.map((group, groupIndex) => (
+            <div key={group.label}>
+              <div
+                className={cn(
+                  "mb-2 flex items-center gap-2.5 px-2.5 text-[10px] font-extrabold uppercase tracking-[0.2em] text-[var(--pine-text-dim)]",
+                  groupIndex === 0 ? "mt-1" : "mt-5"
+                )}
+              >
                 {group.label}
+                <span className="h-px flex-1 bg-[var(--pine-line)]" />
               </div>
-              <div className="space-y-1">
+              <div>
                 {group.items.map(item => {
                   const Icon = item.icon;
                   const active =
@@ -211,15 +234,32 @@ export function AppShell({ children }: { children: ReactNode }) {
                       key={item.href}
                       href={item.href}
                       className={cn(
-                        "flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors",
+                        "relative mb-0.5 flex h-10 items-center gap-3 rounded-[10px] border border-transparent px-3 text-sm font-semibold transition-colors",
                         active
-                          ? "bg-primary/10 text-primary"
-                          : "text-foreground hover:bg-muted"
+                          ? "border-[rgba(131,226,130,0.28)] bg-gradient-to-r from-[rgba(131,226,130,0.16)] to-[rgba(131,226,130,0.05)] text-[#f3f7e9] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                          : "text-[var(--pine-text)] hover:bg-white/5 hover:text-[#e8ead9]"
                       )}
                     >
-                      <Icon className="size-4" />
+                      {active && (
+                        <span className="absolute -left-3.5 top-1/2 h-[22px] w-[3px] -translate-y-1/2 rounded-r-[3px] bg-[var(--moss)] shadow-[0_0_10px_rgba(131,226,130,0.6)]" />
+                      )}
+                      <Icon
+                        className={cn(
+                          "size-[18px] shrink-0",
+                          active ? "text-[var(--moss)]" : "opacity-75"
+                        )}
+                      />
                       {item.label}
-                      {item.href === "/messages" && unreadBadge}
+                      {item.href === "/messages" && unread > 0 && (
+                        <span className="ml-auto rounded-full border border-[rgba(201,139,60,0.35)] bg-[rgba(201,139,60,0.18)] px-2 py-px font-display text-[11px] font-bold text-[#deb277]">
+                          {unread > 99 ? "99+" : unread}
+                        </span>
+                      )}
+                      {item.href === "/jobs" && onRouteJobs > 0 && (
+                        <span className="ml-auto rounded-full border border-[rgba(131,226,130,0.3)] bg-[rgba(131,226,130,0.15)] px-2 py-px font-display text-[11px] font-bold text-[#b8e89e]">
+                          {onRouteJobs} live
+                        </span>
+                      )}
                     </Link>
                   );
                 })}
@@ -227,28 +267,45 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           ))}
         </nav>
+
+        <div className="mx-3.5 mb-4 rounded-[14px] border border-[var(--pine-line)] bg-gradient-to-br from-[var(--pine-800)] to-[var(--pine-850)] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+          <div className="flex items-center gap-2.5">
+            <span className="pulse-dot size-2 rounded-full bg-[var(--moss)] shadow-[0_0_8px_rgba(131,226,130,0.7)]" />
+            <span className="text-xs font-bold text-[#e3e9da]">Crews on route</span>
+            <span className="ml-auto font-display text-[11px] font-semibold text-[var(--pine-text-dim)]">
+              {onRouteJobs} / {activeJobs}
+            </span>
+          </div>
+          <div className="mt-2.5 h-[5px] overflow-hidden rounded bg-white/10">
+            <span
+              className="block h-full rounded bg-gradient-to-r from-[var(--moss-deep)] to-[var(--moss)] transition-[width] duration-1000"
+              style={{ width: `${crewPct}%` }}
+            />
+          </div>
+        </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col md:h-screen md:overflow-hidden">
-        <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur md:static">
-          <div className="flex min-h-20 flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between md:px-6">
+        <header className="sticky top-0 z-30 border-b border-border bg-card/85 backdrop-blur-md md:static">
+          <div className="flex min-h-[68px] flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between md:px-6">
             <GlobalSearch />
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
               <AddNewMenu />
               <button
-                className="flex size-10 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted"
+                className="relative flex size-11 items-center justify-center rounded-[11px] border border-border bg-card text-muted-foreground transition-colors hover:border-[var(--line-strong)] hover:bg-muted"
                 aria-label="Notifications"
               >
-                <Bell className="size-5" />
+                <Bell className="size-[18px]" />
+                <span className="absolute right-2.5 top-2 size-2 rounded-full border-2 border-card bg-[var(--amber)]" />
               </button>
               <button
-                className="flex h-10 items-center gap-2 rounded-full px-2 text-sm font-medium text-primary transition-colors hover:bg-muted"
+                className="flex h-11 items-center gap-2 rounded-[11px] border border-border bg-card px-2 text-sm font-medium transition-colors hover:border-[var(--line-strong)] hover:bg-muted"
                 aria-label="Account menu"
               >
-                <span className="flex size-7 items-center justify-center rounded-full bg-primary/10">
+                <span className="flex size-8 items-center justify-center rounded-[9px] bg-gradient-to-br from-[#1f7a4a] to-[#052a2b] font-display text-[11px] font-extrabold tracking-wide text-[#dde8c2]">
                   AM
                 </span>
-                <ChevronDown className="size-4 text-foreground" />
+                <ChevronDown className="size-4 text-muted-foreground" />
               </button>
             </div>
           </div>
@@ -303,9 +360,15 @@ export function OperationsShell({
     <>
       <div className="border-b border-border bg-background px-4 py-5 md:px-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-2 text-base">
-            {Icon && <Icon className="size-5 text-foreground" />}
-            <span className="font-medium text-foreground">{title}</span>
+          <div className="flex items-center gap-3">
+            {Icon && (
+              <span className="flex size-9 items-center justify-center rounded-[10px] border border-border bg-card text-[var(--moss-deep)] shadow-sm">
+                <Icon className="size-[18px]" />
+              </span>
+            )}
+            <span className="font-display text-xl font-bold tracking-tight text-foreground">
+              {title}
+            </span>
           </div>
           {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
         </div>
@@ -319,10 +382,8 @@ export function AddNewMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button className="h-10 gap-2 rounded-lg bg-[#2d5016] px-2 pr-4 text-white hover:bg-[#234011]">
-          <span className="flex size-8 items-center justify-center rounded-md bg-[#1a2f0d]">
-            <Plus className="size-5" />
-          </span>
+        <Button className="h-11 gap-2 rounded-[11px] border border-[#11604a] bg-gradient-to-br from-[#0f5132] to-[#052a2b] px-4 text-sm font-bold text-[#eafbe7] shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_4px_12px_-4px_rgba(5,42,43,0.5)] transition hover:from-[#136040] hover:to-[#063537]">
+          <Plus className="size-4" />
           <span>Add New</span>
         </Button>
       </DropdownMenuTrigger>
@@ -349,6 +410,18 @@ export function AddNewMenu() {
 
 function GlobalSearch() {
   const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
   const [jobs, setJobs] = useState<Job[]>(() => getJobs());
   const [clients, setClients] = useState<ClientRecord[]>(() => getClients());
   const [employees, setEmployees] = useState<EmployeeRecord[]>(() =>
@@ -530,24 +603,31 @@ function GlobalSearch() {
   );
 
   return (
-    <div className="relative w-full md:max-w-[370px]">
-      <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-foreground" />
-      <Input
-        value={query}
-        onChange={event => setQuery(event.target.value)}
-        placeholder="Search"
-        className="h-10 rounded-lg bg-card pl-10 pr-10 text-base"
-      />
-      {query && (
-        <button
-          type="button"
-          onClick={() => setQuery("")}
-          className="absolute right-3 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-full border border-foreground text-foreground"
-          aria-label="Clear search"
-        >
-          <X className="size-3" />
-        </button>
-      )}
+    <div className="relative w-full md:max-w-[440px]">
+      <div className="flex h-11 items-center gap-2.5 rounded-[11px] border border-border bg-card px-3 transition-shadow focus-within:border-[var(--moss-deep)] focus-within:ring-[3px] focus-within:ring-[rgba(31,122,74,0.12)]">
+        <Search className="size-4 shrink-0 text-muted-foreground" />
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={event => setQuery(event.target.value)}
+          placeholder="Search jobs, clients, invoices…"
+          className="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+        />
+        {query ? (
+          <button
+            type="button"
+            onClick={() => setQuery("")}
+            className="flex size-5 shrink-0 items-center justify-center rounded-full border border-muted-foreground text-muted-foreground hover:text-foreground"
+            aria-label="Clear search"
+          >
+            <X className="size-3" />
+          </button>
+        ) : (
+          <kbd className="hidden shrink-0 rounded-md border border-b-2 border-border bg-muted px-2 py-0.5 font-display text-[11px] font-semibold text-muted-foreground md:block">
+            ⌘ K
+          </kbd>
+        )}
+      </div>
 
       {query && (
         <div className="absolute left-0 top-[calc(100%+6px)] z-50 max-h-[70vh] w-full overflow-y-auto rounded-lg border border-border bg-popover p-6 shadow-xl md:w-[370px]">
@@ -563,7 +643,7 @@ function GlobalSearch() {
                         {group.label}
                       </span>
                       <span className="h-px flex-1 bg-border" />
-                      <span className="text-xs text-[#7180a8]">
+                      <span className="text-xs text-[#8a9180]">
                         {group.items.length} result
                       </span>
                     </div>
@@ -580,7 +660,7 @@ function GlobalSearch() {
                               {item.title}
                             </span>
                             {item.subtitle && (
-                              <span className="mt-0.5 block truncate text-sm text-[#7180a8]">
+                              <span className="mt-0.5 block truncate text-sm text-[#8a9180]">
                                 {item.subtitle}
                               </span>
                             )}
@@ -592,7 +672,7 @@ function GlobalSearch() {
                   </section>
                 );
               })}
-              <div className="border-t border-border pt-3 text-xs text-[#7180a8]">
+              <div className="border-t border-border pt-3 text-xs text-[#8a9180]">
                 {resultCount} total results
               </div>
             </div>

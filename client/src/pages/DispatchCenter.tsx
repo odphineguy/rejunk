@@ -470,8 +470,8 @@ export default function DispatchCenter() {
         <div>${detail.phone ?? "No phone on file"}</div>
         <div>${detail.job ? `Job: ${detail.job.job.jobNumber} · ${detail.job.job.customerName}` : "No job assigned"}</div>
         <div style="margin-top:8px;display:flex;gap:12px">
-          ${detail.phone ? `<a href="tel:${detail.phone}" style="color:#2d5016;font-weight:600">Call</a>` : ""}
-          ${detail.phone ? `<a href="sms:${detail.phone}" style="color:#2d5016;font-weight:600">Message</a>` : ""}
+          ${detail.phone ? `<a href="tel:${detail.phone}" style="color:#155e3f;font-weight:600">Call</a>` : ""}
+          ${detail.phone ? `<a href="sms:${detail.phone}" style="color:#155e3f;font-weight:600">Message</a>` : ""}
           ${detail.job ? `<a href="/jobs/${detail.job.job.id}" style="color:#2563eb">Open Job</a>` : ""}
         </div>
       </div>
@@ -609,7 +609,7 @@ export default function DispatchCenter() {
           </Select>
           <Button
             variant={showDrivers ? "default" : "outline"}
-            className={showDrivers ? "bg-[#2d5016] text-white hover:bg-[#234011]" : undefined}
+            className={showDrivers ? "bg-[#155e3f] text-white hover:bg-[#0c4a30]" : undefined}
             onClick={() => setShowDrivers(value => !value)}
             title={showDrivers ? "Hide live driver locations" : "Show live driver locations"}
           >
@@ -717,7 +717,7 @@ export default function DispatchCenter() {
                     onClick={() => setDriversCollapsed(value => !value)}
                   >
                     <span className="flex items-center gap-2 text-base font-semibold text-foreground">
-                      <LocateFixed className="size-4 text-[#2d5016]" />
+                      <LocateFixed className="size-4 text-[#155e3f]" />
                       Drivers
                     </span>
                     <span className="flex items-center gap-2">

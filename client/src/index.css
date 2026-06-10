@@ -1,10 +1,15 @@
-/* Google Fonts for Eco-Conscious Organic Design */
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Lato:wght@400;500;700&display=swap');
+/* Rejunk Field Ops theme — warm canvas + deep pine + lime (logo #052a2b / #83e282) */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 @import "tailwindcss";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans: 'Manrope', system-ui, sans-serif;
+  --font-display: 'Space Grotesk', sans-serif;
+}
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
@@ -46,76 +51,102 @@
 }
 
 :root {
-  /* Eco-Conscious Organic Color Palette */
-  --primary: #2d5016; /* Forest Green */
-  --primary-foreground: #f5f5f0; /* Off-white */
-  --sidebar-primary: #2d5016;
-  --sidebar-primary-foreground: #f5f5f0;
-  --secondary: #8b6f47; /* Earth Brown */
-  --secondary-foreground: #f5f5f0;
-  --accent: #87ceeb; /* Sky Blue */
-  --accent-foreground: #1a1a1a;
-  --chart-1: #2d5016;
-  --chart-2: #8b6f47;
-  --chart-3: #87ceeb;
-  --chart-4: #c97c5c; /* Clay Orange */
-  --chart-5: #9caf88; /* Sage Green */
-  --radius: 1rem; /* Organic rounded corners */
-  --background: #fafaf8; /* Warm off-white */
-  --foreground: #2a2a28; /* Deep charcoal */
-  --card: #ffffff;
-  --card-foreground: #2a2a28;
+  /* Surfaces — warm paper canvas, near-white cards */
+  --background: #efede5;
+  --foreground: #1b1f17;
+  --card: #fbfaf6;
+  --card-foreground: #1b1f17;
   --popover: #ffffff;
-  --popover-foreground: #2a2a28;
-  --muted: #e8e6e0; /* Light warm gray */
-  --muted-foreground: #6b6b68;
-  --destructive: #d9534f;
+  --popover-foreground: #1b1f17;
+  --muted: #eceade;
+  --muted-foreground: #7c826c;
+  --border: #e2dfd3;
+  --input: #f3f1e8;
+
+  /* Brand — deep pine actions, lime highlights */
+  --primary: #155e3f;
+  --primary-foreground: #eafbe7;
+  --secondary: #e7e4d5;
+  --secondary-foreground: #4b5244;
+  --accent: #e4f0d9;
+  --accent-foreground: #1f4d2e;
+  --destructive: #c0392b;
   --destructive-foreground: #ffffff;
-  --border: #e0ddd8; /* Warm border */
-  --input: #f5f5f0;
-  --ring: #2d5016;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #2a2a28;
-  --sidebar-accent: #f0ede8;
-  --sidebar-accent-foreground: #2d5016;
-  --sidebar-border: #e0ddd8;
-  --sidebar-ring: #2d5016;
+  --ring: #1f7a4a;
+  --radius: 0.875rem;
+
+  --chart-1: #1f7a4a;
+  --chart-2: #83e282;
+  --chart-3: #052a2b;
+  --chart-4: #c98b3c;
+  --chart-5: #9dbe57;
+
+  /* Sidebar — logo pine with lime accents */
+  --sidebar: #052a2b;
+  --sidebar-foreground: #9bb5a6;
+  --sidebar-primary: #83e282;
+  --sidebar-primary-foreground: #052a2b;
+  --sidebar-accent: rgba(131, 226, 130, 0.1);
+  --sidebar-accent-foreground: #ecf6e4;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #83e282;
+
+  /* Extended brand tokens */
+  --moss: #83e282;
+  --moss-deep: #1f7a4a;
+  --pine-950: #03191a;
+  --pine-900: #052a2b;
+  --pine-850: #0a3a38;
+  --pine-800: #0e4a45;
+  --pine-line: rgba(255, 255, 255, 0.07);
+  --pine-text: #9bb5a6;
+  --pine-text-dim: #54756a;
+  --line-strong: #cfcaba;
+  --amber: #c98b3c;
+  --shadow-card: 0 1px 2px rgba(27, 31, 23, 0.05), 0 4px 14px -6px rgba(27, 31, 23, 0.08);
+  --shadow-pop: 0 8px 30px -8px rgba(5, 42, 43, 0.35), 0 2px 8px rgba(5, 42, 43, 0.12);
 }
 
 .dark {
-  /* Dark mode for eco-conscious design */
-  --primary: #4a7c3c; /* Lighter forest green for dark mode */
-  --primary-foreground: #f5f5f0;
-  --sidebar-primary: #4a7c3c;
-  --sidebar-primary-foreground: #f5f5f0;
-  --background: #1a1a18; /* Very dark warm */
-  --foreground: #e8e6e0; /* Light warm gray */
-  --card: #2a2a28; /* Dark charcoal */
-  --card-foreground: #e8e6e0;
-  --popover: #2a2a28;
-  --popover-foreground: #e8e6e0;
-  --secondary: #a89968; /* Lighter earth brown */
-  --secondary-foreground: #f5f5f0;
-  --muted: #3a3a38;
-  --muted-foreground: #a8a8a5;
-  --accent: #87ceeb;
-  --accent-foreground: #1a1a18;
+  --background: #081413;
+  --foreground: #e6ece4;
+  --card: #0d201f;
+  --card-foreground: #e6ece4;
+  --popover: #0d201f;
+  --popover-foreground: #e6ece4;
+  --muted: #142927;
+  --muted-foreground: #8aa399;
+  --border: #1c3431;
+  --input: #0d201f;
+  --primary: #83e282;
+  --primary-foreground: #052a2b;
+  --secondary: #16302d;
+  --secondary-foreground: #cfe3d8;
+  --accent: #14322a;
+  --accent-foreground: #aef0a8;
   --destructive: #e74c3c;
   --destructive-foreground: #ffffff;
-  --border: #3a3a38;
-  --input: #2a2a28;
-  --ring: #4a7c3c;
-  --chart-1: #4a7c3c;
-  --chart-2: #a89968;
-  --chart-3: #87ceeb;
+  --ring: #83e282;
+  --chart-1: #83e282;
+  --chart-2: #1f7a4a;
+  --chart-3: #9dbe57;
   --chart-4: #d9a574;
-  --chart-5: #b8d4a8;
-  --sidebar: #2a2a28;
-  --sidebar-foreground: #e8e6e0;
-  --sidebar-accent: #3a3a38;
-  --sidebar-accent-foreground: #4a7c3c;
-  --sidebar-border: #3a3a38;
-  --sidebar-ring: #4a7c3c;
+  --chart-5: #87ceeb;
+  --sidebar: #03191a;
+  --sidebar-foreground: #9bb5a6;
+  --sidebar-primary: #83e282;
+  --sidebar-primary-foreground: #052a2b;
+  --sidebar-accent: rgba(131, 226, 130, 0.1);
+  --sidebar-accent-foreground: #ecf6e4;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #83e282;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px -6px rgba(0, 0, 0, 0.4);
+  --line-strong: #2a443f;
+}
+
+::selection {
+  background: #cdeec4;
+  color: #11331c;
 }
 
 @layer base {
@@ -124,20 +155,22 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
-    font-family: 'Lato', sans-serif;
+    font-family: 'Manrope', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Space Grotesk', sans-serif;
     font-weight: 700;
+    letter-spacing: -0.02em;
   }
   h1 {
-    @apply text-4xl md:text-5xl;
-  }
-  h2 {
     @apply text-3xl md:text-4xl;
   }
-  h3 {
+  h2 {
     @apply text-2xl md:text-3xl;
+  }
+  h3 {
+    @apply text-xl md:text-2xl;
   }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
@@ -191,6 +224,76 @@
       padding-left: 2rem; /* 32px - desktop padding */
       padding-right: 2rem;
       max-width: 1280px; /* Standard content width */
+    }
+  }
+
+  /* Dark pine sidebar surface: faint lime glow + vertical pine fade + texture */
+  .sidebar-pine {
+    background:
+      repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.012) 0 2px, transparent 2px 6px),
+      radial-gradient(420px 260px at -30% -5%, rgba(131, 226, 130, 0.09), transparent 60%),
+      linear-gradient(180deg, #063133 0%, #03191a 100%);
+  }
+
+  /* KPI / stat cards: rise in, lift on hover, lime top bar reveal */
+  .kpi-card {
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow-card);
+    transition:
+      transform 0.18s cubic-bezier(0.2, 0.7, 0.3, 1),
+      box-shadow 0.18s,
+      border-color 0.18s;
+    animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  }
+  .kpi-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 2px 4px rgba(27, 31, 23, 0.05), 0 14px 28px -10px rgba(27, 31, 23, 0.14);
+    border-color: var(--line-strong);
+  }
+  .kpi-card::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--moss-deep), var(--moss));
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .kpi-card:hover::after {
+    opacity: 1;
+  }
+  .kpi-ico {
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+  }
+  .kpi-card:hover .kpi-ico {
+    background: var(--moss-deep);
+    color: #eafbe7;
+    border-color: var(--moss-deep);
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .pulse-dot {
+    animation: pulse-dot 2.4s infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.4;
     }
   }
 }

@@ -77,7 +77,7 @@ export default function Payments() {
               <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-foreground" />
               <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search..." className="h-12 rounded-lg pl-10 pr-10" />
               {query && (
-                <button type="button" onClick={() => setQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#7180a8]" aria-label="Clear payment search">
+                <button type="button" onClick={() => setQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8a9180]" aria-label="Clear payment search">
                   <X className="size-4" />
                 </button>
               )}
@@ -115,7 +115,7 @@ export default function Payments() {
                 {filteredPayments.map((payment, index) => (
                   <TableRow key={payment.id} className={index % 2 === 1 ? "bg-muted/20" : undefined}>
                     <TableCell className="px-5 font-medium">
-                      <span className="text-[#2d5016] underline underline-offset-2">{payment.customerName}</span>
+                      <span className="text-[#155e3f] underline underline-offset-2">{payment.customerName}</span>
                     </TableCell>
                     <TableCell>{payment.method}</TableCell>
                     <TableCell>{money.format(payment.baseAmount)}</TableCell>
@@ -124,7 +124,7 @@ export default function Payments() {
                     <TableCell>{formatPaymentDate(payment.paidAt)}</TableCell>
                     <TableCell>
                       {payment.jobId ? (
-                        <Link href={`/jobs/${payment.jobId}`} className="text-[#2d5016] underline underline-offset-2">
+                        <Link href={`/jobs/${payment.jobId}`} className="text-[#155e3f] underline underline-offset-2">
                           {payment.jobId}
                         </Link>
                       ) : (
@@ -133,7 +133,7 @@ export default function Payments() {
                     </TableCell>
                     <TableCell>
                       {payment.invoiceId ? (
-                        <Link href={`/invoices/${payment.invoiceId}`} className="text-[#2d5016] underline underline-offset-2">
+                        <Link href={`/invoices/${payment.invoiceId}`} className="text-[#155e3f] underline underline-offset-2">
                           {payment.invoiceId}
                         </Link>
                       ) : (
