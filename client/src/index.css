@@ -235,6 +235,22 @@
       linear-gradient(180deg, #063133 0%, #03191a 100%);
   }
 
+  /* Slim dark scrollbar for scroll areas inside the pine sidebar */
+  .pine-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  }
+  .pine-scroll::-webkit-scrollbar {
+    width: 5px;
+  }
+  .pine-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+  }
+  .pine-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
   /* KPI / stat cards: rise in, lift on hover, lime top bar reveal */
   .kpi-card {
     position: relative;

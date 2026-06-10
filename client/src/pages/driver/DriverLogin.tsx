@@ -67,7 +67,7 @@ export default function DriverLogin() {
     <div className="flex min-h-dvh flex-col bg-muted/30">
       <header className="border-b border-[var(--pine-line)] bg-[#052a2b] px-4 py-4">
         <div className="mx-auto flex max-w-md items-center justify-center">
-          <img src="/rejunk.png" alt="Rejunk" className="h-12 w-auto" />
+          <img src="/rejunk-mark.png" alt="Rejunk" className="h-8 w-auto" />
         </div>
       </header>
 

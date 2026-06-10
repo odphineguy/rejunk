@@ -205,13 +205,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           href="/"
           className="block border-b border-[var(--pine-line)] px-5 pb-4 pt-5"
         >
-          <img src="/rejunk.png" alt="Rejunk" className="h-14 w-auto rounded-xl" />
-          <div className="mt-2 px-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--pine-text-dim)]">
+          <img src="/rejunk-mark.png" alt="Rejunk" className="h-9 w-auto" />
+          <div className="mt-2.5 px-0.5 text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--pine-text-dim)]">
             Field Ops Platform
           </div>
         </Link>
 
-        <nav className="flex-1 overflow-y-auto px-3.5 py-3">
+        <nav className="pine-scroll flex-1 overflow-y-auto px-3.5 py-3">
           {navGroups.map((group, groupIndex) => (
             <div key={group.label}>
               <div

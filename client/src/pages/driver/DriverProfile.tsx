@@ -79,7 +79,7 @@ export default function DriverProfile() {
       <header className="sticky top-0 z-10 border-b border-[var(--pine-line)] bg-[#052a2b] px-4 py-3">
         <div className="mx-auto grid max-w-md grid-cols-[2.25rem_1fr_2.25rem] items-center">
           <span />
-          <img src="/rejunk.png" alt="Rejunk" className="mx-auto h-16 w-auto max-w-[280px]" />
+          <img src="/rejunk-mark.png" alt="Rejunk" className="mx-auto h-9 w-auto max-w-[280px]" />
           <span />
         </div>
       </header>
