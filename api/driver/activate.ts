@@ -63,11 +63,11 @@ function buildActivationEmailHtml(payload: ActivationEmailPayload) {
         <div style="padding:28px 24px">
           <h1 style="margin:0 0 12px;font-size:20px">Activate Your Rejunk Driver App</h1>
           <p style="margin:0 0 16px;font-size:15px;line-height:1.5">Hi ${greetingName}, your dispatcher set you up with the Rejunk driver app. Use this activation key to get started:</p>
-          <div style="background:#f0f4ec;border:1px dashed #155e3f;border-radius:10px;padding:18px;text-align:center;margin:0 0 20px">
+          <div style="background:#f0f4ec;border:2px dashed #83e282;border-radius:10px;padding:18px;text-align:center;margin:0 0 20px">
             <span style="font-family:'SF Mono',Menlo,Consolas,monospace;font-size:24px;font-weight:700;letter-spacing:2px;color:#155e3f">${payload.activationKey}</span>
           </div>
           <div style="text-align:center;margin:0 0 20px">
-            <a href="${link}" style="display:inline-block;background:#155e3f;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:12px 28px;border-radius:8px">Open the Driver App</a>
+            <a href="${link}" style="display:inline-block;background:#83e282;color:#052a2b;text-decoration:none;font-size:15px;font-weight:700;padding:12px 28px;border-radius:8px">Open the Driver App</a>
           </div>
           <p style="margin:0 0 8px;font-size:13px;color:#5b6357;line-height:1.5">${expiryLine}</p>
           <p style="margin:0;font-size:13px;color:#5b6357;line-height:1.5">You'll set a 4-digit PIN the first time you sign in. Questions? Call or text your dispatcher.</p>
