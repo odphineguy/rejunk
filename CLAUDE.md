@@ -193,6 +193,14 @@ standalone/additive; adds `dispatch_threads` + `dispatch_messages` to the `supab
 **IS applied to the live DB** (2026-06-09). Additive only; the new `paused` job status needed no DB change
 because `jobs.status` is unconstrained text.
 
+`202606100002_job_photos_storage.sql` (driver photo uploads: `job-photos` storage bucket + `job_photos`
+table) **IS applied to the live DB** (2026-06-10). Standalone/additive — extracted from the unapplied
+phase-1 driver migration with deliberate differences: no FKs to the not-live `job_stops`/
+`employee_profiles`, RLS relaxed to any `authenticated` user (matches the anonymous-session model), and
+the bucket is **public-read** because `uploadJobPhoto` renders via `getPublicUrl`. No delete policy on the
+bucket — photos can't be deleted from the client. Phase 1 uses `if not exists`/`on conflict`, so applying
+it later won't conflict.
+
 ## Deployment
 
 Production is a **static SPA on Vercel** (`vercel.json`: build `vite build`, output `dist/public`, SPA
