@@ -160,7 +160,7 @@ export default function DriverMessages() {
   // -------------------------------------------------------------------------
   if (activeThread) {
     return (
-      <div className="flex min-h-dvh flex-col bg-muted/30">
+      <div className="flex min-h-dvh flex-col bg-[#f4f6f1]">
         <header className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
           <div className="mx-auto flex max-w-md items-center gap-3">
             <Button variant="ghost" size="icon" onClick={closeThread} aria-label="Back to messages">
@@ -186,7 +186,7 @@ export default function DriverMessages() {
           {activeThread.threadType === "job" && activeThread.jobId && (
             <Link
               href={`/driver/jobs/${activeThread.jobId}`}
-              className="mb-3 block rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-[#155e3f]"
+              className="mb-3 block rounded-lg border border-[#c8d1c0] bg-white px-3 py-2 text-sm font-medium text-[#155e3f] shadow-sm"
             >
               {activeThread.title} — open job →
             </Link>
@@ -201,7 +201,7 @@ export default function DriverMessages() {
                   <div
                     className={cn(
                       "max-w-[80%] rounded-lg px-3.5 py-2.5 text-sm leading-relaxed",
-                      outgoing ? "bg-[#e8f5e4]" : "border border-border bg-background",
+                      outgoing ? "bg-[#e8f5e4]" : "border border-[#c8d1c0] bg-white",
                     )}
                   >
                     {message.body}
@@ -224,7 +224,7 @@ export default function DriverMessages() {
                 if (event.key === "Enter") void sendDraft();
               }}
               placeholder="Message"
-              className="h-11"
+              className="h-11 border-[#c8d1c0] bg-white"
             />
             <Button size="icon" className="size-11 shrink-0 bg-[#155e3f] text-white hover:bg-[#0c4a30]" onClick={() => void sendDraft()} aria-label="Send message">
               <Send className="size-4" />
@@ -239,7 +239,7 @@ export default function DriverMessages() {
   // Thread list view
   // -------------------------------------------------------------------------
   return (
-    <div className="min-h-dvh bg-muted/30 pb-24">
+    <div className="min-h-dvh bg-[#f4f6f1] pb-24">
       <header className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-md items-center gap-3">
           <Button asChild variant="ghost" size="icon" aria-label="Back to today">
@@ -264,7 +264,7 @@ export default function DriverMessages() {
             key={thread.id}
             type="button"
             onClick={() => openThread(thread.id)}
-            className="w-full rounded-lg border border-border bg-background p-3 text-left"
+            className="w-full rounded-lg border border-[#c8d1c0] bg-white p-3 text-left shadow-sm"
           >
             <div className="flex items-center gap-3">
               <ThreadIcon thread={thread} />
@@ -285,7 +285,7 @@ export default function DriverMessages() {
         ))}
 
         {threads.length === 0 && (
-          <div className="rounded-lg border border-dashed bg-background p-8 text-center text-sm text-muted-foreground">
+          <div className="rounded-lg border border-dashed border-[#c8d1c0] bg-white p-8 text-center text-sm text-muted-foreground">
             No messages yet. Tap the button below to message dispatch.
           </div>
         )}

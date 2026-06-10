@@ -5,6 +5,7 @@ import { hydratePricingData } from "@/utils/pricingStorage";
 import { hydrateJobs } from "@/lib/jobStorage";
 import { hydratePricebook } from "@/lib/pricebookStorage";
 import { hydrateClients } from "@/lib/clientStorage";
+import { hydrateSettings } from "@/lib/settingsStorage";
 
 const root = createRoot(document.getElementById("root")!);
 
@@ -18,6 +19,7 @@ const hydration = Promise.all([
   hydrateJobs(),
   hydratePricebook(),
   hydrateClients(),
+  hydrateSettings(),
 ]);
 const timeout = new Promise<void>(resolve =>
   setTimeout(resolve, HYDRATE_TIMEOUT_MS)

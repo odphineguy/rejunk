@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useRoute } from "wouter";
-import { AlertTriangle, ArrowLeft, Camera, Check, MessageSquare, Navigation, Phone, Send, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Camera, Check, MapPinned, MessageSquare, Navigation, Phone, Send, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { JobStatusBadge } from "@/components/JobBadges";
@@ -242,7 +242,7 @@ export default function DriverJobDetail() {
   }
 
   return (
-    <div className="min-h-dvh bg-muted/30 pb-8">
+    <div className="min-h-dvh bg-[#f4f6f1] pb-8">
       <header className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-md items-center justify-between gap-3">
           <Button asChild variant="ghost" size="icon" aria-label="Back to today">
@@ -257,28 +257,31 @@ export default function DriverJobDetail() {
       </header>
 
       <main className="mx-auto max-w-md px-4 py-4">
-        <Card>
+        <Card className="border-[#c8d1c0] shadow-sm">
           <CardContent className="space-y-4 p-4">
             <div>
               {!serviceTypeDuplicated && job.serviceType && (
                 <div className="text-sm font-medium text-muted-foreground">{job.serviceType}</div>
               )}
               <div className="text-xl font-bold">{formatWindow(job.scheduledStart, job.scheduledEnd)}</div>
-              <div className="mt-1 text-sm">{formatDriverAddress(job)}</div>
+              <div className="mt-1.5 flex gap-2">
+                <MapPinned className="mt-0.5 size-4 shrink-0 text-primary" />
+                <span className="text-base font-semibold">{formatDriverAddress(job)}</span>
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
-              <Button asChild variant="outline" className="h-12">
+              <Button asChild variant="outline" className="h-12 border-[#155e3f] bg-[#f0f4ec] font-semibold text-[#155e3f] hover:bg-[#e2ead9] hover:text-[#155e3f]">
                 <a href={`https://maps.apple.com/?daddr=${encodeURIComponent(formatDriverAddress(job))}`}>
                   <Navigation className="size-4" />Go
                 </a>
               </Button>
-              <Button asChild variant="outline" className="h-12">
+              <Button asChild variant="outline" className="h-12 border-[#155e3f] bg-[#f0f4ec] font-semibold text-[#155e3f] hover:bg-[#e2ead9] hover:text-[#155e3f]">
                 <a href={job.phone ? `tel:${job.phone}` : "#"} onClick={(event) => !job.phone && event.preventDefault()}>
                   <Phone className="size-4" />Call
                 </a>
               </Button>
-              <Button variant="outline" className="h-12" onClick={() => document.getElementById("message-dispatch")?.scrollIntoView({ behavior: "smooth" })}>
+              <Button variant="outline" className="h-12 border-[#155e3f] bg-[#f0f4ec] font-semibold text-[#155e3f] hover:bg-[#e2ead9] hover:text-[#155e3f]" onClick={() => document.getElementById("message-dispatch")?.scrollIntoView({ behavior: "smooth" })}>
                 <MessageSquare className="size-4" />Msg
               </Button>
             </div>
@@ -310,7 +313,11 @@ export default function DriverJobDetail() {
                   <Button
                     key={action.to}
                     variant={action.variant ?? "default"}
-                    className="h-14 w-full text-base"
+                    className={
+                      action.variant === "outline"
+                        ? "h-14 w-full border-[#c8d1c0] bg-white text-base font-semibold"
+                        : "h-14 w-full text-base"
+                    }
                     onClick={() => void changeStatus(action.to, action.label)}
                   >
                     {action.label}
@@ -320,10 +327,10 @@ export default function DriverJobDetail() {
             )}
 
             {showStops && (
-              <div className="space-y-2 border-t border-border pt-4">
+              <div className="space-y-2 border-t border-[#d4dece] pt-4">
                 <div className="text-xs font-semibold uppercase text-muted-foreground">Stops</div>
                 {stops.map((stop) => (
-                  <div key={stop.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background p-3 text-sm">
+                  <div key={stop.id} className="flex items-center justify-between gap-3 rounded-lg border border-[#c8d1c0] bg-white p-3 text-sm">
                     <div className="min-w-0">
                       <div className="font-semibold">{stop.stopOrder} · {label(stop.stopType)}</div>
                       <div className="truncate text-muted-foreground">{[stop.address, stop.city].filter(Boolean).join(", ") || stop.name}</div>
@@ -346,10 +353,10 @@ export default function DriverJobDetail() {
             )}
 
             {job.items.length > 0 && (
-              <div className="space-y-2 border-t border-border pt-4">
+              <div className="space-y-2 border-t border-[#d4dece] pt-4">
                 {job.items.length > 1 && <div className="text-xs font-semibold uppercase text-muted-foreground">Items</div>}
                 {job.items.map((item) => (
-                  <label key={item.id} className="flex items-start gap-3 rounded-lg border border-border bg-background p-3">
+                  <label key={item.id} className="flex items-start gap-3 rounded-lg border border-[#c8d1c0] bg-white p-3">
                     <Checkbox
                       checked={["loaded", "delivered", "completed"].includes(item.status)}
                       onCheckedChange={(checked) => void updateItemStatus(item, checked ? "loaded" : "pending").then(refresh)}
@@ -368,7 +375,7 @@ export default function DriverJobDetail() {
             )}
 
             {job.disposalEvents.length > 0 && (
-              <div className="space-y-3 border-t border-border pt-4">
+              <div className="space-y-3 border-t border-[#d4dece] pt-4">
                 {disposalEvents(job.disposalEvents).map((event) => (
                   <div key={event.id} className="text-sm">
                     <div className="flex items-center justify-between gap-3">
@@ -377,7 +384,7 @@ export default function DriverJobDetail() {
                         <span className="font-semibold">{facilityCode(event.facilityName)} · {event.facilityName || "Facility TBD"}</span>
                       </div>
                       {changingFacilityFor !== event.id && (
-                        <Button variant="outline" size="sm" className="h-9 shrink-0" onClick={() => setChangingFacilityFor(event.id)}>
+                        <Button variant="outline" size="sm" className="h-9 shrink-0 border-[#c8d1c0] bg-white" onClick={() => setChangingFacilityFor(event.id)}>
                           Change
                         </Button>
                       )}
@@ -389,7 +396,7 @@ export default function DriverJobDetail() {
                     {changingFacilityFor === event.id && (
                       <div className="mt-2 space-y-2">
                         <Select onValueChange={(facilityId) => void changeFacility(event.id, facilityId)}>
-                          <SelectTrigger className="h-11"><SelectValue placeholder="Pick the new facility" /></SelectTrigger>
+                          <SelectTrigger className="h-11 border-[#c8d1c0] bg-white"><SelectValue placeholder="Pick the new facility" /></SelectTrigger>
                           <SelectContent>
                             {facilities.map((facility) => (
                               <SelectItem key={facility.id} value={facility.id}>
@@ -407,27 +414,27 @@ export default function DriverJobDetail() {
             )}
 
             {(job.notes || job.internalNotes) && (
-              <div className="space-y-2 border-t border-border pt-4 text-sm">
+              <div className="space-y-2 border-t border-[#d4dece] pt-4 text-sm">
                 {job.notes && <p>{job.notes}</p>}
                 {job.internalNotes && <p className="rounded-md bg-amber-50 p-3 text-amber-950">{job.internalNotes}</p>}
               </div>
             )}
 
-            <div className="space-y-3 border-t border-border pt-4">
+            <div className="space-y-3 border-t border-[#d4dece] pt-4">
               <div className="grid grid-cols-2 gap-2">
                 <Select value={photoType} onValueChange={(value) => setPhotoType(value as JobPhotoType)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-11 border-[#c8d1c0] bg-white"><SelectValue /></SelectTrigger>
                   <SelectContent>{photoTypes.map((type) => <SelectItem key={type} value={type}>{label(type)}</SelectItem>)}</SelectContent>
                 </Select>
                 <Select value={photoVisibility} onValueChange={(value) => setPhotoVisibility(value as JobPhotoVisibility)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-11 border-[#c8d1c0] bg-white"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="internal">internal</SelectItem>
                     <SelectItem value="customer_ready">customer ready</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <Input value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="Caption optional" />
+              <Input value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="Caption optional" className="h-11 border-[#c8d1c0] bg-white" />
               <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => void handlePhoto(event)} />
               <Button className="h-12 w-full" onClick={() => fileRef.current?.click()} disabled={uploading}>
                 {uploading ? <Upload className="size-4 animate-pulse" /> : <Camera className="size-4" />}
@@ -444,7 +451,7 @@ export default function DriverJobDetail() {
               )}
             </div>
 
-            <div id="message-dispatch" className="space-y-2 border-t border-border pt-4">
+            <div id="message-dispatch" className="space-y-2 border-t border-[#d4dece] pt-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-xs font-semibold uppercase text-muted-foreground">Message dispatch</div>
                 <Link
@@ -455,8 +462,8 @@ export default function DriverJobDetail() {
                 </Link>
               </div>
               <div className="flex gap-2">
-                <Input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Message dispatch" />
-                <Button size="icon" onClick={() => void submitMessage()} aria-label="Send message"><Send className="size-4" /></Button>
+                <Input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Message dispatch" className="h-11 border-[#c8d1c0] bg-white" />
+                <Button size="icon" className="size-11 shrink-0" onClick={() => void submitMessage()} aria-label="Send message"><Send className="size-4" /></Button>
               </div>
             </div>
           </CardContent>

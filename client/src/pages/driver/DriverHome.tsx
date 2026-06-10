@@ -60,7 +60,7 @@ function navigationUrl(job: DriverJob) {
 function DriverJobCard({ job, active }: { job: DriverJob; active?: boolean }) {
   const metrics = jobOperationalMetrics(job);
   return (
-    <Card className={active ? "border-primary shadow-sm" : "border-border/80"}>
+    <Card className={active ? "border-primary shadow-sm" : "border-[#c8d1c0] bg-white shadow-sm"}>
       <CardContent className="space-y-4 p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -76,8 +76,8 @@ function DriverJobCard({ job, active }: { job: DriverJob; active?: boolean }) {
 
         <div className="space-y-2 text-sm">
           <div className="flex gap-2">
-            <MapPinned className="mt-0.5 size-4 shrink-0 text-primary" />
-            <span>{formatDriverAddress(job)}</span>
+            <MapPinned className="mt-1 size-4 shrink-0 text-primary" />
+            <span className="text-base font-medium">{formatDriverAddress(job)}</span>
           </div>
           <div className="grid grid-cols-2 gap-2 text-muted-foreground">
             <span>{pluralize(metrics.customerStopCount, "service location")}</span>
@@ -204,7 +204,7 @@ export default function DriverHome() {
   }
 
   return (
-    <div className="min-h-dvh bg-muted/30 pb-24">
+    <div className="min-h-dvh bg-[#f4f6f1] pb-24">
       <header className="sticky top-0 z-10 border-b border-[var(--pine-line)] bg-[#052a2b] px-4 py-3">
         <div className="mx-auto grid max-w-md grid-cols-[2.25rem_1fr_2.25rem] items-center">
           <span />
@@ -231,7 +231,7 @@ export default function DriverHome() {
           </div>
         )}
 
-        <section className="rounded-lg border border-border bg-background p-4">
+        <section className="rounded-lg border border-[#c8d1c0] bg-background p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <span className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -252,9 +252,9 @@ export default function DriverHome() {
             )}
           </div>
           <div className="mt-4 grid grid-cols-3 gap-2 text-center text-sm">
-            <div className="rounded-md bg-muted p-2"><strong>{stats.total}</strong><br />Jobs</div>
-            <div className="rounded-md bg-muted p-2"><strong>{stats.issues}</strong><br />Issues</div>
-            <div className="rounded-md bg-muted p-2"><strong>{stats.completed}</strong><br />Done</div>
+            <div className="rounded-md border border-[#d4dece] bg-[#f0f4ec] p-2"><span className="text-xl font-bold">{stats.total}</span><br />Jobs</div>
+            <div className="rounded-md border border-[#d4dece] bg-[#f0f4ec] p-2"><span className="text-xl font-bold">{stats.issues}</span><br />Issues</div>
+            <div className="rounded-md border border-[#d4dece] bg-[#f0f4ec] p-2"><span className="text-xl font-bold">{stats.completed}</span><br />Done</div>
           </div>
         </section>
 
@@ -264,14 +264,14 @@ export default function DriverHome() {
               type="button"
               onClick={() => void toggleMealBreak()}
               className={cn(
-                "flex h-16 flex-col items-center justify-center gap-1 rounded-lg border text-sm font-semibold transition-colors",
+                "flex h-[72px] flex-col items-center justify-center gap-1 rounded-lg border text-sm font-semibold transition-colors",
                 workday.mealBreakStartedAt
                   ? "border-amber-300 bg-amber-100 text-amber-900"
-                  : "border-border bg-background text-foreground hover:bg-muted",
+                  : "border-[#c8d1c0] bg-white text-foreground shadow-sm hover:bg-muted",
               )}
             >
               <span className="flex items-center gap-1.5">
-                {workday.mealBreakStartedAt ? <span aria-hidden>🍔</span> : <Sandwich className="size-4" />}
+                {workday.mealBreakStartedAt ? <span aria-hidden>🍔</span> : <Sandwich className="size-5" />}
                 {workday.mealBreakStartedAt ? "End Break" : "Meal Break"}
               </span>
               {workday.mealBreakStartedAt && (
@@ -282,14 +282,14 @@ export default function DriverHome() {
               type="button"
               onClick={() => (workday.downtimeStartedAt ? void finishDowntime() : openDowntimePrompt())}
               className={cn(
-                "flex h-16 flex-col items-center justify-center gap-1 rounded-lg border text-sm font-semibold transition-colors",
+                "flex h-[72px] flex-col items-center justify-center gap-1 rounded-lg border text-sm font-semibold transition-colors",
                 workday.downtimeStartedAt
                   ? "border-red-300 bg-red-100 text-red-900"
-                  : "border-border bg-background text-foreground hover:bg-muted",
+                  : "border-[#c8d1c0] bg-white text-foreground shadow-sm hover:bg-muted",
               )}
             >
               <span className="flex items-center gap-1.5">
-                <Wrench className="size-4" />
+                <Wrench className="size-5" />
                 {workday.downtimeStartedAt ? "End Downtime" : "Downtime"}
               </span>
               {workday.downtimeStartedAt && (
@@ -300,7 +300,7 @@ export default function DriverHome() {
             </button>
           </div>
           {downtimePromptOpen && !workday.downtimeStartedAt && (
-            <div className="space-y-2 rounded-lg border border-border bg-background p-3">
+            <div className="space-y-2 rounded-lg border border-[#c8d1c0] bg-white p-3 shadow-sm">
               <div className="text-sm font-semibold">Which vehicle is down?</div>
               <Select value={downtimeVehicleId} onValueChange={setDowntimeVehicleId}>
                 <SelectTrigger className="h-11"><SelectValue placeholder="Pick a vehicle" /></SelectTrigger>
@@ -336,13 +336,13 @@ export default function DriverHome() {
         <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase text-muted-foreground">Upcoming jobs</h2>
           {today.upcomingJobs.map((job) => <DriverJobCard key={job.id} job={job} />)}
-          {today.upcomingJobs.length === 0 && <div className="rounded-lg border border-dashed bg-background p-5 text-center text-sm text-muted-foreground">No upcoming jobs assigned.</div>}
+          {today.upcomingJobs.length === 0 && <div className="rounded-lg border border-dashed border-[#c8d1c0] bg-white p-5 text-center text-sm text-muted-foreground">No upcoming jobs assigned.</div>}
         </section>
 
         <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase text-muted-foreground">Completed today</h2>
           {today.completedJobs.map((job) => <DriverJobCard key={job.id} job={job} />)}
-          {today.completedJobs.length === 0 && <div className="rounded-lg border border-dashed bg-background p-5 text-center text-sm text-muted-foreground">Nothing completed yet.</div>}
+          {today.completedJobs.length === 0 && <div className="rounded-lg border border-dashed border-[#c8d1c0] bg-white p-5 text-center text-sm text-muted-foreground">Nothing completed yet.</div>}
         </section>
       </main>
 

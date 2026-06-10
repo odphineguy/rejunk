@@ -72,10 +72,11 @@ export default function DriverProfile() {
     maxLength: 4,
     autoComplete: "off" as const,
     placeholder: "••••",
+    className: "h-11 border-[#c8d1c0] bg-white",
   };
 
   return (
-    <div className="min-h-dvh bg-muted/30 pb-24">
+    <div className="min-h-dvh bg-[#f4f6f1] pb-24">
       <header className="sticky top-0 z-10 border-b border-[var(--pine-line)] bg-[#052a2b] px-4 py-3">
         <div className="mx-auto grid max-w-md grid-cols-[2.25rem_1fr_2.25rem] items-center">
           <span />
@@ -85,7 +86,7 @@ export default function DriverProfile() {
       </header>
 
       <main className="mx-auto max-w-md space-y-4 px-4 py-5">
-        <Card>
+        <Card className="border-[#c8d1c0] shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base"><UserRound className="size-4" />Personal Info</CardTitle>
           </CardHeader>
@@ -98,7 +99,7 @@ export default function DriverProfile() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-[#c8d1c0] shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base"><KeyRound className="size-4" />Change PIN</CardTitle>
           </CardHeader>
@@ -125,7 +126,7 @@ export default function DriverProfile() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-[#c8d1c0] shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base"><Truck className="size-4" />Current Vehicle</CardTitle>
           </CardHeader>
@@ -135,7 +136,7 @@ export default function DriverProfile() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-[#c8d1c0] shadow-sm">
           <CardHeader>
             <CardTitle className="text-base">App Info</CardTitle>
           </CardHeader>
