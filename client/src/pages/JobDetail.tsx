@@ -24,7 +24,7 @@ import {
   getJobWarningsWithFacilityCheck,
   margin,
 } from "@/lib/jobIntelligence";
-import { toDriverJob } from "@/lib/driverStorage";
+import { syncJobPhotos, toDriverJob } from "@/lib/driverStorage";
 import {
   dispatchResolveIssue,
   employeeLabel,
@@ -132,6 +132,7 @@ export default function JobDetail() {
   const [settings, setSettings] = useState(() => loadPricingSettings());
   const [job, setJob] = useState<Job | null>(() => getJobs().find((item) => item.id === params?.jobId) ?? null);
   const [photoVisibilityFilter, setPhotoVisibilityFilter] = useState<"all" | JobPhotoVisibility>("all");
+  const [driverDataVersion, setDriverDataVersion] = useState(0);
   const [dispatchMessage, setDispatchMessage] = useState("");
   const [instructionUpdate, setInstructionUpdate] = useState("");
   const [routeEstimates, setRouteEstimates] = useState<Record<string, JobRouteEstimate>>(() =>
@@ -140,7 +141,12 @@ export default function JobDetail() {
   const savedSnapshotKey = useRef("");
 
   useEffect(() => {
-    const refresh = () => setJob(getJobs().find((item) => item.id === params?.jobId) ?? null);
+    const refresh = () => {
+      setJob(getJobs().find((item) => item.id === params?.jobId) ?? null);
+      // getJobs() returns the same object identities, so bump a version to force
+      // the driverJob memo to re-read the operational cache (photos, stops, ...).
+      setDriverDataVersion((version) => version + 1);
+    };
     window.addEventListener("jobs-updated", refresh);
     window.addEventListener("driver-data-updated", refresh);
     return () => {
@@ -150,13 +156,19 @@ export default function JobDetail() {
   }, [params?.jobId]);
 
   useEffect(() => {
+    // Pull photos the crew uploaded from their phones (no-op when nothing new).
+    if (params?.jobId) void syncJobPhotos([params.jobId]);
+  }, [params?.jobId]);
+
+  useEffect(() => {
     const refreshSettings = () => setSettings(loadPricingSettings());
     window.addEventListener("pricing-settings-updated", refreshSettings);
     return () => window.removeEventListener("pricing-settings-updated", refreshSettings);
   }, []);
 
   const actualFinancials = useMemo(() => (job ? getActualFinancials(job) : { charged: 0, cost: 0, profit: 0 }), [job]);
-  const driverJob = useMemo(() => (job ? toDriverJob(job) : null), [job]);
+  // driverDataVersion forces a re-read of the operational cache (photos, stops, ...).
+  const driverJob = useMemo(() => (job ? toDriverJob(job) : null), [job, driverDataVersion]);
   const filteredDriverPhotos = useMemo(
     () => driverJob?.photos.filter((photo) => photoVisibilityFilter === "all" || photo.visibility === photoVisibilityFilter) ?? [],
     [driverJob?.photos, photoVisibilityFilter],
@@ -495,22 +507,28 @@ export default function JobDetail() {
                   </div>
                   <div className="grid gap-3 md:grid-cols-3">
                     {filteredDriverPhotos.map((photo) => (
-                      <a key={photo.id} href={photo.publicUrl || photo.storagePath} className="rounded-lg border border-border p-3 text-sm" target="_blank" rel="noreferrer">
-                        <div className="font-semibold">{photo.photoType.replaceAll("_", " ")}</div>
-                        <div className="text-muted-foreground">{photo.visibility.replaceAll("_", " ")}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">{formatDate(photo.createdAt)}</div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="mt-3"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            void updatePhotoVisibility(photo, photo.visibility === "customer_ready" ? "internal" : "customer_ready").then(() => setJob(getJobs().find((item) => item.id === job.id) ?? job));
-                          }}
-                        >
-                          Mark {photo.visibility === "customer_ready" ? "internal" : "customer-ready"}
-                        </Button>
+                      <a key={photo.id} href={photo.publicUrl || photo.storagePath} className="overflow-hidden rounded-lg border border-border text-sm" target="_blank" rel="noreferrer">
+                        {photo.publicUrl && (
+                          <img src={photo.publicUrl} alt={photo.caption || photo.photoType.replaceAll("_", " ")} loading="lazy" className="aspect-video w-full bg-muted object-cover" />
+                        )}
+                        <div className="p-3">
+                          <div className="font-semibold capitalize">{photo.photoType.replaceAll("_", " ")}</div>
+                          <div className="text-muted-foreground">{photo.visibility.replaceAll("_", " ")}</div>
+                          {photo.caption && <div className="mt-1 text-xs text-muted-foreground">{photo.caption}</div>}
+                          <div className="mt-1 text-xs text-muted-foreground">{formatDate(photo.createdAt)}</div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="mt-3"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              void updatePhotoVisibility(photo, photo.visibility === "customer_ready" ? "internal" : "customer_ready").then(() => setJob(getJobs().find((item) => item.id === job.id) ?? job));
+                            }}
+                          >
+                            Mark {photo.visibility === "customer_ready" ? "internal" : "customer-ready"}
+                          </Button>
+                        </div>
                       </a>
                     ))}
                     {filteredDriverPhotos.length === 0 && <p className="text-sm text-muted-foreground">No photos match this filter.</p>}

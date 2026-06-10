@@ -15,6 +15,7 @@ import {
   confirmDispatchCalled,
   getDriverJob,
   sendJobMessage,
+  syncJobPhotos,
   updateDisposalEventFacility,
   updateDriverJobStatus,
   updateItemStatus,
@@ -144,6 +145,8 @@ export default function DriverJobDetail() {
 
   useEffect(() => {
     void refresh();
+    // Pull photos other devices uploaded for this job (no-op when nothing new).
+    if (params?.jobId) void syncJobPhotos([params.jobId]);
     const update = () => void refresh();
     window.addEventListener("jobs-updated", update);
     window.addEventListener("driver-data-updated", update);

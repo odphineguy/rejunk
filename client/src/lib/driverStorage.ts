@@ -549,6 +549,57 @@ async function compressImage(file: File): Promise<File> {
   return blob ? new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" }) : file;
 }
 
+function photoRowToJobPhoto(row: {
+  id: string;
+  job_id: string;
+  stop_id: string | null;
+  uploaded_by: string | null;
+  storage_path: string;
+  photo_type: JobPhotoType;
+  visibility: JobPhotoVisibility;
+  caption: string | null;
+  created_at: string;
+}): JobPhoto {
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    stopId: row.stop_id ?? undefined,
+    uploadedBy: row.uploaded_by ?? undefined,
+    storagePath: row.storage_path,
+    publicUrl: supabase ? supabase.storage.from("job-photos").getPublicUrl(row.storage_path).data.publicUrl : undefined,
+    photoType: row.photo_type,
+    visibility: row.visibility,
+    caption: row.caption ?? undefined,
+    createdAt: row.created_at,
+  };
+}
+
+/**
+ * Pulls photo rows from Supabase into the local operational cache so photos
+ * taken on one device (the driver's phone) show up on another (dispatch).
+ * Remote rows win by id; local-only entries (e.g. offline uploads still using
+ * blob URLs) are kept. Fires `driver-data-updated` only when something changed,
+ * so pages that re-sync on that event don't loop.
+ */
+export async function syncJobPhotos(jobIds?: string[]): Promise<void> {
+  if (!supabase || !(await ensureSession())) return;
+  let query = (supabase as any).from("job_photos").select("*").order("created_at", { ascending: false }).limit(500);
+  if (jobIds && jobIds.length > 0) query = query.in("job_id", jobIds);
+  const { data, error } = await query;
+  if (error || !Array.isArray(data)) return;
+
+  const remote: JobPhoto[] = data.map(photoRowToJobPhoto);
+  const remoteIds = new Set(remote.map((photo) => photo.id));
+  const cache = readJson(OPERATIONAL_CACHE_KEY, emptyOperationalCache());
+  const merged = [...remote, ...cache.photos.filter((photo) => !remoteIds.has(photo.id))];
+
+  const canonical = (photos: JobPhoto[]) => JSON.stringify([...photos].sort((a, b) => a.id.localeCompare(b.id)));
+  if (canonical(merged) === canonical(cache.photos)) return;
+
+  writeJson(OPERATIONAL_CACHE_KEY, { ...cache, photos: merged });
+  window.dispatchEvent(new Event("driver-data-updated"));
+}
+
 export async function uploadJobPhoto(input: {
   jobId: string;
   stopId?: string;
@@ -591,7 +642,7 @@ export async function uploadJobPhoto(input: {
   });
 
   if (supabase && await ensureSession()) {
-    await (supabase as any).from("job_photos").insert({
+    const inserted = await (supabase as any).from("job_photos").insert({
       id: row.id,
       job_id: row.jobId,
       stop_id: row.stopId ?? null,
@@ -600,6 +651,7 @@ export async function uploadJobPhoto(input: {
       visibility: row.visibility,
       caption: row.caption ?? null,
     });
+    if (inserted.error) console.error("[driverStorage] job_photos insert failed; photo stays local-only.", inserted.error.message);
   }
   return row;
 }
