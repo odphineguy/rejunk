@@ -83,7 +83,10 @@ const WASTE_STREAM_CODES: Record<string, string> = {
 
 function wasteStreamCode(materialType?: string) {
   if (!materialType) return "MSW";
-  return WASTE_STREAM_CODES[materialType] ?? (materialType.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase() || "MSW");
+  // Disposal events may carry the display name ("Green Waste") instead of the
+  // category id ("green_waste") — normalize before the lookup.
+  const key = materialType.trim().toLowerCase().replace(/[\s/-]+/g, "_");
+  return WASTE_STREAM_CODES[key] ?? (materialType.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase() || "MSW");
 }
 
 type StripAction = { label: string; to: DriverJobStatus; variant?: "default" | "outline" };
