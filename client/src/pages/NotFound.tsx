@@ -4,10 +4,12 @@ import { AlertCircle, Home } from "lucide-react";
 import { useLocation } from "wouter";
 
 export default function NotFound() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
 
   const handleGoHome = () => {
-    setLocation("/");
+    // "Home" depends on which app you're lost in: drivers go back to their
+    // job list, staff to the Dashboard (which moved from "/" to /dashboard).
+    setLocation(location.startsWith("/driver") ? "/driver" : "/dashboard");
   };
 
   return (

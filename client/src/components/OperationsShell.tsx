@@ -11,6 +11,7 @@ import {
   ClipboardList,
   FileText,
   LayoutDashboard,
+  LogOut,
   Map as MapIcon,
   MessageSquare,
   PackageSearch,
@@ -39,6 +40,7 @@ import { eventAddress, getEvents } from "@/lib/eventStorage";
 import { getInvoices } from "@/lib/invoiceStorage";
 import { getJobs } from "@/lib/jobStorage";
 import { getPayments } from "@/lib/paymentStorage";
+import { clearStaffSession, getStoredStaffSession } from "@/lib/staffSession";
 import { cn } from "@/lib/utils";
 import { loadSavedEstimates } from "@/utils/pricingStorage";
 import type { ClientRecord } from "@/types/clients";
@@ -52,7 +54,7 @@ const navGroups = [
   {
     label: "Workspace",
     items: [
-      { href: "/", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/messages", label: "Messages", icon: MessageSquare },
       { href: "/clients", label: "Clients & Leads", icon: UsersRound },
     ],
@@ -201,7 +203,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background md:flex md:h-screen md:overflow-hidden">
       <aside className="sidebar-pine hidden w-[268px] shrink-0 md:flex md:h-screen md:flex-col">
         <Link
-          href="/"
+          href="/dashboard"
           className="block border-b border-[var(--pine-line)] px-5 pb-4 pt-5"
         >
           <img src="/rejunk-mark.png" alt="Rejunk" className="h-9 w-auto" />
@@ -297,15 +299,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Bell className="size-[18px]" />
                 <span className="absolute right-2.5 top-2 size-2 rounded-full border-2 border-card bg-[var(--amber)]" />
               </button>
-              <button
-                className="flex h-11 items-center gap-2 rounded-[11px] border border-border bg-card px-2 text-sm font-medium transition-colors hover:border-[var(--line-strong)] hover:bg-muted"
-                aria-label="Account menu"
-              >
-                <span className="flex size-8 items-center justify-center rounded-[9px] bg-gradient-to-br from-[#1f7a4a] to-[#052a2b] font-display text-[11px] font-extrabold tracking-wide text-[#dde8c2]">
-                  AM
-                </span>
-                <ChevronDown className="size-4 text-muted-foreground" />
-              </button>
+              <AccountMenu />
             </div>
           </div>
 
@@ -374,6 +368,54 @@ export function OperationsShell({
       </div>
       <div className="px-4 py-6 md:px-6">{children}</div>
     </>
+  );
+}
+
+/**
+ * The header account chip. Signing out clears the staff session — the
+ * StaffSessionGate listens for the session event and bounces to /login.
+ */
+function AccountMenu() {
+  const session = getStoredStaffSession();
+  const initials = (session?.fullName ?? "Rejunk Staff")
+    .split(/\s+/)
+    .map(part => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="flex h-11 items-center gap-2 rounded-[11px] border border-border bg-card px-2 text-sm font-medium transition-colors hover:border-[var(--line-strong)] hover:bg-muted"
+          aria-label="Account menu"
+        >
+          <span className="flex size-8 items-center justify-center rounded-[9px] bg-gradient-to-br from-[#1f7a4a] to-[#052a2b] font-display text-[11px] font-extrabold tracking-wide text-[#dde8c2]">
+            {initials}
+          </span>
+          <ChevronDown className="size-4 text-muted-foreground" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52 rounded-lg p-2">
+        <div className="px-3 py-2">
+          <div className="truncate text-sm font-semibold text-foreground">
+            {session?.fullName ?? "Signed in"}
+          </div>
+          {session?.email && (
+            <div className="truncate text-xs text-muted-foreground">{session.email}</div>
+          )}
+        </div>
+        <DropdownMenuItem
+          className="rounded-md px-3 py-2.5 text-[15px] text-destructive focus:text-destructive"
+          onClick={() => clearStaffSession()}
+        >
+          <LogOut className="size-4" />
+          Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
