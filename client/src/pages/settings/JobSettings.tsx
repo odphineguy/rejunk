@@ -18,7 +18,7 @@ import { loadSettingsSection, saveSettingsSection } from "@/lib/settingsStorage"
 
 const SECTION = "jobs";
 
-type LeadCategory = "Paid" | "Organic";
+type LeadCategory = "Paid" | "Organic" | "Unknown";
 
 type LeadSource = {
   id: string;
@@ -57,6 +57,10 @@ const seedLeadSources: Array<[string, LeadCategory]> = [
   ["Angies", "Paid"],
   ["Door Hangers", "Paid"],
   ["EDDM", "Paid"],
+  ["Unknown", "Unknown"],
+  ["Website", "Organic"],
+  ["Yard Signs", "Paid"],
+  ["Yelp Ads", "Paid"],
 ];
 
 const seedJobTypes = [
@@ -87,9 +91,9 @@ const DURATION_OPTIONS = ["30 minutes", "1 hour", "2 hours", "3 hours", "4 hours
 const ARRIVAL_OPTIONS = ["Exact time", "1 hour", "2 hours", "4 hours"];
 
 function categoryBadgeClass(category: LeadCategory) {
-  return category === "Paid"
-    ? "bg-[#edebde] text-foreground border-border"
-    : "bg-[#f0f4ec] text-[#155e3f] border-[#155e3f]/25";
+  if (category === "Paid") return "bg-[#edebde] text-foreground border-border";
+  if (category === "Organic") return "bg-[#f0f4ec] text-[#155e3f] border-[#155e3f]/25";
+  return "bg-muted text-muted-foreground border-border";
 }
 
 export default function JobSettings() {
@@ -222,6 +226,7 @@ export default function JobSettings() {
                   <SelectContent>
                     <SelectItem value="Paid">Paid</SelectItem>
                     <SelectItem value="Organic">Organic</SelectItem>
+                    <SelectItem value="Unknown">Unknown</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button

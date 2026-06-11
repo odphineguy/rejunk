@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { OperationsShell } from "@/components/OperationsShell";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -160,28 +161,23 @@ export default function Pricebook() {
   };
 
   return (
-    <>
-      <div className="border-b border-border bg-background px-4 py-5 md:px-8">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-2 text-base">
-            <PackageSearch className="size-5 text-foreground" />
-            <span className="font-medium text-foreground">Pricebook</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="rounded-lg" onClick={() => setEditingCategory(newCategoryDraft())}>
-              <Plus className="size-4" />
-              Create Category
-            </Button>
-            <Button className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]" onClick={() => setEditingItem(newItemDraft(pricebook.categories[0]?.id))}>
-              <Plus className="size-4" />
-              Create Item
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <div className="px-4 py-8 md:px-8">
-        <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
+    <OperationsShell
+      title="Pricebook"
+      icon={PackageSearch}
+      actions={
+        <>
+          <Button variant="outline" className="rounded-lg" onClick={() => setEditingCategory(newCategoryDraft())}>
+            <Plus className="size-4" />
+            Create Category
+          </Button>
+          <Button className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]" onClick={() => setEditingItem(newItemDraft(pricebook.categories[0]?.id))}>
+            <Plus className="size-4" />
+            Create Item
+          </Button>
+        </>
+      }
+    >
+      <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="relative w-full lg:max-w-[400px]">
               <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-foreground" />
@@ -233,7 +229,6 @@ export default function Pricebook() {
             )}
           </div>
         </section>
-      </div>
 
       <ItemDialog
         open={Boolean(editingItem)}
@@ -267,7 +262,7 @@ export default function Pricebook() {
           toast.success(saved.id === category.id ? "Category updated" : "Category created");
         }}
       />
-    </>
+    </OperationsShell>
   );
 }
 

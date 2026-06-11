@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import MapView from "@/components/Map";
 import FacilityDetails from "@/components/FacilityDetails";
+import { OperationsShell } from "@/components/OperationsShell";
 import FacilityList from "@/components/FacilityList";
 import { Facility, facilityTypeColors } from "@/data/facilities";
 import { loadPricingSettings } from "@/utils/pricingStorage";
@@ -156,14 +157,8 @@ export default function Home() {
   );
 
   return (
-    <>
-      <div className="border-b border-border bg-background px-4 py-5 md:px-8">
-        <div className="flex items-center gap-2 text-base">
-          <MapIcon className="size-5 text-foreground" />
-          <span className="font-medium text-foreground">Map Facility</span>
-        </div>
-      </div>
-      <div className="space-y-6 px-4 py-6 md:px-6">
+    <OperationsShell title="Map Facility" icon={MapIcon}>
+      <div className="space-y-6">
         <div className="grid gap-3 lg:grid-cols-[2fr_1fr]">
           <section className="relative overflow-hidden rounded-lg border border-border bg-card shadow-sm">
             <MapView
@@ -225,7 +220,7 @@ export default function Home() {
           />
         </section>
       </div>
-    </>
+    </OperationsShell>
   );
 }
 

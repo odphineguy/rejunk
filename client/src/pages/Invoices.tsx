@@ -93,11 +93,16 @@ function newDraftInvoice(): InvoiceRecord {
 
 function InvoiceHeader({ crumb, actions }: { crumb?: string; actions?: React.ReactNode }) {
   return (
-    <div className="border-b border-border bg-background px-4 py-5 md:px-8">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-2 text-base">
-          <FileText className="size-5 text-foreground" />
-          <Link href="/invoices" className="text-foreground hover:text-[#155e3f]">
+    <div className="border-b border-border bg-background px-4 py-5 md:px-6">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-3">
+          <span className="flex size-9 items-center justify-center rounded-[10px] border border-border bg-card text-[var(--moss-deep)] shadow-sm">
+            <FileText className="size-[18px]" />
+          </span>
+          <Link
+            href="/invoices"
+            className="font-display text-xl font-bold tracking-tight text-foreground hover:text-[#155e3f]"
+          >
             Invoices
           </Link>
           {crumb && (

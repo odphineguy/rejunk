@@ -244,11 +244,15 @@ export default function Messages() {
 
   return (
     <>
-      <div className="border-b border-border bg-background px-4 py-5 md:px-8">
+      <div className="border-b border-border bg-background px-4 py-5 md:px-6">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-lg font-medium">
-            <MessageSquare className="size-5" />
-            Messages
+          <div className="flex items-center gap-3">
+            <span className="flex size-9 items-center justify-center rounded-[10px] border border-border bg-card text-[var(--moss-deep)] shadow-sm">
+              <MessageSquare className="size-[18px]" />
+            </span>
+            <span className="font-display text-xl font-bold tracking-tight text-foreground">
+              Messages
+            </span>
           </div>
           <Button onClick={() => setNewMessageOpen(true)} className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]">
             <Plus className="size-4" />
@@ -598,6 +602,16 @@ function JobContext({ thread, employees }: { thread: DispatchThread; employees: 
       </div>
       <div className="mt-4 space-y-4">
         <ContextRow label="Customer">{job.customerName}</ContextRow>
+        <ContextRow label="Phone">
+          {job.phone ? (
+            <a href={`tel:${job.phone}`} className="flex items-center gap-2 text-[#155e3f] hover:underline">
+              <Phone className="size-4" />
+              {job.phone}
+            </a>
+          ) : (
+            "Not provided"
+          )}
+        </ContextRow>
         <ContextRow label="Address">{[job.address, job.city, job.zip].filter(Boolean).join(", ") || "Not provided"}</ContextRow>
         <ContextRow label="Service">{job.materialName || job.jobLabel || job.serviceType?.replaceAll("_", " ") || "Junk removal"}</ContextRow>
         <ContextRow label="Scheduled">{formatSchedule(job)}</ContextRow>

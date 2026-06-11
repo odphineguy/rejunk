@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import type { LucideIcon } from "lucide-react";
+import { OperationsShell } from "@/components/OperationsShell";
 import {
   BadgePercent,
   Bell,
@@ -47,24 +48,13 @@ const settingsCards: SettingsCard[] = [
 
 export default function Settings() {
   return (
-    <>
-      <div className="border-b border-border bg-background px-4 py-5 md:px-8">
-        <div className="flex items-center gap-2">
-          <SettingsIcon className="size-5 text-foreground" />
-          <span className="font-display text-xl font-bold tracking-tight text-foreground">
-            Settings
-          </span>
-        </div>
+    <OperationsShell title="Settings" icon={SettingsIcon}>
+      <div className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
+        {settingsCards.map((card) => (
+          <SettingsTile key={card.label} card={card} />
+        ))}
       </div>
-
-      <div className="px-4 py-8 md:px-8">
-        <div className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
-          {settingsCards.map((card) => (
-            <SettingsTile key={card.label} card={card} />
-          ))}
-        </div>
-      </div>
-    </>
+    </OperationsShell>
   );
 }
 

@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { Banknote, ChevronLeft, ChevronRight, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
+import { OperationsShell } from "@/components/OperationsShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -78,17 +79,8 @@ export default function Payments() {
   };
 
   return (
-    <>
-      <div className="border-b border-border bg-background px-4 py-5 md:px-8">
-        <div className="flex items-center gap-2">
-          <Banknote className="size-5 text-foreground" />
-          <span className="font-display text-xl font-bold tracking-tight text-foreground">
-            Payments
-          </span>
-        </div>
-      </div>
-
-      <div className="space-y-5 px-4 py-8 md:px-8">
+    <OperationsShell title="Payments" icon={Banknote}>
+      <div className="space-y-5">
         <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="relative w-full lg:max-w-[400px]">
@@ -197,6 +189,6 @@ export default function Payments() {
           <span className="hidden md:block" />
         </section>
       </div>
-    </>
+    </OperationsShell>
   );
 }

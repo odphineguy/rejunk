@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 
 import { loadMapScript } from "@/components/Map";
+import { OperationsShell } from "@/components/OperationsShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -860,52 +861,45 @@ export default function EstimateBuilder() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-background px-4 py-5 md:px-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-2 text-base">
-            <Calculator className="size-5 text-foreground" />
-            <span className="font-medium text-foreground">
-              Estimate Builder
-            </span>
-          </div>
-          <div
-            className="inline-flex rounded-lg border border-border bg-muted/40 p-1"
-            role="tablist"
-            aria-label="Estimate mode"
+    <OperationsShell
+      title="Estimate Builder"
+      icon={Calculator}
+      actions={
+        <div
+          className="inline-flex rounded-lg border border-border bg-muted/40 p-1"
+          role="tablist"
+          aria-label="Estimate mode"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "junk"}
+            onClick={() => setMode("junk")}
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "junk" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
           >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "junk"}
-              onClick={() => setMode("junk")}
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "junk" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              Junk Removal
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "moving"}
-              onClick={() => setMode("moving")}
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "moving" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              Moving
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "service"}
-              onClick={() => setMode("service")}
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "service" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              Assembly &amp; Handyman
-            </button>
-          </div>
+            Junk Removal
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "moving"}
+            onClick={() => setMode("moving")}
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "moving" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Moving
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "service"}
+            onClick={() => setMode("service")}
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "service" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Assembly &amp; Handyman
+          </button>
         </div>
-      </header>
-
-      <main className="px-4 py-6 md:px-6">
+      }
+    >
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Job Info</CardTitle>
@@ -1684,8 +1678,7 @@ export default function EstimateBuilder() {
             </aside>
           </div>
         )}
-      </main>
-    </div>
+    </OperationsShell>
   );
 }
 
