@@ -1,7 +1,9 @@
 import type { PricebookCrewSize, PricebookItem, PricebookItemType, PricebookPriceUnit } from "@/types/pricebook";
 
-/** Which estimator the EstimateBuilder is currently in. */
-export type EstimateMode = "junk" | "service";
+/** Which estimator the EstimateBuilder is currently in. "service" and "moving"
+ * share the Pricebook engine (serviceCalculator); "moving" just scopes the UI
+ * to the moving categories and enforces the 2-hour moving minimum. */
+export type EstimateMode = "junk" | "service" | "moving";
 
 export type StairFloor = "none" | "2nd" | "3rd" | "above_3rd";
 
@@ -51,6 +53,7 @@ export type ServiceWarningCode =
   | "crew_three"
   | "min_service_call"
   | "two_worker_minimum"
+  | "moving_two_hour_min"
   | "photo_required";
 
 export interface ServiceWarning {

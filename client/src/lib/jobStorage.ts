@@ -175,7 +175,9 @@ export function createJobFromEstimate(estimate: SavedEstimate): Job {
   const estimatedMarginDecimal = estimate.grossMarginDecimal ?? (estimate.finalQuote > 0 ? estimatedProfit / estimate.finalQuote : 0);
   const location = parseEstimateLocation(estimate.jobAddress);
 
-  const isService = estimate.mode === "service";
+  // Moving estimates ride the same Pricebook snapshot as service estimates —
+  // neither carries material/volume/facility data.
+  const isService = estimate.mode === "service" || estimate.mode === "moving";
 
   return saveJob({
     id: jobId(),

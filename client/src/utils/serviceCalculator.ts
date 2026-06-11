@@ -33,9 +33,17 @@ function lineTotalFor(unitPrice: number, unit: PricebookPriceUnit | undefined, q
   return round2(unitPrice * Math.max(0, quantity));
 }
 
+/** Ops rule: 2-hour minimum on ALL moving jobs — hourly moving lines bill at least 2 hours. */
+const MOVING_MIN_HOURS = 2;
+
+function isHourlyMoving(entry: ServiceQuoteEntry) {
+  return entry.item.mode === "moving" && entry.item.priceUnit === "hourly";
+}
+
 function toLineResult(entry: ServiceQuoteEntry): ServiceLineResult {
   const { item } = entry;
-  const quantity = Math.max(0, entry.quantity || 0);
+  let quantity = Math.max(0, entry.quantity || 0);
+  if (quantity > 0 && isHourlyMoving(entry)) quantity = Math.max(quantity, MOVING_MIN_HOURS);
   return {
     itemId: item.id,
     name: item.name,
@@ -165,6 +173,16 @@ export function calculateServiceEstimate(input: ServiceEstimateInput): ServiceEs
   }
   if (twoWorkerFloorApplied) {
     warnings.push({ code: "two_worker_minimum", message: `Raised to the $${config.twoWorkerMinimum} two-worker minimum.`, severity: "info" });
+  }
+  const movingMinHoursApplied = (input.lineItems ?? []).some(
+    (entry) => isHourlyMoving(entry) && (entry.quantity || 0) > 0 && (entry.quantity || 0) < MOVING_MIN_HOURS,
+  );
+  if (movingMinHoursApplied) {
+    warnings.push({
+      code: "moving_two_hour_min",
+      message: `Moving jobs bill a ${MOVING_MIN_HOURS}-hour minimum — hourly lines below ${MOVING_MIN_HOURS} hours were raised to ${MOVING_MIN_HOURS}.`,
+      severity: "info",
+    });
   }
   if (photoRequired) {
     warnings.push({ code: "photo_required", message: "Photos required before confirming final price with customer.", severity: "warning" });

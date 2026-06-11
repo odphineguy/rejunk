@@ -86,7 +86,45 @@ function QtyStepper({ value, onChange }: { value: number; onChange: (next: numbe
   );
 }
 
+/** Which Pricebook slice the panel quotes from. Both run the same calculator;
+ * "moving" scopes the pickers to the moving categories and seeds hourly crews
+ * at the 2-hour moving minimum. */
+export type ServicePanelMode = "service" | "moving";
+
+const PANEL_COPY: Record<ServicePanelMode, {
+  itemsTitle: string;
+  itemsDescription: string;
+  itemPlaceholder: string;
+  emptyText: string;
+  quoteTitle: string;
+  loadLabel: string;
+  savedToast: string;
+  quoteHeading: string;
+}> = {
+  service: {
+    itemsTitle: "Service Items",
+    itemsDescription: "Flat-rate assembly, handyman, appliance, and cleaning items from the Pricebook.",
+    itemPlaceholder: "Add a service item…",
+    emptyText: "No items yet. Use the dropdown to add assembly, handyman, appliance, or cleaning items.",
+    quoteTitle: "Service Quote",
+    loadLabel: "Service / Task",
+    savedToast: "Service estimate saved",
+    quoteHeading: "Service Estimate",
+  },
+  moving: {
+    itemsTitle: "Moving Items",
+    itemsDescription: "Flat-rate moves, hourly crews, and specialty items (pianos, safes, hot tubs). 2-hour minimum on all moving jobs.",
+    itemPlaceholder: "Add a move, hourly crew, or specialty item…",
+    emptyText: "No items yet. Pick a flat-rate move, an hourly crew, or a specialty item from the dropdown.",
+    quoteTitle: "Moving Quote",
+    loadLabel: "Moving",
+    savedToast: "Moving estimate saved",
+    quoteHeading: "Moving Estimate",
+  },
+};
+
 export interface ServiceEstimatePanelProps {
+  mode: ServicePanelMode;
   customerName: string;
   jobAddress: string;
   notes: string;
@@ -94,7 +132,8 @@ export interface ServiceEstimatePanelProps {
   loadSeed?: SavedEstimate | null;
 }
 
-export function ServiceEstimatePanel({ customerName, jobAddress, notes, onSaved, loadSeed }: ServiceEstimatePanelProps) {
+export function ServiceEstimatePanel({ mode, customerName, jobAddress, notes, onSaved, loadSeed }: ServiceEstimatePanelProps) {
+  const copy = PANEL_COPY[mode];
   const [pricebook, setPricebook] = useState(() => getPricebook());
   const [itemQty, setItemQty] = useState<Record<string, number>>({});
   const [surchargeQty, setSurchargeQty] = useState<Record<string, number>>({});
@@ -122,11 +161,12 @@ export function ServiceEstimatePanel({ customerName, jobAddress, notes, onSaved,
 
   const itemsById = useMemo(() => Object.fromEntries(pricebook.items.map((item) => [item.id, item])), [pricebook.items]);
 
-  // Quotable service items (assembly/handyman/appliance/cleaning + moving), excluding fees + the auto discount.
+  // Quotable items for this tab's mode, excluding fees + the auto discount.
+  const panelCategoryMode = mode === "moving" ? "moving" : "assembly_service";
   const serviceGroups = useMemo(() => {
     const sorted = [...pricebook.categories].sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999));
     return sorted
-      .filter((category) => category.mode === "assembly_service" || category.mode === "moving")
+      .filter((category) => category.mode === panelCategoryMode)
       .map((category) => ({
         category,
         items: pricebook.items.filter(
@@ -134,12 +174,19 @@ export function ServiceEstimatePanel({ customerName, jobAddress, notes, onSaved,
         ),
       }))
       .filter((group) => group.items.length > 0);
-  }, [pricebook.categories, pricebook.items]);
+  }, [pricebook.categories, pricebook.items, panelCategoryMode]);
 
-  // Surcharge / fee items (excludes the stair items — those use the dedicated control — and the auto discount).
+  // Surcharge / fee items (excludes the stair items — those use the dedicated control — and the
+  // auto discount). Moving-specific fees (travel, mileage, liftgate) only show on the Moving tab;
+  // generic surcharges/overages/fees show on both.
   const surchargeGroups = useMemo(() => {
+    const categoryModeById = new Map(pricebook.categories.map((c) => [c.id, c.mode]));
     const fees = pricebook.items.filter(
-      (item) => item.itemType === "Fee" && item.id !== "assembly-multi-item-discount" && !item.id.startsWith("surcharge-stairs-"),
+      (item) =>
+        item.itemType === "Fee" &&
+        item.id !== "assembly-multi-item-discount" &&
+        !item.id.startsWith("surcharge-stairs-") &&
+        (categoryModeById.get(item.categoryId) !== "moving" || mode === "moving"),
     );
     const byCategory = new Map<string, { category: PricebookCategory | undefined; items: PricebookItem[] }>();
     fees.forEach((item) => {
@@ -188,7 +235,13 @@ export function ServiceEstimatePanel({ customerName, jobAddress, notes, onSaved,
       return next;
     });
 
-  const addItem = (id: string) => setItem(id, (itemQty[id] ?? 0) + 1);
+  const addItem = (id: string) => {
+    const item = itemsById[id];
+    // Hourly moving crews start at the 2-hour moving minimum (the calculator
+    // also enforces it, but seeding 2 keeps what's shown honest).
+    const seed = item?.mode === "moving" && item.priceUnit === "hourly" ? 2 : 1;
+    setItem(id, (itemQty[id] ?? 0) + (itemQty[id] ? 1 : seed));
+  };
   const addSurcharge = (id: string) => setSurcharge(id, (surchargeQty[id] ?? 0) + 1);
 
   const reset = () => {
@@ -230,14 +283,14 @@ export function ServiceEstimatePanel({ customerName, jobAddress, notes, onSaved,
       return;
     }
     const now = new Date().toISOString();
-    const primaryName = result.lineItems[0]?.name ?? "Service";
+    const primaryName = result.lineItems[0]?.name ?? (mode === "moving" ? "Moving" : "Service");
     const estimate: SavedEstimate = {
       id: newId(),
       createdAt: now,
       updatedAt: now,
       customerName: customerName || undefined,
       jobAddress: jobAddress || undefined,
-      loadLabel: "Service / Task",
+      loadLabel: copy.loadLabel,
       materialName: primaryName,
       // Placeholder — service estimates are distinguished by `mode`, not material.
       materialType: "household_junk",
@@ -256,19 +309,19 @@ export function ServiceEstimatePanel({ customerName, jobAddress, notes, onSaved,
       grossProfitDollars: result.grossProfitDollars,
       grossMarginDecimal: result.grossMarginDecimal,
       notes: notes || undefined,
-      mode: "service",
+      mode,
       service: buildSnapshot(),
       serviceType: deriveServiceType(),
       crewSize: result.crewSize,
     };
     saveEstimate(estimate);
     onSaved();
-    toast.success("Service estimate saved");
+    toast.success(copy.savedToast);
   };
 
   const customerQuoteText = () =>
     [
-      "Service Estimate",
+      copy.quoteHeading,
       "",
       `Estimated price: ${money(result.total)}`,
       `Crew: ${result.crewSize} worker${result.crewSize > 1 ? "s" : ""}`,
@@ -294,13 +347,13 @@ export function ServiceEstimatePanel({ customerName, jobAddress, notes, onSaved,
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Service Items</CardTitle>
-            <CardDescription>Flat-rate assembly, handyman, appliance, and moving items from the Pricebook.</CardDescription>
+            <CardTitle>{copy.itemsTitle}</CardTitle>
+            <CardDescription>{copy.itemsDescription}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Select value="" onValueChange={addItem}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Add a service item…" />
+                <SelectValue placeholder={copy.itemPlaceholder} />
               </SelectTrigger>
               <SelectContent className="max-h-80">
                 {serviceGroups.map((group) => (
@@ -319,7 +372,7 @@ export function ServiceEstimatePanel({ customerName, jobAddress, notes, onSaved,
 
             {lineEntries.length === 0 ? (
               <p className="rounded-lg border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-                No items yet. Use the dropdown to add assembly, handyman, appliance, or moving items.
+                {copy.emptyText}
               </p>
             ) : (
               <div className="divide-y divide-border rounded-lg border border-border">
@@ -337,7 +390,9 @@ export function ServiceEstimatePanel({ customerName, jobAddress, notes, onSaved,
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <QtyStepper value={line.quantity} onChange={(qty) => setItem(line.itemId, qty)} />
+                      {/* Stepper binds to the entered qty (not the billed qty) so the
+                          2-hour moving clamp can't trap the value above zero. */}
+                      <QtyStepper value={itemQty[line.itemId] ?? line.quantity} onChange={(qty) => setItem(line.itemId, qty)} />
                       <Button variant="ghost" size="icon" className="size-7" onClick={() => setItem(line.itemId, 0)} aria-label={`Remove ${line.name}`}>
                         <Trash2 className="size-4 text-red-500" />
                       </Button>
@@ -432,7 +487,7 @@ export function ServiceEstimatePanel({ customerName, jobAddress, notes, onSaved,
           <CardHeader>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <CardTitle>Service Quote</CardTitle>
+                <CardTitle>{copy.quoteTitle}</CardTitle>
                 <CardDescription>{hasItems ? `${lineEntries.length} item${lineEntries.length > 1 ? "s" : ""}` : "Add items to calculate."}</CardDescription>
               </div>
               {hasItems ? <CrewBadge crewSize={result.crewSize} /> : <Badge variant="outline">Not ready</Badge>}

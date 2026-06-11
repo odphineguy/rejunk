@@ -715,13 +715,13 @@ export default function EstimateBuilder() {
   };
 
   const loadSavedIntoBuilder = (estimate: SavedEstimate) => {
-    if (estimate.mode === "service") {
+    if (estimate.mode === "service" || estimate.mode === "moving") {
       setCustomerName(estimate.customerName ?? "");
       setJobAddress(estimate.jobAddress ?? "");
       setNotes(estimate.notes ?? "");
       setServiceLoadSeed(estimate);
-      setMode("service");
-      toast.success("Service estimate loaded into builder");
+      setMode(estimate.mode);
+      toast.success(`${estimate.mode === "moving" ? "Moving" : "Service"} estimate loaded into builder`);
       return;
     }
     setMode("junk");
@@ -886,11 +886,20 @@ export default function EstimateBuilder() {
             <button
               type="button"
               role="tab"
+              aria-selected={mode === "moving"}
+              onClick={() => setMode("moving")}
+              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "moving" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Moving
+            </button>
+            <button
+              type="button"
+              role="tab"
               aria-selected={mode === "service"}
               onClick={() => setMode("service")}
               className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "service" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
             >
-              Service / Task
+              Assembly &amp; Handyman
             </button>
           </div>
         </div>
@@ -931,9 +940,12 @@ export default function EstimateBuilder() {
           </CardContent>
         </Card>
 
-        {mode === "service" ? (
+        {mode !== "junk" ? (
           <div className="space-y-6">
             <ServiceEstimatePanel
+              // key resets the panel's line items when switching Moving <-> Assembly.
+              key={mode}
+              mode={mode}
               customerName={customerName}
               jobAddress={jobAddress}
               notes={notes}
@@ -1724,12 +1736,12 @@ function SavedEstimatesPanel({
                       "Unnamed estimate"}
                   </div>
                   <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                    {estimate.mode === "service" && (
+                    {(estimate.mode === "service" || estimate.mode === "moving") && (
                       <Badge
                         variant="outline"
                         className="px-1.5 py-0 text-[10px]"
                       >
-                        Service
+                        {estimate.mode === "moving" ? "Moving" : "Service"}
                       </Badge>
                     )}
                     {estimate.materialName ||

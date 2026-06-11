@@ -1,6 +1,6 @@
 -- Staff authentication ("the front door" for the office app).
 --
--- NOT APPLIED YET — Abe applies migrations to the live database himself.
+-- APPLIED to the live DB 2026-06-10 (with Abe's go-ahead; seeded emails are real).
 --
 -- Staff sign in at /login with email + 4-digit PIN. The PIN hash uses the
 -- exact same PBKDF2-SHA256 format as driver PINs (client/src/lib/driverAuth.ts
@@ -34,21 +34,20 @@ create policy "staff updatable by authenticated"
   on public.staff for update to authenticated using (true) with check (true);
 
 -- ─── Seed users ──────────────────────────────────────────────────────────────
--- ⚠️ EDIT THE EMAILS BELOW BEFORE APPLYING — these are placeholders.
--- ⚠️ Both PINs are the temporary 0000. CHANGE BOTH PINs after the first
---    deploy (there is no PIN-change UI yet; update pin_hash directly, or ask
---    Claude to generate a new hash — same format as driver PINs).
+-- Both PINs start as 0000 (Abe's call, 2026-06-10: fine for now). To change
+-- one later, update pin_hash directly — same PBKDF2 format as driver PINs;
+-- ask Claude to generate a new hash.
 insert into public.staff (full_name, email, pin_hash, role)
 values
   (
     'Abe',
-    'abe@example.com',  -- ⚠️ placeholder: replace with Abe's real email
+    'odphineguy@gmail.com',
     'pbkdf2-sha256$100000$do/b1iqCukxybLrwJEgbYQ==$P40Clr4KUBKZAWkiuDXa7rtPJ9AyObuEJfcy2CG8Dfo=',  -- PIN 0000
     'owner'
   ),
   (
     'Sam',
-    'sam@example.com',  -- ⚠️ placeholder: replace with Sam's real email
+    'saake28@gmail.com',
     'pbkdf2-sha256$100000$zuoKEDxRvL+oB2fLnk+wjA==$1fAfxiw9WokkmkSFx4RW9x5MC7NJgqHMtwTrF8ZY7pU=',  -- PIN 0000
     'owner'
   )
