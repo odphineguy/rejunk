@@ -4,8 +4,8 @@ import { PALETTE } from "./palette";
 export function LandingFooter() {
   return (
     <footer
-      className="flex flex-col items-center gap-1 px-6 py-8 text-center text-xs md:flex-row md:justify-center md:gap-3"
-      style={{ background: PALETTE.sand, color: PALETTE.inkSoft }}
+      className="flex flex-col items-center gap-1 border-t px-6 py-8 text-center text-xs md:flex-row md:justify-center md:gap-3"
+      style={{ borderColor: PALETTE.pineLine, color: PALETTE.paperSoft }}
     >
       <span>Progressive Transportation Services LLC</span>
       <span className="hidden md:inline">·</span>

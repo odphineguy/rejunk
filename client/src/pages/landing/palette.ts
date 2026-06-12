@@ -1,50 +1,24 @@
 /**
- * Every color in the landing scene, in one place. Kept in its own tiny module
- * (rather than inside GarageScene) because App.tsx needs DOOR_COLOR for the
- * Suspense fallback — the closed door — without pulling in the whole scene.
+ * Landing page colors, in one tiny module because App.tsx needs the page
+ * background for the Suspense fallback without pulling in the whole page.
  *
- * Brand greens come from the Rejunk logo (pine + lime, see index.css tokens);
- * everything else is the warm desert-neutral family.
+ * Brand greens come from the Rejunk logo (pine + lime, see index.css tokens).
  */
 
 export const PALETTE = {
-  /** Rejunk pine — truck box, wordmarks, dark accents. */
+  /** Rejunk pine — the page background. */
   pine: "#052a2b",
+  /** A step lighter than pine — cards and raised surfaces. */
+  pineRaised: "#0a3b3c",
+  /** Hairline borders on pine surfaces. */
+  pineLine: "#16494a",
   /** Rejunk lime — CTA, highlights. */
   lime: "#83e282",
-  /** Deeper green for CTA hover / icon strokes. */
-  moss: "#1f7a4a",
-
-  /** Warm sand page + scene background. */
-  sand: "#f3ead9",
-  /** Slightly deeper sand for the driveway / ground band. */
-  sandDeep: "#e6d8bf",
-  /** Warm sky band behind the house. */
-  sky: "#fdf6e8",
-  /** Stucco house wall. */
-  stucco: "#efe2c8",
-  /** Stucco shadow / trim. */
-  stuccoShade: "#dcc9a5",
-  /** Roof line + wheels + outlines. */
-  charcoal: "#3d3a34",
-  /** Soft charcoal for text. */
-  ink: "#2b2925",
-  /** Muted text. */
-  inkSoft: "#6b675e",
-
-  /** The garage door panels — also the Suspense fallback color. */
-  door: "#e9dcc3",
-  doorLine: "#cdbb97",
-  /** Dark garage interior revealed behind the door. */
-  garageDark: "#2e2b26",
-
-  /** Terracotta — secondary accent for select junk items. */
-  terracotta: "#c96f4a",
-  /** Amber — paint cans, lamp shade. */
-  amber: "#dba84d",
-  /** Saguaro green (desaturated, not a brand green). */
-  cactus: "#7d9d6a",
+  /** Near-white text on pine. */
+  paper: "#f2f7f2",
+  /** Muted text on pine. */
+  paperSoft: "#9db8ad",
 } as const;
 
-/** The closed-door color App.tsx paints while the landing chunk downloads. */
-export const DOOR_COLOR = PALETTE.door;
+/** The color App.tsx paints while the landing chunk downloads. */
+export const LANDING_BG = PALETTE.pine;
