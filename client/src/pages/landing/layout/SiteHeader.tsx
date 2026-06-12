@@ -23,7 +23,7 @@ export function SiteHeader() {
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3 md:px-8">
         <Link href="/" aria-label="Rejunk home" onClick={() => setOpen(false)}>
           {/* rejunk-whites.png is the dark-on-transparent logo made for white surfaces. */}
-          <img src="/rejunk-whites.png" alt="Rejunk" className="h-9 w-auto md:h-10" />
+          <img src="/rejunk-whites.png" alt="Rejunk" className="h-18 w-auto md:h-20" />
         </Link>
 
         <nav className="hidden items-center gap-6 md:flex" aria-label="Main">
