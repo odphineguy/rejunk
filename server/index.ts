@@ -3,6 +3,7 @@ import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 import { driverActivationRouter } from "./routes/driverActivation";
+import { leadRouter } from "./routes/lead";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,6 +13,7 @@ async function startServer() {
   const server = createServer(app);
 
   app.use("/api/driver", express.json(), driverActivationRouter);
+  app.use("/api/lead", express.json(), leadRouter);
 
   app.use("/maps-proxy", async (req, res) => {
     const googleMapsKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;

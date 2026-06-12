@@ -281,7 +281,53 @@ function vitePluginDriverApi(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy(), vitePluginMapsProxy(), vitePluginDriverApi()];
+// Dev-server twin of the Express POST /api/lead route (website estimate-form
+// leads), same situation as the driver activation middleware above. The
+// deployed static site uses the Vercel function api/lead.ts instead.
+function vitePluginLeadApi(): Plugin {
+  return {
+    name: "rejunk-lead-api",
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use("/api/lead", (req, res) => {
+        if (req.method !== "POST") {
+          res.writeHead(405, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "POST only" }));
+          return;
+        }
+        let body = "";
+        req.on("data", (chunk) => {
+          body += chunk.toString();
+        });
+        req.on("end", () => {
+          void (async () => {
+            try {
+              const { sendLeadEmail, validateLeadPayload } = await import("./server/leadEmail");
+              const lead = validateLeadPayload(JSON.parse(body || "{}"));
+              if (!lead) {
+                res.writeHead(400, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: "A name, phone number, and at least one service are required." }));
+                return;
+              }
+              if (lead.isBot) {
+                res.writeHead(200, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ sent: true }));
+                return;
+              }
+              const result = await sendLeadEmail(lead);
+              res.writeHead(result.sent ? 200 : 502, { "Content-Type": "application/json" });
+              res.end(JSON.stringify(result.sent ? { sent: true } : { error: result.error ?? "The lead email could not be sent." }));
+            } catch (error) {
+              res.writeHead(500, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: String(error) }));
+            }
+          })();
+        });
+      });
+    },
+  };
+}
+
+const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy(), vitePluginMapsProxy(), vitePluginDriverApi(), vitePluginLeadApi()];
 
 export default defineConfig(({ mode }) => {
   // Vite only hands VITE_-prefixed values to the browser. The dev maps + storage
@@ -289,7 +335,7 @@ export default defineConfig(({ mode }) => {
   // .env file here and copy the keys in — otherwise the maps proxy can't find the
   // Google key and the map silently falls back to the local placeholder view.
   const env = loadEnv(mode, path.resolve(import.meta.dirname), "");
-  for (const key of ["GOOGLE_MAPS_API_KEY", "VITE_GOOGLE_MAPS_API_KEY", "BUILT_IN_FORGE_API_URL", "BUILT_IN_FORGE_API_KEY", "RESEND_API_KEY", "RESEND_FROM"]) {
+  for (const key of ["GOOGLE_MAPS_API_KEY", "VITE_GOOGLE_MAPS_API_KEY", "BUILT_IN_FORGE_API_URL", "BUILT_IN_FORGE_API_KEY", "RESEND_API_KEY", "RESEND_FROM", "LEAD_TO"]) {
     if (!process.env[key] && env[key]) {
       process.env[key] = env[key];
     }

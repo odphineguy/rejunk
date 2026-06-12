@@ -1,0 +1,66 @@
+/**
+ * Site-wide marketing content: contact info, nav, eco stats, page meta.
+ * Single source of truth so the real phone number is a one-line swap.
+ */
+
+// TODO: replace with the real business number before pushing live — this
+// placeholder is used by every Call/Text button on the public site.
+export const PHONE_DISPLAY = "(602) 555-0123";
+export const PHONE_HREF = "tel:+16025550123";
+export const SMS_HREF = "sms:+16025550123";
+
+export const SERVICE_AREA = "Phoenix metro & East Valley";
+
+export const NAV_ITEMS = [
+  { label: "Junk Removal", href: "/junk-removal" },
+  { label: "Moving", href: "/moving" },
+  { label: "Assembly & Handyman", href: "/assembly-handyman" },
+] as const;
+
+/**
+ * The eco story is Rejunk's differentiator: the owner spent 17 years on the
+ * waste-collection side at Waste Management and the business routes every load
+ * to the right Phoenix-metro facility. Facility count mirrors the operations
+ * database (client/src/data/facilities.ts — 12 facilities as of 2026-06;
+ * hard-coded here so the data file stays out of the marketing bundle).
+ */
+export const ECO_STATS = [
+  { value: "17", unit: "years", label: "in the waste & recycling industry" },
+  { value: "12+", unit: "facilities", label: "recycling, donation & disposal sites we route to" },
+  { value: "1st", unit: "stop", label: "donate and recycle before anything hits a landfill" },
+] as const;
+
+export const ECO_HEADING = "We know where your junk should actually go.";
+export const ECO_PARAGRAPH =
+  "Before Rejunk, our founder spent 17 years in waste collection at Waste Management. " +
+  "That means every load we haul gets routed on purpose — metal to the scrap yard, " +
+  "usable furniture to donation, green waste to composting, electronics to certified " +
+  "recyclers — not just dumped at the nearest landfill.";
+
+export const PAGE_META = {
+  home: {
+    title: "Rejunk — Junk Removal, Moving & Assembly in Phoenix, AZ",
+    description:
+      "Junk removal, local moving, and assembly & handyman services across the Phoenix valley. Eco-friendly disposal, upfront pricing, usually same-day.",
+  },
+  junk: {
+    title: "Junk Removal in Phoenix, AZ — Same-Day Hauling | Rejunk",
+    description:
+      "Full cleanouts or single items, hauled the same day across Phoenix and the East Valley. We donate and recycle first — 17 years of waste-industry know-how.",
+  },
+  moving: {
+    title: "Local Moving & Delivery in Phoenix, AZ | Rejunk",
+    description:
+      "Local moves, in-home furniture moves, and big-item delivery across the Phoenix valley. Careful crews, upfront pricing.",
+  },
+  assembly: {
+    title: "Assembly & Handyman in Phoenix — Senior-Friendly | Rejunk",
+    description:
+      "Furniture assembly, TV mounting, grab bars, and small repairs across Phoenix. Patient, senior-friendly service — and we help everyone.",
+  },
+  estimate: {
+    title: "Get a Free Estimate | Rejunk Phoenix",
+    description:
+      "Tell us what you need hauled, moved, or built and we'll text or call you back with a quote — usually within the hour.",
+  },
+} as const;

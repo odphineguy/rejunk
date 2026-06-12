@@ -4,15 +4,16 @@ import { useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LANDING_BG } from "./pages/landing/palette";
+import { isPublicPath } from "./pages/landing/publicPaths";
 
 // Three separate bundles so paid-lead traffic on the landing page never
 // downloads the office or driver apps (and none of the Supabase/maps code
 // they pull in). Each lazy module owns its own providers and routing.
-const Landing = lazy(() => import("./pages/landing/Landing"));
+const Landing = lazy(() => import("./pages/landing/SiteRouter"));
 const StaffApp = lazy(() => import("./StaffApp"));
 const DriverApp = lazy(() => import("./DriverApp"));
 
-// Full-viewport block in the landing page's pine background so there's no
+// Full-viewport block in the landing page's background so there's no
 // flash while the landing chunk downloads.
 function LandingFallback() {
   return <div style={{ minHeight: "100dvh", background: LANDING_BG }} />;
@@ -25,7 +26,7 @@ function AppFallback() {
 function App() {
   const [location] = useLocation();
   const isDriverRoute = location === "/driver" || location.startsWith("/driver/");
-  const isLandingRoute = location === "/";
+  const isLandingRoute = isPublicPath(location);
 
   return (
     <ErrorBoundary>
