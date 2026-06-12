@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   AlertTriangle,
@@ -61,8 +61,10 @@ import { PhotoRequiredBanner } from "@/components/PhotoRequiredBanner";
 import type {
   EstimateWarning,
   ExtraFee,
+  FacilityRouteComparison,
   JobRouteEstimate,
   SavedEstimate,
+  VehicleJobComparison,
 } from "@/types/pricing";
 import type { EstimateMode } from "@/types/service";
 
@@ -364,6 +366,10 @@ export default function EstimateBuilder() {
   const [routeEstimates, setRouteEstimates] = useState<
     Record<string, JobRouteEstimate>
   >({});
+  // Tracks the last value WE wrote into "Round trip miles" so the auto-fill
+  // never clobbers a number the user typed by hand. "20" is the seed default
+  // and counts as overwritable.
+  const lastAutoMilesRef = useRef<string>("20");
 
   useEffect(() => {
     const refreshSettings = () => {
@@ -493,6 +499,26 @@ export default function EstimateBuilder() {
       canceled = true;
     };
   }, [jobAddress, activeFacilities]);
+
+  // Auto-fill "Round trip miles" from the real route to the selected facility.
+  // Only overwrites the seed default / a previous auto-fill — a hand-typed
+  // value stays until the user clears it or the route changes underneath it.
+  const selectedFacilityRoute = selectedFacility
+    ? routeEstimates[selectedFacility.id]
+    : undefined;
+  useEffect(() => {
+    if (selectedFacilityRoute?.roundTripMiles == null) return;
+    const next = String(Math.round(selectedFacilityRoute.roundTripMiles));
+    setRoundTripMiles(current => {
+      if (current !== "" && current !== lastAutoMilesRef.current) return current;
+      lastAutoMilesRef.current = next;
+      return next;
+    });
+  }, [selectedFacilityRoute?.roundTripMiles, roundTripMiles]);
+  const milesAutoFilled =
+    selectedFacilityRoute?.roundTripMiles != null &&
+    roundTripMiles !== "" &&
+    roundTripMiles === lastAutoMilesRef.current;
 
   const recommendationBundle = useMemo(
     () =>
@@ -1205,13 +1231,22 @@ export default function EstimateBuilder() {
                     />
                   </Field>
                   <Field label="Round trip miles">
-                    <Input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={roundTripMiles}
-                      onChange={event => setRoundTripMiles(event.target.value)}
-                    />
+                    <div className="space-y-1">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={roundTripMiles}
+                        onChange={event => setRoundTripMiles(event.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {milesAutoFilled
+                          ? "Auto-filled from the real route to this facility. Type to override."
+                          : selectedFacilityRoute?.roundTripMiles != null
+                            ? `Manual override (route says ${Math.round(selectedFacilityRoute.roundTripMiles)} mi). Clear the field to use the route.`
+                            : "Enter manually — route distance unavailable."}
+                      </p>
+                    </div>
                   </Field>
                   <Field label="MPG">
                     <Input
@@ -1528,9 +1563,15 @@ export default function EstimateBuilder() {
                         />
                         <DetailRow
                           label="Round trip"
-                          value={miles(
-                            recommendation.facilityComparison?.roundTripMiles
-                          )}
+                          value={
+                            recommendation.facilityComparison
+                              ?.estimatedDriveMinutes != null
+                              ? `${miles(recommendation.facilityComparison?.roundTripMiles)} · ~${Math.round(recommendation.facilityComparison.estimatedDriveMinutes)} min`
+                              : miles(
+                                  recommendation.facilityComparison
+                                    ?.roundTripMiles
+                                )
+                          }
                         />
                         <DetailRow
                           label="Estimated operating cost"
@@ -1544,6 +1585,15 @@ export default function EstimateBuilder() {
                       <p className="mt-3 text-muted-foreground">
                         {recommendation.reason}
                       </p>
+                      {recommendation.facilityId !== facility.id && (
+                        <Button
+                          size="sm"
+                          className="mt-3 w-full"
+                          onClick={() => setFacilityId(recommendation.facilityId)}
+                        >
+                          Use {recommendation.facilityName}
+                        </Button>
+                      )}
                       {recommendation.warnings.length > 0 && (
                         <div className="mt-3 flex flex-wrap gap-2">
                           {recommendation.warnings.slice(0, 3).map(warning => (
@@ -1557,6 +1607,23 @@ export default function EstimateBuilder() {
                           ))}
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {quoteReady && recommendation && (
+                    <div className="space-y-2">
+                      <FacilityComparePanel
+                        comparisons={recommendationBundle.facilityComparisons}
+                        selectedFacilityId={facility.id}
+                        recommendedFacilityId={recommendation.facilityId}
+                        onUse={setFacilityId}
+                      />
+                      <VehicleComparePanel
+                        comparisons={recommendationBundle.vehicleComparisons}
+                        selectedVehicleId={vehicle.id}
+                        recommendedVehicleId={recommendation.vehicleId}
+                        onUse={setVehicleId}
+                      />
                     </div>
                   )}
 
@@ -1974,5 +2041,231 @@ function DetailRow({ label, value }: { label: string; value: string }) {
       <span className="text-muted-foreground">{label}</span>
       <span className="text-right font-semibold">{value}</span>
     </div>
+  );
+}
+
+function CompareRowShell({
+  isSelected,
+  children,
+}: {
+  isSelected: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`rounded-lg border p-3 text-sm ${
+        isSelected ? "border-primary bg-primary/5" : "border-border"
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function CompareBadges({
+  isBest,
+  isSelected,
+  flags,
+}: {
+  isBest: boolean;
+  isSelected: boolean;
+  flags: string[];
+}) {
+  return (
+    <span className="flex flex-wrap items-center gap-1">
+      {isBest && (
+        <Badge className="bg-green-100 px-1.5 py-0 text-[10px] text-green-700">
+          Best
+        </Badge>
+      )}
+      {isSelected && (
+        <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+          Selected
+        </Badge>
+      )}
+      {flags.map(flag => (
+        <Badge
+          key={flag}
+          variant="outline"
+          className="border-amber-200 bg-amber-50 px-1.5 py-0 text-[10px] text-amber-800"
+        >
+          {flag}
+        </Badge>
+      ))}
+    </span>
+  );
+}
+
+/** Ranked list of every active facility for this job — same ordering the
+ * recommendation engine uses (compatible first, fresh pricing, then cheapest). */
+function FacilityComparePanel({
+  comparisons,
+  selectedFacilityId,
+  recommendedFacilityId,
+  onUse,
+}: {
+  comparisons: FacilityRouteComparison[];
+  selectedFacilityId: string;
+  recommendedFacilityId: string;
+  onUse: (facilityId: string) => void;
+}) {
+  const ranked = [...comparisons].sort((a, b) => {
+    if (a.acceptedMaterial !== b.acceptedMaterial)
+      return a.acceptedMaterial ? -1 : 1;
+    if (a.pricingStale !== b.pricingStale) return a.pricingStale ? 1 : -1;
+    return a.totalOperationalCost - b.totalOperationalCost;
+  });
+
+  return (
+    <Collapsible>
+      <CollapsibleTrigger asChild>
+        <Button variant="outline" size="sm" className="w-full justify-between">
+          Compare All Facilities ({ranked.length})
+          <ChevronDown className="size-4" />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-2 space-y-2">
+        {ranked.map(comparison => {
+          const isSelected = comparison.facilityId === selectedFacilityId;
+          const flags = [
+            ...(comparison.acceptedMaterial ? [] : ["Material mismatch"]),
+            ...(comparison.pricingStale ? ["Stale pricing"] : []),
+          ];
+          return (
+            <CompareRowShell
+              key={comparison.facilityId}
+              isSelected={isSelected}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5 font-medium">
+                    <span className="truncate">{comparison.facilityName}</span>
+                    <CompareBadges
+                      isBest={comparison.facilityId === recommendedFacilityId}
+                      isSelected={isSelected}
+                      flags={flags}
+                    />
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    {comparison.roundTripMiles != null
+                      ? `${miles(comparison.roundTripMiles)} round trip`
+                      : "Distance unavailable"}
+                    {comparison.estimatedDriveMinutes != null
+                      ? ` · ~${Math.round(comparison.estimatedDriveMinutes)} min`
+                      : ""}
+                    {` · Disposal ${money(comparison.disposalCost)} · Fuel ${money(comparison.fuelCost)}`}
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className="font-bold">
+                    {money(comparison.totalOperationalCost)}
+                  </div>
+                  {!isSelected && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs"
+                      onClick={() => onUse(comparison.facilityId)}
+                    >
+                      Use
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CompareRowShell>
+          );
+        })}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+/** Every active vehicle sized against this load — trips, payload fit, cost,
+ * and profit at the current quote. */
+function VehicleComparePanel({
+  comparisons,
+  selectedVehicleId,
+  recommendedVehicleId,
+  onUse,
+}: {
+  comparisons: VehicleJobComparison[];
+  selectedVehicleId: string;
+  recommendedVehicleId?: string;
+  onUse: (vehicleId: string) => void;
+}) {
+  const ranked = [...comparisons].sort((a, b) => {
+    if (Boolean(a.excludedFromRecommendation) !== Boolean(b.excludedFromRecommendation))
+      return a.excludedFromRecommendation ? 1 : -1;
+    const aOver = a.payloadWarning === "Payload exceeded" ? 1 : 0;
+    const bOver = b.payloadWarning === "Payload exceeded" ? 1 : 0;
+    if (aOver !== bOver) return aOver - bOver;
+    if (a.tripsRequired !== b.tripsRequired)
+      return a.tripsRequired - b.tripsRequired;
+    return b.estimatedProfit - a.estimatedProfit;
+  });
+
+  return (
+    <Collapsible>
+      <CollapsibleTrigger asChild>
+        <Button variant="outline" size="sm" className="w-full justify-between">
+          Compare Vehicles ({ranked.length})
+          <ChevronDown className="size-4" />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-2 space-y-2">
+        {ranked.map(comparison => {
+          const isSelected = comparison.vehicleId === selectedVehicleId;
+          const flags = [
+            ...(comparison.excludedFromRecommendation
+              ? ["Not suitable for this material"]
+              : []),
+            ...(comparison.payloadWarning ? [comparison.payloadWarning] : []),
+            ...(comparison.tripsRequired > 1
+              ? [`${comparison.tripsRequired} trips`]
+              : []),
+          ];
+          return (
+            <CompareRowShell key={comparison.vehicleId} isSelected={isSelected}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5 font-medium">
+                    <span className="truncate">{comparison.vehicleName}</span>
+                    <CompareBadges
+                      isBest={comparison.vehicleId === recommendedVehicleId}
+                      isSelected={isSelected}
+                      flags={flags}
+                    />
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    {`${comparison.cubicYardCapacity} yd³ · ${comparison.payloadCapacityLbs.toLocaleString()} lb payload · Job cost ${money(comparison.totalOperationalCost)}`}
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div
+                    className={`font-bold ${comparison.estimatedProfit < 0 ? "text-destructive" : ""}`}
+                  >
+                    {money(comparison.estimatedProfit)}
+                    <span className="font-normal text-xs text-muted-foreground">
+                      {" "}
+                      profit
+                    </span>
+                  </div>
+                  {!isSelected && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs"
+                      onClick={() => onUse(comparison.vehicleId)}
+                    >
+                      Use
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CompareRowShell>
+          );
+        })}
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
