@@ -9,13 +9,15 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { PhotoRequiredBanner } from "@/components/PhotoRequiredBanner";
+import { loadMapScript } from "@/components/Map";
 import { getPricebook } from "@/lib/pricebookStorage";
 import { saveEstimate } from "@/utils/pricingStorage";
-import { calculateServiceEstimate } from "@/utils/serviceCalculator";
+import { calculateServiceEstimate, DEFAULT_SERVICE_CONFIG } from "@/utils/serviceCalculator";
+import { getPointToPointRoute, type PointToPointRoute } from "@/utils/distanceRouting";
 import type { PricebookCategory, PricebookItem } from "@/types/pricebook";
 import type { JobServiceType } from "@/types/jobs";
 import type { SavedEstimate } from "@/types/pricing";
-import type { ServiceEstimateSnapshot, ServiceQuoteEntry, StairFloor } from "@/types/service";
+import type { MovingVehicle, ServiceEstimateSnapshot, ServiceQuoteEntry, StairFloor } from "@/types/service";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const currency2 = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
@@ -37,6 +39,54 @@ const stairOptions: { value: StairFloor; label: string }[] = [
   { value: "3rd", label: "3rd floor (+$200/dir)" },
   { value: "above_3rd", label: "Above 3rd floor (+$300/dir)" },
 ];
+
+// Moving mode: each location is one direction, so the label drops "/dir".
+const locationStairOptions: { value: StairFloor; label: string }[] = [
+  { value: "none", label: "No stairs / elevator" },
+  { value: "2nd", label: "2nd floor (+$100)" },
+  { value: "3rd", label: "3rd floor (+$200)" },
+  { value: "above_3rd", label: "Above 3rd floor (+$300)" },
+];
+
+function stairRate(floor: StairFloor) {
+  const rates = DEFAULT_SERVICE_CONFIG.stairRates;
+  switch (floor) {
+    case "2nd":
+      return rates.second;
+    case "3rd":
+      return rates.third;
+    case "above_3rd":
+      return rates.aboveThird;
+    default:
+      return 0;
+  }
+}
+
+function stairFloorLabel(floor: StairFloor) {
+  switch (floor) {
+    case "2nd":
+      return "2nd floor";
+    case "3rd":
+      return "3rd floor";
+    case "above_3rd":
+      return "above 3rd floor";
+    default:
+      return "none";
+  }
+}
+
+/** Travel fee covers the first 15 route miles; beyond that, per-mile excess applies. */
+const FREE_ROUTE_MILES = 15;
+
+/** Pricebook ids the vehicle selector manages automatically — kept out of the
+ * manual surcharge picker in moving mode so they can't be double-added. */
+const AUTO_MOVING_FEE_IDS = new Set(["moving-travel-van", "moving-travel-box", "moving-mileage-van", "moving-mileage-box"]);
+
+/** Items that need no vehicle at all (customer provides the truck / on-site labor). */
+const NO_VEHICLE_ITEM_IDS = new Set(["moving-labor-only", "moving-additional-mover"]);
+
+const TRAVEL_FEE_ID: Record<MovingVehicle, string> = { van: "moving-travel-van", box_truck: "moving-travel-box" };
+const MILEAGE_FEE_ID: Record<MovingVehicle, string> = { van: "moving-mileage-van", box_truck: "moving-mileage-box" };
 
 const SERVICE_TYPE_BY_CATEGORY: Record<string, JobServiceType> = {
   "cat-assembly": "furniture_assembly",
@@ -127,18 +177,38 @@ export interface ServiceEstimatePanelProps {
   mode: ServicePanelMode;
   customerName: string;
   jobAddress: string;
+  /** Moving mode: pickup is the primary address (same value as jobAddress). */
+  pickupAddress?: string;
+  deliveryAddress?: string;
   notes: string;
   onSaved: () => void;
+  /** Moving mode: lets the parent clear moving-only Job Info fields on Reset. */
+  onResetMoving?: () => void;
   loadSeed?: SavedEstimate | null;
 }
 
-export function ServiceEstimatePanel({ mode, customerName, jobAddress, notes, onSaved, loadSeed }: ServiceEstimatePanelProps) {
+export function ServiceEstimatePanel({
+  mode,
+  customerName,
+  jobAddress,
+  pickupAddress,
+  deliveryAddress,
+  notes,
+  onSaved,
+  onResetMoving,
+  loadSeed,
+}: ServiceEstimatePanelProps) {
   const copy = PANEL_COPY[mode];
   const [pricebook, setPricebook] = useState(() => getPricebook());
   const [itemQty, setItemQty] = useState<Record<string, number>>({});
   const [surchargeQty, setSurchargeQty] = useState<Record<string, number>>({});
   const [stairFloor, setStairFloor] = useState<StairFloor>("none");
   const [stairDirections, setStairDirections] = useState<1 | 2>(1);
+  // Moving-only state. vehicleChoice null = follow the auto default for the items on the quote.
+  const [pickupStairFloor, setPickupStairFloor] = useState<StairFloor>("none");
+  const [deliveryStairFloor, setDeliveryStairFloor] = useState<StairFloor>("none");
+  const [vehicleChoice, setVehicleChoice] = useState<MovingVehicle | null>(null);
+  const [route, setRoute] = useState<PointToPointRoute | null>(null);
 
   useEffect(() => {
     const refresh = () => setPricebook(getPricebook());
@@ -152,11 +222,26 @@ export function ServiceEstimatePanel({ mode, customerName, jobAddress, notes, on
     const seedItems: Record<string, number> = {};
     const seedSurcharges: Record<string, number> = {};
     loadSeed.service.lineItems.forEach((line) => (seedItems[line.itemId] = line.quantity));
-    loadSeed.service.surcharges.forEach((line) => (seedSurcharges[line.itemId] = line.quantity));
+    loadSeed.service.surcharges.forEach((line) => {
+      // Travel/mileage fees are auto-managed by the vehicle selector now — don't
+      // also restore them as manual surcharges (older saves may carry them).
+      if (mode === "moving" && AUTO_MOVING_FEE_IDS.has(line.itemId)) return;
+      seedSurcharges[line.itemId] = line.quantity;
+    });
     setItemQty(seedItems);
     setSurchargeQty(seedSurcharges);
     setStairFloor(loadSeed.service.stairFloor);
     setStairDirections(loadSeed.service.stairDirections);
+    if (mode === "moving") {
+      // Legacy moving saves only have floor × directions — map them onto the
+      // per-location model so the restored total matches what was saved.
+      const legacyFloor = loadSeed.service.stairFloor ?? "none";
+      setPickupStairFloor(loadSeed.service.pickupStairFloor ?? legacyFloor);
+      setDeliveryStairFloor(
+        loadSeed.service.deliveryStairFloor ?? (loadSeed.service.stairDirections === 2 ? legacyFloor : "none"),
+      );
+      setVehicleChoice(loadSeed.service.movingVehicle ?? null);
+    }
   }, [loadSeed?.id]);
 
   const itemsById = useMemo(() => Object.fromEntries(pricebook.items.map((item) => [item.id, item])), [pricebook.items]);
@@ -186,7 +271,9 @@ export function ServiceEstimatePanel({ mode, customerName, jobAddress, notes, on
         item.itemType === "Fee" &&
         item.id !== "assembly-multi-item-discount" &&
         !item.id.startsWith("surcharge-stairs-") &&
-        (categoryModeById.get(item.categoryId) !== "moving" || mode === "moving"),
+        (categoryModeById.get(item.categoryId) !== "moving" || mode === "moving") &&
+        // Travel + excess mileage are auto-applied by the vehicle selector in moving mode.
+        !(mode === "moving" && AUTO_MOVING_FEE_IDS.has(item.id)),
     );
     const byCategory = new Map<string, { category: PricebookCategory | undefined; items: PricebookItem[] }>();
     fees.forEach((item) => {
@@ -213,10 +300,86 @@ export function ServiceEstimatePanel({ mode, customerName, jobAddress, notes, on
     [surchargeQty, itemsById],
   );
 
-  const result = useMemo(
-    () => calculateServiceEstimate({ lineItems: lineEntries, surcharges: surchargeEntries, stairFloor, stairDirections }),
-    [lineEntries, surchargeEntries, stairFloor, stairDirections],
+  // ── Moving vehicle + auto fees ───────────────────────────────────────────
+  // The selector only matters when something on the quote needs a vehicle;
+  // labor-only work (customer's truck) never gets a travel fee.
+  const movingVehicleNeeded = mode === "moving" && lineEntries.some((entry) => !NO_VEHICLE_ITEM_IDS.has(entry.item.id));
+  // Default: box truck for flat-rate home moves / 2BR apartments / explicit
+  // box-truck crews; cargo van otherwise. The user can always override.
+  const autoVehicle: MovingVehicle = useMemo(
+    () =>
+      lineEntries.some(
+        (entry) =>
+          entry.item.name.includes("Home Move") ||
+          entry.item.name.includes("Apartment Move — 2BR") ||
+          entry.item.name.includes("Box Truck"),
+      )
+        ? "box_truck"
+        : "van",
+    [lineEntries],
   );
+  const movingVehicle: MovingVehicle | null = movingVehicleNeeded ? (vehicleChoice ?? autoVehicle) : null;
+
+  const routeMiles = mode === "moving" ? route?.miles ?? null : null;
+  const excessMiles = routeMiles != null && routeMiles > FREE_ROUTE_MILES ? Math.round((routeMiles - FREE_ROUTE_MILES) * 10) / 10 : 0;
+
+  // Travel fee + excess mileage as synthetic line entries fed straight to the
+  // calculator — they show in the quote summary but not in the manual surcharge list.
+  const autoMovingEntries: ServiceQuoteEntry[] = useMemo(() => {
+    if (!movingVehicle) return [];
+    const entries: ServiceQuoteEntry[] = [];
+    const travelItem = itemsById[TRAVEL_FEE_ID[movingVehicle]];
+    if (travelItem) entries.push({ item: travelItem, quantity: 1 });
+    if (excessMiles > 0) {
+      const mileageItem = itemsById[MILEAGE_FEE_ID[movingVehicle]];
+      if (mileageItem) {
+        entries.push({
+          item: { ...mileageItem, name: `Excess mileage (${excessMiles} mi × ${money2(mileageItem.price)})` },
+          quantity: excessMiles,
+        });
+      }
+    }
+    return entries;
+  }, [movingVehicle, excessMiles, itemsById]);
+
+  const result = useMemo(
+    () =>
+      calculateServiceEstimate({
+        lineItems: lineEntries,
+        surcharges: [...surchargeEntries, ...autoMovingEntries],
+        stairFloor,
+        stairDirections,
+        ...(mode === "moving" ? { pickupStairFloor, deliveryStairFloor } : {}),
+      }),
+    [lineEntries, surchargeEntries, autoMovingEntries, stairFloor, stairDirections, mode, pickupStairFloor, deliveryStairFloor],
+  );
+
+  // Route distance between pickup and delivery (debounced — same Distance Matrix
+  // pattern as the junk tab's facility routing).
+  useEffect(() => {
+    if (mode !== "moving") return;
+    const origin = (pickupAddress ?? "").trim();
+    const destination = (deliveryAddress ?? "").trim();
+    if (!origin || !destination) {
+      setRoute(null);
+      return;
+    }
+    let canceled = false;
+    const timer = window.setTimeout(() => {
+      loadMapScript()
+        .then(() => getPointToPointRoute(origin, destination))
+        .then((next) => {
+          if (!canceled) setRoute(next);
+        })
+        .catch(() => {
+          if (!canceled) setRoute(null);
+        });
+    }, 600);
+    return () => {
+      canceled = true;
+      window.clearTimeout(timer);
+    };
+  }, [mode, pickupAddress, deliveryAddress]);
 
   const hasItems = lineEntries.length > 0;
 
@@ -249,6 +412,11 @@ export function ServiceEstimatePanel({ mode, customerName, jobAddress, notes, on
     setSurchargeQty({});
     setStairFloor("none");
     setStairDirections(1);
+    setPickupStairFloor("none");
+    setDeliveryStairFloor("none");
+    setVehicleChoice(null);
+    setRoute(null);
+    if (mode === "moving") onResetMoving?.();
   };
 
   const deriveServiceType = (): JobServiceType => {
@@ -264,6 +432,15 @@ export function ServiceEstimatePanel({ mode, customerName, jobAddress, notes, on
     surcharges: result.surcharges,
     stairFloor,
     stairDirections,
+    ...(mode === "moving"
+      ? {
+          pickupStairFloor,
+          deliveryStairFloor,
+          movingVehicle: movingVehicle ?? undefined,
+          routeMiles: route?.miles ?? undefined,
+          routeDriveMinutes: route?.driveMinutes ?? undefined,
+        }
+      : {}),
     itemsSubtotal: result.itemsSubtotal,
     discountApplied: result.discountApplied,
     discountAmount: result.discountAmount,
@@ -290,6 +467,7 @@ export function ServiceEstimatePanel({ mode, customerName, jobAddress, notes, on
       updatedAt: now,
       customerName: customerName || undefined,
       jobAddress: jobAddress || undefined,
+      deliveryAddress: mode === "moving" ? deliveryAddress?.trim() || undefined : undefined,
       loadLabel: copy.loadLabel,
       materialName: primaryName,
       // Placeholder — service estimates are distinguished by `mode`, not material.
@@ -319,8 +497,37 @@ export function ServiceEstimatePanel({ mode, customerName, jobAddress, notes, on
     toast.success(copy.savedToast);
   };
 
-  const customerQuoteText = () =>
-    [
+  const customerQuoteText = () => {
+    if (mode === "moving") {
+      const vehicleLabel =
+        movingVehicle === "box_truck" ? "Box Truck with hydraulic liftgate" : movingVehicle === "van" ? "Cargo Van" : null;
+      const lines: (string | null)[] = [
+        "Moving Estimate",
+        "",
+        `Pickup: ${pickupAddress?.trim() || "To be confirmed"}`,
+        `Delivery: ${deliveryAddress?.trim() || "To be confirmed"}`,
+        routeMiles != null ? `Distance: ${routeMiles.toFixed(1)} miles` : null,
+        "",
+        `Estimated price: ${money(result.total)}`,
+        `Crew: ${result.crewSize} worker${result.crewSize > 1 ? "s" : ""}`,
+        vehicleLabel ? `Vehicle: ${vehicleLabel}` : null,
+        "",
+        "Items:",
+        ...result.lineItems.map((line) => `- ${line.name}${line.quantity > 1 ? ` x${line.quantity}` : ""}: ${money2(line.lineTotal)}`),
+        pickupStairFloor !== "none"
+          ? `- Stairs at pickup: ${stairFloorLabel(pickupStairFloor)} +${money2(stairRate(pickupStairFloor))}`
+          : null,
+        deliveryStairFloor !== "none"
+          ? `- Stairs at delivery: ${stairFloorLabel(deliveryStairFloor)} +${money2(stairRate(deliveryStairFloor))}`
+          : null,
+        ...result.surcharges.map((line) => `- ${line.name}: ${money2(line.lineTotal)}`),
+        "",
+        result.photoRequired ? "Please send a few photos so we can confirm the exact price." : null,
+        notes ? `Notes:\n${notes}` : null,
+      ];
+      return lines.filter((line) => line !== null).join("\n");
+    }
+    return [
       copy.quoteHeading,
       "",
       `Estimated price: ${money(result.total)}`,
@@ -336,6 +543,7 @@ export function ServiceEstimatePanel({ mode, customerName, jobAddress, notes, on
     ]
       .filter(Boolean)
       .join("\n");
+  };
 
   const copyText = async (text: string, label: string) => {
     await navigator.clipboard.writeText(text);
@@ -345,6 +553,46 @@ export function ServiceEstimatePanel({ mode, customerName, jobAddress, notes, on
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
       <div className="space-y-6">
+        {mode === "moving" && movingVehicleNeeded && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Vehicle</CardTitle>
+              <CardDescription>
+                Sets the travel fee ($50 van / $75 box truck) — covers the first {FREE_ROUTE_MILES} route miles.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div
+                className="inline-flex rounded-lg border border-border bg-muted/40 p-1"
+                role="tablist"
+                aria-label="Moving vehicle"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={movingVehicle === "van"}
+                  onClick={() => setVehicleChoice("van")}
+                  className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${movingVehicle === "van" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Cargo Van
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={movingVehicle === "box_truck"}
+                  onClick={() => setVehicleChoice("box_truck")}
+                  className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${movingVehicle === "box_truck" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Box Truck
+                </button>
+              </div>
+              {movingVehicle === "box_truck" && (
+                <p className="text-xs text-muted-foreground">Includes hydraulic liftgate at no extra charge</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle>{copy.itemsTitle}</CardTitle>
@@ -407,38 +655,77 @@ export function ServiceEstimatePanel({ mode, customerName, jobAddress, notes, on
         <Card>
           <CardHeader>
             <CardTitle>Stairs & Surcharges</CardTitle>
-            <CardDescription>Stair surcharges apply per move direction (loading and unloading count separately).</CardDescription>
+            <CardDescription>
+              {mode === "moving"
+                ? "Stairs are charged per location — the pickup and the delivery each count once."
+                : "Stair surcharges apply per move direction (loading and unloading count separately)."}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Stairs</Label>
-                <Select value={stairFloor} onValueChange={(value) => setStairFloor(value as StairFloor)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stairOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {mode === "moving" ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Stairs at pickup</Label>
+                  <Select value={pickupStairFloor} onValueChange={(value) => setPickupStairFloor(value as StairFloor)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {locationStairOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Stairs at delivery</Label>
+                  <Select value={deliveryStairFloor} onValueChange={(value) => setDeliveryStairFloor(value as StairFloor)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {locationStairOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Directions</Label>
-                <Select value={String(stairDirections)} onValueChange={(value) => setStairDirections(Number(value) as 1 | 2)} disabled={stairFloor === "none"}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">One direction (load OR unload)</SelectItem>
-                    <SelectItem value="2">Both directions (load AND unload)</SelectItem>
-                  </SelectContent>
-                </Select>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Stairs</Label>
+                  <Select value={stairFloor} onValueChange={(value) => setStairFloor(value as StairFloor)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stairOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Directions</Label>
+                  <Select value={String(stairDirections)} onValueChange={(value) => setStairDirections(Number(value) as 1 | 2)} disabled={stairFloor === "none"}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">One direction (load OR unload)</SelectItem>
+                      <SelectItem value="2">Both directions (load AND unload)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            </div>
+            )}
 
             <Select value="" onValueChange={addSurcharge}>
               <SelectTrigger className="w-full">
@@ -460,7 +747,9 @@ export function ServiceEstimatePanel({ mode, customerName, jobAddress, notes, on
 
             {surchargeEntries.length > 0 && (
               <div className="divide-y divide-border rounded-lg border border-border">
-                {result.surcharges.map((line) => (
+                {/* Only manually-added surcharges — the vehicle's auto travel/mileage
+                    lines live in the quote summary, not here. */}
+                {result.surcharges.filter((line) => surchargeQty[line.itemId]).map((line) => (
                   <div key={line.itemId} className="flex items-center justify-between gap-3 p-3">
                     <div className="min-w-0">
                       <div className="truncate font-medium">{line.name}</div>
@@ -512,6 +801,23 @@ export function ServiceEstimatePanel({ mode, customerName, jobAddress, notes, on
                   </div>
                 </div>
 
+                {mode === "moving" && routeMiles != null && (
+                  <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">Route</span>
+                      <span className="font-medium">
+                        {routeMiles.toFixed(1)} mi
+                        {route?.driveMinutes != null ? ` · ~${route.driveMinutes} min drive` : ""}
+                      </span>
+                    </div>
+                    {excessMiles > 0 && (
+                      <p className="mt-1.5 text-xs text-muted-foreground">
+                        Travel fee covers first {FREE_ROUTE_MILES} mi — excess mileage auto-applied
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {result.photoRequired && <PhotoRequiredBanner />}
 
                 <Separator />
@@ -538,11 +844,28 @@ export function ServiceEstimatePanel({ mode, customerName, jobAddress, notes, on
                       <span className="font-medium">{money(result.itemsAfterDiscount)}</span>
                     </div>
                   )}
-                  {result.stairSurcharge > 0 && (
-                    <div className="flex justify-between gap-3">
-                      <span className="text-muted-foreground">Stairs ({stairDirections} dir)</span>
-                      <span className="font-medium">{money2(result.stairSurcharge)}</span>
-                    </div>
+                  {mode === "moving" ? (
+                    <>
+                      {pickupStairFloor !== "none" && (
+                        <div className="flex justify-between gap-3">
+                          <span className="text-muted-foreground">Stairs at pickup ({stairFloorLabel(pickupStairFloor)})</span>
+                          <span className="font-medium">{money2(stairRate(pickupStairFloor))}</span>
+                        </div>
+                      )}
+                      {deliveryStairFloor !== "none" && (
+                        <div className="flex justify-between gap-3">
+                          <span className="text-muted-foreground">Stairs at delivery ({stairFloorLabel(deliveryStairFloor)})</span>
+                          <span className="font-medium">{money2(stairRate(deliveryStairFloor))}</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    result.stairSurcharge > 0 && (
+                      <div className="flex justify-between gap-3">
+                        <span className="text-muted-foreground">Stairs ({stairDirections} dir)</span>
+                        <span className="font-medium">{money2(result.stairSurcharge)}</span>
+                      </div>
+                    )
                   )}
                   {result.surcharges.map((line) => (
                     <div key={line.itemId} className="flex justify-between gap-3">

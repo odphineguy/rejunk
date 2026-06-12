@@ -7,6 +7,10 @@ export type EstimateMode = "junk" | "service" | "moving";
 
 export type StairFloor = "none" | "2nd" | "3rd" | "above_3rd";
 
+/** Vehicle on a moving job — drives the travel fee ($50 van / $75 box truck)
+ * and the excess-mileage rate ($2.00/mi van / $2.50/mi box truck). */
+export type MovingVehicle = "van" | "box_truck";
+
 /** A pricebook item + how many units (or hours/miles) of it are on the job. */
 export interface ServiceQuoteEntry {
   item: PricebookItem;
@@ -31,6 +35,10 @@ export interface ServiceEstimateInput {
   surcharges?: ServiceQuoteEntry[];
   stairFloor?: StairFloor;
   stairDirections?: 1 | 2;
+  /** Moving mode: independent stairs at each end of the move. When BOTH are set
+   * they override stairFloor + stairDirections (each location is one direction). */
+  pickupStairFloor?: StairFloor;
+  deliveryStairFloor?: StairFloor;
   crewSizeOverride?: PricebookCrewSize;
   config?: Partial<ServiceEstimateConfig>;
 }
@@ -87,6 +95,12 @@ export interface ServiceEstimateSnapshot {
   surcharges: ServiceLineResult[];
   stairFloor: StairFloor;
   stairDirections: 1 | 2;
+  // Moving-mode extras (all optional so older saved estimates keep loading).
+  pickupStairFloor?: StairFloor;
+  deliveryStairFloor?: StairFloor;
+  movingVehicle?: MovingVehicle;
+  routeMiles?: number;
+  routeDriveMinutes?: number;
   itemsSubtotal: number;
   discountApplied: boolean;
   discountAmount: number;

@@ -324,7 +324,9 @@ export default function EstimateBuilder() {
   );
 
   const [customerName, setCustomerName] = useState("");
+  // In moving mode jobAddress is the PICKUP address; deliveryAddress is the drop-off.
   const [jobAddress, setJobAddress] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [materialId, setMaterialId] = useState(activeMaterials[0]?.id ?? "");
   const [vehicleId, setVehicleId] = useState(
@@ -566,6 +568,7 @@ export default function EstimateBuilder() {
   const resetForm = () => {
     setCustomerName("");
     setJobAddress("");
+    setDeliveryAddress("");
     setNotes("");
     setMaterialId(activeMaterials[0]?.id ?? "");
     setVehicleId(
@@ -719,6 +722,7 @@ export default function EstimateBuilder() {
     if (estimate.mode === "service" || estimate.mode === "moving") {
       setCustomerName(estimate.customerName ?? "");
       setJobAddress(estimate.jobAddress ?? "");
+      setDeliveryAddress(estimate.deliveryAddress ?? "");
       setNotes(estimate.notes ?? "");
       setServiceLoadSeed(estimate);
       setMode(estimate.mode);
@@ -915,13 +919,32 @@ export default function EstimateBuilder() {
                 placeholder="Optional"
               />
             </Field>
-            <Field label="Job address">
-              <Input
-                value={jobAddress}
-                onChange={event => setJobAddress(event.target.value)}
-                placeholder="Optional"
-              />
-            </Field>
+            {mode === "moving" ? (
+              <>
+                <Field label="Pickup address">
+                  <Input
+                    value={jobAddress}
+                    onChange={event => setJobAddress(event.target.value)}
+                    placeholder="Where the crew loads"
+                  />
+                </Field>
+                <Field label="Delivery address">
+                  <Input
+                    value={deliveryAddress}
+                    onChange={event => setDeliveryAddress(event.target.value)}
+                    placeholder="Where the crew unloads"
+                  />
+                </Field>
+              </>
+            ) : (
+              <Field label="Job address">
+                <Input
+                  value={jobAddress}
+                  onChange={event => setJobAddress(event.target.value)}
+                  placeholder="Optional"
+                />
+              </Field>
+            )}
             <div className="md:col-span-2">
               <Field label="Notes">
                 <Textarea
@@ -942,8 +965,11 @@ export default function EstimateBuilder() {
               mode={mode}
               customerName={customerName}
               jobAddress={jobAddress}
+              pickupAddress={jobAddress}
+              deliveryAddress={deliveryAddress}
               notes={notes}
               onSaved={() => setSavedEstimates(loadSavedEstimates())}
+              onResetMoving={() => setDeliveryAddress("")}
               loadSeed={serviceLoadSeed}
             />
             <div className="xl:max-w-[460px]">
@@ -1828,9 +1854,15 @@ function SavedEstimateDetail({
               value={estimate.customerName || "Not provided"}
             />
             <DetailRow
-              label="Job"
+              label={estimate.mode === "moving" ? "Pickup" : "Job"}
               value={estimate.jobAddress || "Not provided"}
             />
+            {estimate.mode === "moving" && (
+              <DetailRow
+                label="Delivery"
+                value={estimate.deliveryAddress || "Not provided"}
+              />
+            )}
             <DetailRow
               label="Material"
               value={

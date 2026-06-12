@@ -341,6 +341,8 @@ export interface SavedEstimate {
   updatedAt: string;
   customerName?: string;
   jobAddress?: string;
+  /** Moving mode: jobAddress is the pickup; this is the drop-off. */
+  deliveryAddress?: string;
   loadLabel?: string;
   loadFraction?: number;
   materialName?: string;

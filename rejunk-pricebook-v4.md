@@ -160,6 +160,9 @@ for either of us.
 | Apartment Move — Studio/1BR | **$350** | 50% | ⚠️ 2 | Sam's rate. Flat rate, van or truck. |
 | Apartment Move — 2BR | **$450** | 52% | ⚠️ 2 | Sam's rate. Box truck preferred. |
 | Home Move — Small House | **$750** | 55% | ⚠️ 2 | Sam's rate. Box truck required. |
+| Home Move — Medium House (3BR) | **$1,100** | 52% | ⚠️ 2 | Box truck required. 6-8 hrs typical. |
+| Home Move — Large House (4BR) | **$1,500** | 53% | ⚠️ 3 | Box truck required. 8-10 hrs typical. 3 workers for safety. Photos required. |
+| Home Move — X-Large House (5BR+) | **$2,500** | 55% | ⚠️ 3 | Box truck required. Custom scope — photos and walkthrough required. |
 | Moving Labor Only (2 movers, 2 hr min) | **$199** | 50% | ⚠️ 2 | No vehicle. Customer provides truck. |
 | Additional Mover (per hour) | **$45/hr** | 44% | — | Add to base rate. |
 | Furniture Rearranging (same building) | **$149** | 52% | 1-2 | Sam's rate. On-site repositioning. |
@@ -358,6 +361,9 @@ NEVER: "Sure, no problem" / "We'll take care of it" / "Yeah we can grab that too
 | "Load/unload my truck" | $199 (2hr min) | 2 |
 | "Studio move" | $350 flat | 2 |
 | "2BR apartment move" | $450 flat + stairs | 2 |
+| "3BR house move" | $1,100 flat + stairs | 2 |
+| "4BR house move" | $1,500 flat + stairs | 3 |
+| "5BR+ house move" | $2,500 (photos + walkthrough first) | 3 |
 | "Move a piano" | $495-$895 | 2-3 |
 | "Remove a couch" | $119 | 1 |
 | "Garage cleanout" | Send photos first, min $299 | 2 |

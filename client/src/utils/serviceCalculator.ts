@@ -117,9 +117,17 @@ export function calculateServiceEstimate(input: ServiceEstimateInput): ServiceEs
   }
 
   // 4. Surcharges: stairs + flat surcharges, then percent surcharges on the subtotal.
+  // Moving mode sends per-location stairs (pickup + delivery, one direction each);
+  // when both are present they override the legacy floor × directions model.
   const stairFloor: StairFloor = input.stairFloor ?? "none";
   const stairDirections = input.stairDirections ?? 1;
-  const stairSurcharge = round2(stairRateFor(stairFloor, config.stairRates) * stairDirections);
+  const hasPerLocationStairs = input.pickupStairFloor != null && input.deliveryStairFloor != null;
+  const stairSurcharge = hasPerLocationStairs
+    ? round2(
+        stairRateFor(input.pickupStairFloor!, config.stairRates) +
+          stairRateFor(input.deliveryStairFloor!, config.stairRates),
+      )
+    : round2(stairRateFor(stairFloor, config.stairRates) * stairDirections);
 
   const flatSurchargeTotal = round2(surcharges.reduce((sum, line) => sum + line.lineTotal, 0));
   const baseBeforePercent = round2(itemsAfterDiscount + stairSurcharge + flatSurchargeTotal);

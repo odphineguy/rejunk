@@ -88,6 +88,22 @@ export async function getDistanceToFacility(jobAddress: string, facilityAddress:
   }
 }
 
+export interface PointToPointRoute {
+  miles: number | null;
+  driveMinutes: number | null;
+}
+
+/** One-way route between two addresses (moving pickup → delivery). Same Distance
+ * Matrix call as the facility routing, but NOT doubled to a round trip. */
+export async function getPointToPointRoute(origin: string, destination: string): Promise<PointToPointRoute> {
+  const result = await getDistanceToFacility(origin, destination);
+  return {
+    miles: result.oneWayMiles,
+    // getDistanceToFacility doubles duration for the round trip — halve it back.
+    driveMinutes: result.estimatedDriveMinutes == null ? null : Math.round(result.estimatedDriveMinutes / 2),
+  };
+}
+
 export async function getRouteEstimateToFacility(jobAddress: string | undefined, facility: DisposalFacility): Promise<JobRouteEstimate> {
   if (!jobAddress?.trim()) {
     return emptyRouteEstimate(jobAddress, facility.id);
