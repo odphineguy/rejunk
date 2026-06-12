@@ -119,3 +119,5 @@ client/public/__manus__/version.json
 # Sensitive: real fleet data (VINs, plates, insurance policy numbers) — keep out of a public repo
 Fleet - Sheet1.csv
 .vercel
+.firecrawl/
+landing-assets/

@@ -3,11 +3,9 @@
  * Single source of truth so the real phone number is a one-line swap.
  */
 
-// TODO: replace with the real business number before pushing live — this
-// placeholder is used by every Call/Text button on the public site.
-export const PHONE_DISPLAY = "(602) 555-0123";
-export const PHONE_HREF = "tel:+16025550123";
-export const SMS_HREF = "sms:+16025550123";
+export const PHONE_DISPLAY = "(480) 351-0291";
+export const PHONE_HREF = "tel:+14803510291";
+export const SMS_HREF = "sms:+14803510291";
 
 export const SERVICE_AREA = "Phoenix metro & East Valley";
 

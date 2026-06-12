@@ -1,16 +1,33 @@
+import { useState } from "react";
+
 import { IMAGE_BRIEFS, type ImageBriefId } from "../content/imageBriefs";
 import { PALETTE } from "../palette";
 
 const P = PALETTE;
 
 /**
- * Visible stand-in for every photo slot on the public site. Shows the slot id
- * and the shot description so Abe can produce the premium branded image for
- * each slot and we swap a real <img> in later (hosted via /manus-storage —
- * never committed into client/public, per the deploy-timeout rule).
+ * Photo slot for the public site. Renders the hosted image from
+ * content/imageBriefs.ts when one exists; if the slot has no `src` or the
+ * image fails to load (CDN gone, offline), it degrades to a labeled
+ * placeholder box showing the slot id + shot description.
  */
 export function ImagePlaceholder({ id, className = "" }: { id: ImageBriefId; className?: string }) {
-  const { brief, aspect } = IMAGE_BRIEFS[id];
+  const { brief, aspect, src } = IMAGE_BRIEFS[id] as { brief: string; aspect: string; src?: string };
+  const [failed, setFailed] = useState(false);
+
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt={brief}
+        loading="lazy"
+        className={`w-full rounded-2xl object-cover ${className}`}
+        style={{ aspectRatio: aspect, background: P.mist }}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
   return (
     <div
       role="img"
