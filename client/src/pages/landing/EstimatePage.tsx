@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { saveClient } from "@/lib/clientStorage";
+
 import type { ImageBriefId } from "./content/imageBriefs";
 import { PAGE_META, PHONE_DISPLAY, PHONE_HREF, SMS_HREF } from "./content/site";
 import { ImagePlaceholder } from "./components/ImagePlaceholder";
@@ -51,6 +53,56 @@ const SERVICE_OPTIONS: Array<{
 ];
 
 const TIMING_OPTIONS = ["Today", "This week", "Flexible"] as const;
+
+function newId(prefix: string) {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${prefix}-${Date.now()}`;
+}
+
+/**
+ * Mirror the submitted lead into the shared `clients` table as a `kind:"lead"`
+ * record so it lands on the office Clients page automatically — not just in the
+ * notification email. The clients table RLS allows any authenticated (anonymous)
+ * visitor to write, and `saveClient` fire-and-forgets to Supabase, so this works
+ * straight from the public browser with no server-side key.
+ *
+ * Always a fresh random id (never phone-derived): a deterministic id could later
+ * overwrite a real client who shares the phone — downgrading them back to a lead
+ * and wiping their contact log. A rare duplicate lead row is the safe trade.
+ */
+function recordWebsiteLead(form: FormState) {
+  const parts = form.name.trim().split(/\s+/);
+  const firstName = parts.shift() ?? form.name.trim();
+  const lastName = parts.join(" ");
+
+  const detailLines = form.services.map(service =>
+    form.details[service]?.trim()
+      ? `${service}: ${form.details[service].trim()}`
+      : service
+  );
+  const summary = [
+    `Website estimate request — ${form.services.join(" + ") || "no service selected"}.`,
+    `Wants it: ${form.timing}.`,
+    form.zip.trim() ? `ZIP ${form.zip.trim()}.` : "",
+    detailLines.length ? `Details — ${detailLines.join(" · ")}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  saveClient({
+    kind: "lead",
+    firstName,
+    lastName,
+    phone: form.phone.trim(),
+    email: form.email.trim() || undefined,
+    zip: form.zip.trim() || undefined,
+    leadSource: "Website",
+    contactLog: [
+      { id: newId("note"), createdAt: new Date().toISOString(), text: summary },
+    ],
+  });
+}
 
 type Step = "services" | "details" | "done";
 
@@ -115,6 +167,17 @@ export default function EstimatePage() {
     }
     setValidationError("");
     setSubmitting(true);
+
+    // Capture the lead into the office CRM first, in its own guard so a CRM
+    // hiccup can never block the notification email or the confirmation screen.
+    if (!form.company.trim()) {
+      try {
+        recordWebsiteLead(form);
+      } catch {
+        // Non-fatal — the email below is still the primary notification path.
+      }
+    }
+
     try {
       const response = await fetch("/api/lead", {
         method: "POST",

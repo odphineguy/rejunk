@@ -7,7 +7,7 @@ import {
   ChevronDown,
   Copy,
   CopyPlus,
-  Printer,
+  FileDown,
   RotateCcw,
   Save,
   Trash2,
@@ -54,6 +54,7 @@ import {
 } from "@/utils/pricingStorage";
 import { getRouteEstimateToFacility } from "@/utils/distanceRouting";
 import { buildBestRecommendation } from "@/utils/recommendations";
+import { downloadQuotePdf } from "@/utils/quotePdf";
 import { materialIcon } from "@/lib/materialIcons";
 import { createJobFromEstimate, getJobByEstimateId } from "@/lib/jobStorage";
 import { ServiceEstimatePanel } from "@/components/ServiceEstimatePanel";
@@ -836,58 +837,40 @@ export default function EstimateBuilder() {
     navigate(`/jobs/${job.id}`);
   };
 
-  const printQuote = () => {
+  const downloadQuote = async () => {
     if (!quoteReady) {
       toast.error(
-        "Add a job address and choose a disposal facility before printing."
+        "Add a job address and choose a disposal facility before making a PDF."
       );
       return;
     }
-    const printWindow = window.open("", "_blank", "width=720,height=900");
-    if (!printWindow) {
-      toast.error("Pop-up blocked. Allow pop-ups to print the quote.");
-      return;
+    const facts: Array<{ label: string; value: string }> = [
+      { label: "Load size", value: selectedLoadLabel },
+      { label: "Material", value: materialRule.materialName },
+      {
+        label: "Estimated weight",
+        value: `${Math.round(result.estimatedWeightLbs).toLocaleString()} lb · ${result.estimatedTons.toFixed(2)} tons`,
+      },
+    ];
+    if (facility) facts.push({ label: "Disposal facility", value: facility.facilityName });
+    try {
+      const fileName = await downloadQuotePdf({
+        heading: "Junk Removal Estimate",
+        customerName: customerName || undefined,
+        addressLabel: "Job address",
+        address: jobAddress || undefined,
+        total: result.finalRecommendedQuote,
+        rangeLower: range.lower,
+        rangeUpper: range.upper,
+        facts,
+        includes: ["Labor", "Loading", "Haul-away", "Standard disposal"],
+        notes: notes || undefined,
+      });
+      toast.success(`Saved ${fileName} — ready to text or email.`);
+    } catch (error) {
+      console.error("[EstimateBuilder] PDF generation failed", error);
+      toast.error("Couldn't build the PDF. Please try again.");
     }
-
-    printWindow.document.write(`
-      <!doctype html>
-      <html>
-        <head>
-          <title>Junk Removal Estimate</title>
-          <style>
-            body { font-family: Arial, sans-serif; color: #222; margin: 40px; line-height: 1.45; }
-            h1 { margin: 0 0 20px; }
-            .price { font-size: 34px; font-weight: 700; margin: 12px 0; }
-            .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0; }
-            .box { border: 1px solid #ddd; border-radius: 8px; padding: 14px; }
-            ul { padding-left: 20px; }
-            .fine { color: #555; margin-top: 28px; }
-          </style>
-        </head>
-        <body>
-          <h1>Junk Removal Estimate</h1>
-          <div class="price">${money(result.finalRecommendedQuote)}</div>
-          <p>Quote range: ${money(range.lower)} - ${money(range.upper)}</p>
-          <div class="meta">
-            <div class="box"><strong>Customer</strong><br>${customerName || "Not provided"}</div>
-            <div class="box"><strong>Job Address</strong><br>${jobAddress || "Not provided"}</div>
-            <div class="box"><strong>Load Size</strong><br>${selectedLoadLabel}</div>
-            <div class="box"><strong>Material</strong><br>${materialRule.materialName}</div>
-          </div>
-          <h2>Includes</h2>
-          <ul>
-            <li>Labor</li>
-            <li>Loading</li>
-            <li>Haul-away</li>
-            <li>Standard disposal</li>
-          </ul>
-          ${notes ? `<h2>Notes</h2><p>${notes.replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</p>` : ""}
-          <p class="fine">Final price may change if the load contains heavy materials, restricted items, extra labor, or significantly more volume than shown.</p>
-          <script>window.print(); window.close();</script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
   };
 
   return (
@@ -1739,11 +1722,11 @@ export default function EstimateBuilder() {
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={printQuote}
+                      onClick={downloadQuote}
                       disabled={!quoteReady}
                     >
-                      <Printer className="size-4" />
-                      Print
+                      <FileDown className="size-4" />
+                      PDF
                     </Button>
                     <Button
                       variant="secondary"

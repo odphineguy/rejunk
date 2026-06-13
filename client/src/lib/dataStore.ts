@@ -354,26 +354,52 @@ async function getUserId(): Promise<string | null> {
   return data.user?.id ?? null;
 }
 
-/** Sync a config table to exactly `rows`: upsert all, delete any id not present. */
+// Set true once we've successfully read the config tables from Supabase this
+// session — meaning the in-memory cache reflects the real DB. Until then we
+// NEVER destructively delete rows on save: a partial cache (hydration race or
+// localStorage fallback) must not wipe rows it never knew about. This is the
+// guard that stops the "save Settings → a facility silently disappears" bug
+// (the San Tan Transfer Station incident).
+let remoteConfigConfirmed = false;
+
+/**
+ * Sync a config table to exactly `rows`: upsert all, then delete any id not
+ * present — but ONLY when it's safe to do so.
+ *
+ * `allowDelete` must be the confirmed-remote flag: if we've never read the live
+ * table this session, we upsert-only and skip the delete pass entirely. We also
+ * refuse to delete on an empty list, since an empty config list always means a
+ * bug/race ("wipe every facility"), never an intentional save.
+ */
 async function syncTable(
   table:
     | "facilities"
     | "vehicles"
     | "material_pricing_rules"
     | "volume_benchmarks",
-  rows: { id: string }[]
+  rows: { id: string }[],
+  allowDelete: boolean
 ) {
   if (!supabase) return;
   if (rows.length > 0) {
     const { error } = await supabase.from(table).upsert(rows as never[]);
     if (error) throw error;
   }
+  // Safety floor: only delete when we've confirmed live DB state this session
+  // AND we have a non-empty list to sync against. Otherwise upsert-only.
+  if (!allowDelete || rows.length === 0) {
+    if (!allowDelete && rows.length > 0) {
+      console.warn(
+        `[dataStore] ${table}: skipped delete-sync (live DB state not confirmed this session) — upserted ${rows.length} row(s) only, kept existing rows.`
+      );
+    }
+    return;
+  }
   const ids = rows.map(r => r.id);
-  const remove = supabase.from(table).delete();
-  const { error } =
-    ids.length > 0
-      ? await remove.not("id", "in", `(${ids.join(",")})`)
-      : await remove.gte("created_at", "1970-01-01"); // delete all
+  const { error } = await supabase
+    .from(table)
+    .delete()
+    .not("id", "in", `(${ids.join(",")})`);
   if (error) throw error;
 }
 
@@ -402,6 +428,9 @@ export async function loadAllSettings(): Promise<PricingSettings | null> {
     return null;
   }
 
+  // We've now seen the real DB this session — future saves may safely delete-sync.
+  remoteConfigConfirmed = true;
+
   return {
     disposalFacilities: (facilities.data ?? []).map(facilityFromRow),
     vehicles: (vehicles.data ?? []).map(vehicleFromRow),
@@ -421,15 +450,25 @@ export async function saveAllSettings(
   const ok = await ensureSession();
   if (!ok) return;
 
-  await syncTable("facilities", settings.disposalFacilities.map(facilityToRow));
-  await syncTable("vehicles", settings.vehicles.map(vehicleToRow));
+  await syncTable(
+    "facilities",
+    settings.disposalFacilities.map(facilityToRow),
+    remoteConfigConfirmed
+  );
+  await syncTable(
+    "vehicles",
+    settings.vehicles.map(vehicleToRow),
+    remoteConfigConfirmed
+  );
   await syncTable(
     "material_pricing_rules",
-    settings.materialPricingRules.map(materialToRow)
+    settings.materialPricingRules.map(materialToRow),
+    remoteConfigConfirmed
   );
   await syncTable(
     "volume_benchmarks",
-    settings.volumePricingBenchmarks.map(benchmarkToRow)
+    settings.volumePricingBenchmarks.map(benchmarkToRow),
+    remoteConfigConfirmed
   );
 
   const d = settings.defaults;

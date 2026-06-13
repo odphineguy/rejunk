@@ -163,3 +163,35 @@ export function clientName(
 ) {
   return [client.firstName, client.lastName].filter(Boolean).join(" ").trim();
 }
+
+/** Strip everything but digits — for loose phone matching. */
+function phoneDigits(value?: string): string {
+  return (value ?? "").replace(/\D/g, "");
+}
+
+/**
+ * Best-effort match of an operations record (e.g. a job) to a CRM client. Jobs
+ * don't carry a clientId, so we match on phone first (most reliable), then on an
+ * exact normalized full-name match. Returns null when nothing matches — callers
+ * skip silently rather than attach a note to the wrong account.
+ */
+export function findClientByContact(opts: {
+  phone?: string;
+  name?: string;
+}): ClientRecord | null {
+  const digits = phoneDigits(opts.phone);
+  if (digits.length >= 7) {
+    const byPhone = cachedClients.find(
+      client => phoneDigits(client.phone) === digits
+    );
+    if (byPhone) return byPhone;
+  }
+  const name = (opts.name ?? "").trim().toLowerCase();
+  if (name) {
+    const byName = cachedClients.find(
+      client => clientName(client).toLowerCase() === name
+    );
+    if (byName) return byName;
+  }
+  return null;
+}

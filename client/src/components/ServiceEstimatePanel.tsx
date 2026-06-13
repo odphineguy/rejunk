@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy, Minus, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
+import { Copy, FileDown, Minus, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import { getPricebook } from "@/lib/pricebookStorage";
 import { saveEstimate } from "@/utils/pricingStorage";
 import { calculateServiceEstimate, DEFAULT_SERVICE_CONFIG } from "@/utils/serviceCalculator";
 import { getPointToPointRoute, type PointToPointRoute } from "@/utils/distanceRouting";
+import { downloadQuotePdf, type QuotePdfLine } from "@/utils/quotePdf";
 import type { PricebookCategory, PricebookItem } from "@/types/pricebook";
 import type { JobServiceType } from "@/types/jobs";
 import type { SavedEstimate } from "@/types/pricing";
@@ -550,6 +551,65 @@ export function ServiceEstimatePanel({
     toast.success(`${label} copied`);
   };
 
+  const downloadPdf = async () => {
+    if (!hasItems) {
+      toast.error("Add at least one item before making a PDF.");
+      return;
+    }
+    const lineItems: QuotePdfLine[] = [];
+    result.lineItems.forEach((line) =>
+      lineItems.push({
+        label: `${line.name}${line.quantity > 1 ? ` ×${line.quantity}` : ""}`,
+        amount: line.lineTotal,
+      }),
+    );
+    if (result.discountApplied) {
+      lineItems.push({ label: "Multi-item discount (−10%)", amountText: `−${money2(result.discountAmount)}` });
+    }
+    if (mode === "moving") {
+      if (pickupStairFloor !== "none") {
+        lineItems.push({ label: `Stairs at pickup (${stairFloorLabel(pickupStairFloor)})`, amount: stairRate(pickupStairFloor) });
+      }
+      if (deliveryStairFloor !== "none") {
+        lineItems.push({ label: `Stairs at delivery (${stairFloorLabel(deliveryStairFloor)})`, amount: stairRate(deliveryStairFloor) });
+      }
+    } else if (result.stairSurcharge > 0) {
+      lineItems.push({ label: `Stairs (${stairDirections} dir)`, amount: result.stairSurcharge });
+    }
+    result.surcharges.forEach((line) => lineItems.push({ label: line.name, amount: line.lineTotal }));
+
+    const facts: Array<{ label: string; value: string }> = [
+      { label: "Crew", value: `${result.crewSize} worker${result.crewSize > 1 ? "s" : ""}` },
+    ];
+    if (mode === "moving") {
+      const vehicleLabel =
+        movingVehicle === "box_truck" ? "Box truck (liftgate included)" : movingVehicle === "van" ? "Cargo van" : null;
+      if (vehicleLabel) facts.push({ label: "Vehicle", value: vehicleLabel });
+      if (routeMiles != null) facts.push({ label: "Distance", value: `${routeMiles.toFixed(1)} mi` });
+    }
+
+    try {
+      const fileName = await downloadQuotePdf({
+        heading: copy.quoteHeading,
+        customerName: customerName || undefined,
+        addressLabel: mode === "moving" ? "Pickup" : "Job address",
+        address: (mode === "moving" ? pickupAddress : jobAddress) || undefined,
+        ...(mode === "moving"
+          ? { secondAddressLabel: "Delivery", secondAddress: deliveryAddress || undefined }
+          : {}),
+        total: result.total,
+        facts,
+        lineItems,
+        photoRequired: result.photoRequired,
+        notes: notes || undefined,
+      });
+      toast.success(`Saved ${fileName} — ready to text or email.`);
+    } catch (error) {
+      console.error("[ServiceEstimatePanel] PDF generation failed", error);
+      toast.error("Couldn't build the PDF. Please try again.");
+    }
+  };
+
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
       <div className="space-y-6">
@@ -912,7 +972,11 @@ export function ServiceEstimatePanel({
                 <Copy className="size-4" />
                 Customer
               </Button>
-              <Button variant="secondary" className="col-span-2" onClick={reset}>
+              <Button variant="outline" onClick={downloadPdf} disabled={!hasItems}>
+                <FileDown className="size-4" />
+                PDF
+              </Button>
+              <Button variant="secondary" onClick={reset}>
                 <RotateCcw className="size-4" />
                 Reset
               </Button>

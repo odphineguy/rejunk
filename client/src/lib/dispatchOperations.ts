@@ -1,3 +1,4 @@
+import { addClientNote, findClientByContact } from "@/lib/clientStorage";
 import { employeeName, getEmployees } from "@/lib/employeeStorage";
 import { getJobs, saveJob, updateJob } from "@/lib/jobStorage";
 import { ensureSession, supabase } from "@/lib/supabase";
@@ -471,6 +472,26 @@ export async function dispatchResolveIssue(
 
   if (input.resolutionType === "cancel_job") {
     updateJob(issue.jobId, { status: "canceled" });
+  }
+
+  // Mirror the resolution into the matched client's Contact Log so field issues
+  // land on the CRM record — "you never showed up" billing disputes can then be
+  // settled from the log. Jobs carry no clientId, so we match by phone/name; no
+  // match → skip silently rather than note the wrong account.
+  if (input.issueStatus === "resolved") {
+    const job = getJobs().find((item) => item.id === issue.jobId);
+    if (job) {
+      const client = findClientByContact({ phone: job.phone, name: job.customerName });
+      if (client) {
+        const label = issue.issueType.replaceAll("_", " ");
+        const detail =
+          input.dispatchInstructions?.trim() ||
+          input.dispatchResponse?.trim() ||
+          (input.resolutionType ? input.resolutionType.replaceAll("_", " ") : "");
+        const note = `Job ${job.jobNumber} — field issue resolved (${label})${detail ? `: ${detail}` : ""}.`;
+        addClientNote(client.id, note, "dispatch");
+      }
+    }
   }
 
   if (supabase && await ensureSession()) {
