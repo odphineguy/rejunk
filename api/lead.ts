@@ -16,7 +16,7 @@ import { Resend } from "resend";
 const ALLOWED_SERVICES = ["Junk Removal", "Moving", "Assembly & Handyman"] as const;
 
 // TODO: set LEAD_TO in the Vercel env — falls back to the owner.
-const DEFAULT_LEAD_TO = "odphineguy@gmail.com";
+const DEFAULT_LEAD_TO = "abe@saguarotransport.com";
 const DEFAULT_FROM = "Rejunk Website <onboarding@resend.dev>";
 
 interface LeadPayload {
