@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Copy, ShieldCheck, Upload, UserCog } from "lucide-react";
 import { toast } from "sonner";
 
@@ -10,8 +10,19 @@ import {
 } from "@/components/SettingsShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useStaffSession } from "@/hooks/useStaffSession";
 import { loadSettingsSection, saveSettingsSection } from "@/lib/settingsStorage";
+import { postStaff } from "@/lib/staffApi";
+import { patchStoredStaffSession } from "@/lib/staffSession";
 
 const SECTION = "profile";
 
@@ -25,19 +36,38 @@ type ProfileSettingsState = {
 };
 
 const DEFAULTS: ProfileSettingsState = {
-  firstName: "Abel",
-  lastName: "Morales",
-  email: "abel.morales196487@gmail.com",
-  phone: "(626) 559-1923",
+  firstName: "",
+  lastName: "",
+  email: "",
+  phone: "",
   avatarDataUrl: "",
   companyId: "rejunk-0001",
 };
 
 export default function ProfileSettings() {
-  const [settings, setSettings] = useState<ProfileSettingsState>(() =>
-    loadSettingsSection(SECTION, DEFAULTS)
-  );
+  const { session } = useStaffSession();
+  const [settings, setSettings] = useState<ProfileSettingsState>(() => {
+    const stored = loadSettingsSection(SECTION, DEFAULTS);
+    // Seed name/email from the real signed-in account the first time (before
+    // anything's been saved), so this page shows YOU — not sample data.
+    if (!stored.firstName && !stored.lastName && session) {
+      const [first, ...rest] = (session.fullName ?? "").trim().split(/\s+/);
+      return {
+        ...stored,
+        firstName: first ?? "",
+        lastName: rest.join(" "),
+        email: session.email ?? "",
+      };
+    }
+    return stored;
+  });
   const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  // Account email always reflects the real login (source of truth: the server).
+  const accountEmail = session?.email ?? settings.email;
+
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [pinDialogOpen, setPinDialogOpen] = useState(false);
 
   const update = (patch: Partial<ProfileSettingsState>) =>
     setSettings((prev) => ({ ...prev, ...patch }));
@@ -48,7 +78,12 @@ export default function ProfileSettings() {
   };
 
   const initials =
-    `${settings.firstName.trim().charAt(0)}${settings.lastName.trim().charAt(0)}`.toUpperCase();
+    `${settings.firstName.trim().charAt(0)}${settings.lastName.trim().charAt(0)}`.toUpperCase() ||
+    (session?.fullName?.trim().charAt(0) ?? "").toUpperCase();
+
+  const companyName =
+    loadSettingsSection<{ companyName?: string }>("company", {}).companyName ||
+    "Rejunk";
 
   const handleAvatarInput = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -145,26 +180,20 @@ export default function ProfileSettings() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-foreground">Email</div>
-                  <div className="truncate text-sm text-muted-foreground">{settings.email}</div>
+                  <div className="truncate text-sm text-muted-foreground">{accountEmail}</div>
                 </div>
-                <Button
-                  variant="outline"
-                  onClick={() => toast("Email update coming soon")}
-                >
+                <Button variant="outline" onClick={() => setEmailDialogOpen(true)}>
                   Update Email
                 </Button>
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold text-foreground">Password</div>
-                  <div className="text-sm text-muted-foreground">••••••••</div>
+                  <div className="text-sm font-semibold text-foreground">PIN</div>
+                  <div className="text-sm text-muted-foreground">••••</div>
                 </div>
-                <Button
-                  variant="outline"
-                  onClick={() => toast("Password update coming soon")}
-                >
-                  Update Password
+                <Button variant="outline" onClick={() => setPinDialogOpen(true)}>
+                  Change PIN
                 </Button>
               </div>
 
@@ -186,11 +215,9 @@ export default function ProfileSettings() {
               </SettingsField>
 
               <p className="text-sm text-foreground">
-                You are the owner of{" "}
-                <span className="text-[#155e3f] underline underline-offset-2">
-                  Progressive Transportation Services
-                </span>
-                .
+                You are signed in to{" "}
+                <span className="font-semibold text-[#155e3f]">{companyName}</span>
+                {session?.role ? ` as ${session.role === "owner" ? "an Owner" : "Office Staff"}` : ""}.
               </p>
 
               <div className="border-t border-border pt-5">
@@ -212,6 +239,184 @@ export default function ProfileSettings() {
           </SettingsCard>
         </div>
       </div>
+
+      <UpdateEmailDialog
+        open={emailDialogOpen}
+        currentEmail={accountEmail}
+        token={session?.token}
+        onOpenChange={setEmailDialogOpen}
+      />
+      <ChangePinDialog
+        open={pinDialogOpen}
+        token={session?.token}
+        onOpenChange={setPinDialogOpen}
+      />
     </SettingsShell>
+  );
+}
+
+function UpdateEmailDialog({
+  open,
+  currentEmail,
+  token,
+  onOpenChange,
+}: {
+  open: boolean;
+  currentEmail: string;
+  token?: string;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [newEmail, setNewEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (open) setNewEmail("");
+  }, [open]);
+
+  const submit = async () => {
+    if (!token) {
+      toast.error("Your session expired. Sign in again.");
+      return;
+    }
+    setBusy(true);
+    const res = await postStaff<{ email?: string }>("update-email", { token, newEmail });
+    setBusy(false);
+    if (!res.ok) {
+      toast.error(res.error || "Couldn't update your email.");
+      return;
+    }
+    patchStoredStaffSession({ email: res.data.email ?? newEmail });
+    toast.success("Email updated");
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Update Email</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            This is the email you sign in with. Current: <strong>{currentEmail}</strong>
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="new-email">New email</Label>
+            <Input
+              id="new-email"
+              type="email"
+              value={newEmail}
+              onChange={(event) => setNewEmail(event.target.value)}
+              placeholder="you@example.com"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={submit}
+            disabled={busy || !newEmail.trim()}
+            className="bg-[var(--moss-deep)] text-white hover:bg-[#1a7a4f]"
+          >
+            {busy ? "Saving…" : "Update Email"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ChangePinDialog({
+  open,
+  token,
+  onOpenChange,
+}: {
+  open: boolean;
+  token?: string;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [currentPin, setCurrentPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setCurrentPin("");
+      setNewPin("");
+      setConfirmPin("");
+    }
+  }, [open]);
+
+  const submit = async () => {
+    if (!token) {
+      toast.error("Your session expired. Sign in again.");
+      return;
+    }
+    if (!/^\d{4}$/.test(newPin)) {
+      toast.error("Your new PIN must be exactly 4 digits.");
+      return;
+    }
+    if (newPin !== confirmPin) {
+      toast.error("The new PINs don't match.");
+      return;
+    }
+    setBusy(true);
+    const res = await postStaff("update-pin", { token, currentPin, newPin });
+    setBusy(false);
+    if (!res.ok) {
+      toast.error(res.error || "Couldn't change your PIN.");
+      return;
+    }
+    toast.success("PIN changed");
+    onOpenChange(false);
+  };
+
+  const pinInput = (
+    value: string,
+    setter: (v: string) => void,
+    id: string,
+    label: string
+  ) => (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        inputMode="numeric"
+        maxLength={4}
+        value={value}
+        onChange={(event) => setter(event.target.value.replace(/\D/g, "").slice(0, 4))}
+        placeholder="••••"
+      />
+    </div>
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Change PIN</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          {pinInput(currentPin, setCurrentPin, "current-pin", "Current PIN")}
+          {pinInput(newPin, setNewPin, "new-pin", "New PIN")}
+          {pinInput(confirmPin, setConfirmPin, "confirm-pin", "Confirm new PIN")}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={submit}
+            disabled={busy}
+            className="bg-[var(--moss-deep)] text-white hover:bg-[#1a7a4f]"
+          >
+            {busy ? "Saving…" : "Change PIN"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

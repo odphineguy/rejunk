@@ -17,6 +17,7 @@ import {
   Plus,
   Save,
   Search,
+  ShieldCheck,
   Smartphone,
   Trash2,
   Upload,
@@ -56,6 +57,8 @@ import {
   revokeDriverAccess,
   type ActivateDriverResult,
 } from "@/lib/driverActivation";
+import { useStaffSession } from "@/hooks/useStaffSession";
+import { postStaff } from "@/lib/staffApi";
 import { deleteEmployee, employeeName, getEmployee, getEmployees, saveEmployee } from "@/lib/employeeStorage";
 import { colorFor, profileColors } from "@/lib/profileColors";
 import { cn } from "@/lib/utils";
@@ -385,6 +388,201 @@ function AppAccessPanel({ employee }: { employee: EmployeeRecord }) {
   );
 }
 
+/**
+ * "Office Access" card on the employee detail page — grant/revoke an office
+ * LOGIN (separate from the driver app). Owner-only; the server also enforces it.
+ * Granting emails a temporary PIN (shown here too as a fallback).
+ */
+function OfficeAccessPanel({ employee }: { employee: EmployeeRecord }) {
+  const { session, isOwner } = useStaffSession();
+  const [access, setAccess] = useState<{ role: string; email: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [role, setRole] = useState<"office" | "owner">("office");
+  const [busy, setBusy] = useState(false);
+  const [tempPin, setTempPin] = useState<string | null>(null);
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
+
+  const refresh = async () => {
+    if (!session?.token) return;
+    const res = await postStaff<{ access: Array<{ employeeId: string | null; role: string; email: string }> }>("list", {
+      token: session.token,
+    });
+    setLoading(false);
+    if (!res.ok) return;
+    const mine = (res.data.access ?? []).find((row) => row.employeeId === employee.id);
+    setAccess(mine ? { role: mine.role, email: mine.email } : null);
+  };
+
+  useEffect(() => {
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employee.id, session?.token]);
+
+  // Only owners manage office logins.
+  if (!isOwner) return null;
+
+  // Grant or re-send. Always uses the employee's CURRENT email, so changing
+  // their email above and re-sending moves the login to the new address.
+  const send = async (sendRole: "office" | "owner") => {
+    if (!session?.token) return;
+    if (!employee.email) {
+      toast.error("Add an email above first — the PIN is emailed to them.");
+      return;
+    }
+    setBusy(true);
+    setTempPin(null);
+    const res = await postStaff<{ pin?: string; emailed?: boolean }>("grant", {
+      token: session.token,
+      employeeId: employee.id,
+      fullName: employeeName(employee),
+      email: employee.email,
+      role: sendRole,
+    });
+    setBusy(false);
+    if (!res.ok) {
+      toast.error(res.error || "Couldn't send the office login.");
+      return;
+    }
+    if (res.data.emailed) {
+      toast.success(`Office login emailed to ${employee.email}`);
+    } else {
+      toast.warning("Saved, but the email couldn't be sent — share the PIN below.");
+    }
+    if (res.data.pin) setTempPin(res.data.pin);
+    void refresh();
+  };
+
+  const revoke = async () => {
+    setConfirmRevoke(false);
+    if (!session?.token) return;
+    const res = await postStaff("revoke", { token: session.token, employeeId: employee.id });
+    if (!res.ok) {
+      toast.error(res.error || "Couldn't remove office access.");
+      return;
+    }
+    toast.success("Office access removed");
+    setTempPin(null);
+    void refresh();
+  };
+
+  const roleLabel = access?.role === "owner" ? "Owner" : "Office Staff";
+
+  return (
+    <Panel>
+      <SectionTitle icon={ShieldCheck}>Office Access</SectionTitle>
+      <div className="space-y-4 text-sm">
+        {loading ? (
+          <p className="text-muted-foreground">Checking…</p>
+        ) : access ? (
+          <p>
+            Has an office login as <span className="font-semibold">{roleLabel}</span> ({access.email}).
+          </p>
+        ) : (
+          <p className="text-muted-foreground">No office login. They can't sign in to the office app.</p>
+        )}
+
+        {access && employee.email && access.email !== employee.email.trim().toLowerCase() && (
+          <p className="text-xs text-amber-600">
+            Their login still uses {access.email}. Resend below to move it to {employee.email}.
+          </p>
+        )}
+
+        {!access && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={role} onValueChange={(value) => setRole(value as "office" | "owner")}>
+              <SelectTrigger className="h-10 w-[150px] rounded-lg bg-card">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="office">Office Staff</SelectItem>
+                <SelectItem value="owner">Owner</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              className="rounded-lg border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]"
+              onClick={() => void send(role)}
+              disabled={busy}
+            >
+              <Mail className="size-4" />
+              {busy ? "Sending…" : "Give Office Access"}
+            </Button>
+          </div>
+        )}
+
+        {access && (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              className="rounded-lg border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]"
+              onClick={() => void send(access.role === "owner" ? "owner" : "office")}
+              disabled={busy}
+            >
+              <Mail className="size-4" />
+              {busy ? "Sending…" : "Resend Login Email"}
+            </Button>
+            <Button
+              variant="outline"
+              className="rounded-lg text-destructive hover:text-destructive"
+              onClick={() => setConfirmRevoke(true)}
+            >
+              <Trash2 className="size-4" />
+              Remove Office Access
+            </Button>
+          </div>
+        )}
+
+        {tempPin && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-[#155e3f] bg-[#f0f4ec] px-4 py-3">
+            <div>
+              <div className="text-xs font-medium text-muted-foreground">Temporary PIN</div>
+              <span className="font-mono text-2xl font-bold tracking-[0.3em] text-[#155e3f]">{tempPin}</span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                void navigator.clipboard.writeText(tempPin);
+                toast.success("PIN copied");
+              }}
+            >
+              <Copy className="size-4" />
+              Copy
+            </Button>
+          </div>
+        )}
+        {!employee.email && (
+          <p className="text-xs text-muted-foreground">Add an email above to grant office access.</p>
+        )}
+      </div>
+
+      <AlertDialog open={confirmRevoke} onOpenChange={setConfirmRevoke}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove office access?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {employeeName(employee)} will be signed out of the office app immediately and won't be able to sign back in until you
+              grant access again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={(event) => {
+                event.preventDefault();
+                void revoke();
+              }}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Panel>
+  );
+}
+
 export default function Employees() {
   const [, params] = useRoute("/employees/:employeeId");
   const [isNewRoute] = useRoute("/employees/new");
@@ -678,6 +876,7 @@ function EmployeeEditor({ mode, employeeId }: { mode?: "new"; employeeId?: strin
             </Panel>
           )}
           {!isNew && employee.id && <AppAccessPanel employee={employee as EmployeeRecord} />}
+          {!isNew && employee.id && <OfficeAccessPanel employee={employee as EmployeeRecord} />}
         </div>
       </div>
     </>

@@ -41,6 +41,7 @@ import { getInvoices } from "@/lib/invoiceStorage";
 import { getJobs } from "@/lib/jobStorage";
 import { getPayments } from "@/lib/paymentStorage";
 import { clearStaffSession, getStoredStaffSession } from "@/lib/staffSession";
+import { useStaffSession } from "@/hooks/useStaffSession";
 import { cn } from "@/lib/utils";
 import { loadSavedEstimates } from "@/utils/pricingStorage";
 import type { ClientRecord } from "@/types/clients";
@@ -69,8 +70,8 @@ const navGroups = [
       { href: "/schedule", label: "Schedule", icon: CalendarDays },
       { href: "/events", label: "Events", icon: CalendarPlus },
       { href: "/invoices", label: "Invoices", icon: FileText },
-      { href: "/payments", label: "Payments", icon: Banknote },
-      { href: "/pricebook", label: "Pricebook", icon: PackageSearch },
+      { href: "/payments", label: "Payments", icon: Banknote, ownerOnly: true },
+      { href: "/pricebook", label: "Pricebook", icon: PackageSearch, ownerOnly: true },
       { href: "/employees", label: "Employees", icon: BriefcaseBusiness },
     ],
   },
@@ -166,8 +167,15 @@ function paymentRows(payments: PaymentRecord[]) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
+  const { isOwner: isOwnerUser } = useStaffSession();
   const [unread, setUnread] = useState(() => getUnreadTotalFromCache());
   const [shellJobs, setShellJobs] = useState<Job[]>(() => getJobs());
+
+  // Office Staff don't see owner-only areas (pricing setup, payments).
+  const visibleGroups = navGroups.map(group => ({
+    ...group,
+    items: group.items.filter(item => isOwnerUser || !("ownerOnly" in item)),
+  }));
 
   useEffect(() => {
     // Hydrate threads so the Messages badge is accurate, then track changes.
@@ -213,7 +221,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Link>
 
         <nav className="pine-scroll flex-1 overflow-y-auto px-3.5 py-3">
-          {navGroups.map((group, groupIndex) => (
+          {visibleGroups.map((group, groupIndex) => (
             <div key={group.label}>
               <div
                 className={cn(
@@ -304,7 +312,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="flex gap-2 overflow-x-auto border-t border-border px-4 py-3 md:hidden">
-            {navGroups
+            {visibleGroups
               .flatMap(group => group.items)
               .map(item => {
                 const Icon = item.icon;
@@ -463,6 +471,7 @@ function GlobalSearch() {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
+  const { isOwner: isOwnerUser } = useStaffSession();
   const [jobs, setJobs] = useState<Job[]>(() => getJobs());
   const [clients, setClients] = useState<ClientRecord[]>(() => getClients());
   const [employees, setEmployees] = useState<EmployeeRecord[]>(() =>
@@ -614,12 +623,17 @@ function GlobalSearch() {
         icon: FileText,
         items: invoiceRows,
       },
-      {
-        label: "Payments",
-        href: "/payments",
-        icon: Banknote,
-        items: paymentResults,
-      },
+      // Payments are owner-only — never surface them to Office Staff.
+      ...(isOwnerUser
+        ? [
+            {
+              label: "Payments",
+              href: "/payments",
+              icon: Banknote,
+              items: paymentResults,
+            },
+          ]
+        : []),
       {
         label: "Estimates",
         href: "/estimate-builder",
@@ -636,6 +650,7 @@ function GlobalSearch() {
     jobs,
     payments,
     trimmedQuery,
+    isOwnerUser,
   ]);
 
   const resultCount = groups.reduce(

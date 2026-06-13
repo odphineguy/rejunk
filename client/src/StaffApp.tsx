@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
-import { Route, Switch } from "wouter";
+import { useEffect, useState, type ReactNode } from "react";
+import { Redirect, Route, Switch } from "wouter";
 
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useStaffSession } from "@/hooks/useStaffSession";
 import NotFound from "@/pages/NotFound";
 import { AppShell } from "./components/OperationsShell";
 import { StaffSessionGate } from "./components/StaffSessionGate";
@@ -41,6 +42,16 @@ import SmsNotifications from "./pages/settings/SmsNotifications";
 import TaxRates from "./pages/settings/TaxRates";
 import TipSettings from "./pages/settings/TipSettings";
 
+/**
+ * Owner-only route guard (defense in depth — the nav already hides these).
+ * Office Staff who type the URL directly get bounced to the dashboard.
+ */
+function OwnerOnly({ children }: { children: ReactNode }) {
+  const { isOwner } = useStaffSession();
+  if (!isOwner) return <Redirect to="/dashboard" />;
+  return <>{children}</>;
+}
+
 function StaffRouter() {
   return (
     <Switch>
@@ -62,8 +73,16 @@ function StaffRouter() {
       <Route path={"/invoices/new"} component={Invoices} />
       <Route path={"/invoices/:invoiceId"} component={Invoices} />
       <Route path={"/invoices"} component={Invoices} />
-      <Route path={"/payments"} component={Payments} />
-      <Route path={"/pricebook"} component={Pricebook} />
+      <Route path={"/payments"}>
+        <OwnerOnly>
+          <Payments />
+        </OwnerOnly>
+      </Route>
+      <Route path={"/pricebook"}>
+        <OwnerOnly>
+          <Pricebook />
+        </OwnerOnly>
+      </Route>
       <Route path={"/events/new"} component={Events} />
       <Route path={"/events/:eventId"} component={Events} />
       <Route path={"/events"} component={Events} />

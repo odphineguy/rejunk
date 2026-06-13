@@ -281,6 +281,42 @@ function vitePluginDriverApi(): Plugin {
   };
 }
 
+// Dev-server twin of the Express POST /api/staff route (office login + office
+// access management). Unlike the driver activation middleware this one talks to
+// Supabase with the service-role key, so the dev server needs SUPABASE_URL /
+// SUPABASE_SERVICE_ROLE_KEY in process.env (copied from .env below).
+function vitePluginStaffApi(): Plugin {
+  return {
+    name: "rejunk-staff-api",
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use("/api/staff", (req, res) => {
+        if (req.method !== "POST") {
+          res.writeHead(405, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "POST only" }));
+          return;
+        }
+        let body = "";
+        req.on("data", (chunk) => {
+          body += chunk.toString();
+        });
+        req.on("end", () => {
+          void (async () => {
+            try {
+              const { handleStaffAction } = await import("./server/staffAccess");
+              const result = await handleStaffAction(JSON.parse(body || "{}"));
+              res.writeHead(result.status, { "Content-Type": "application/json" });
+              res.end(JSON.stringify(result.body));
+            } catch (error) {
+              res.writeHead(500, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: String(error) }));
+            }
+          })();
+        });
+      });
+    },
+  };
+}
+
 // Dev-server twin of the Express POST /api/lead route (website estimate-form
 // leads), same situation as the driver activation middleware above. The
 // deployed static site uses the Vercel function api/lead.ts instead.
@@ -327,7 +363,7 @@ function vitePluginLeadApi(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy(), vitePluginMapsProxy(), vitePluginDriverApi(), vitePluginLeadApi()];
+const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy(), vitePluginMapsProxy(), vitePluginDriverApi(), vitePluginStaffApi(), vitePluginLeadApi()];
 
 export default defineConfig(({ mode }) => {
   // Vite only hands VITE_-prefixed values to the browser. The dev maps + storage
@@ -335,7 +371,7 @@ export default defineConfig(({ mode }) => {
   // .env file here and copy the keys in — otherwise the maps proxy can't find the
   // Google key and the map silently falls back to the local placeholder view.
   const env = loadEnv(mode, path.resolve(import.meta.dirname), "");
-  for (const key of ["GOOGLE_MAPS_API_KEY", "VITE_GOOGLE_MAPS_API_KEY", "BUILT_IN_FORGE_API_URL", "BUILT_IN_FORGE_API_KEY", "RESEND_API_KEY", "RESEND_FROM", "LEAD_TO"]) {
+  for (const key of ["GOOGLE_MAPS_API_KEY", "VITE_GOOGLE_MAPS_API_KEY", "BUILT_IN_FORGE_API_URL", "BUILT_IN_FORGE_API_KEY", "RESEND_API_KEY", "RESEND_FROM", "LEAD_TO", "SUPABASE_URL", "VITE_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]) {
     if (!process.env[key] && env[key]) {
       process.env[key] = env[key];
     }

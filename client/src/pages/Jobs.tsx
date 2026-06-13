@@ -35,6 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useStaffSession } from "@/hooks/useStaffSession";
 import { getJobWarningsWithFacilityCheck } from "@/lib/jobIntelligence";
 import { deleteJob, getActualFinancials, getJobs } from "@/lib/jobStorage";
 import { loadPricingSettings } from "@/utils/pricingStorage";
@@ -108,6 +109,7 @@ export default function Jobs() {
   const [query, setQuery] = useState("");
   const [activeStatus, setActiveStatus] = useState<"all" | JobStatus>("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const { isOwner } = useStaffSession();
 
   useEffect(() => {
     const refresh = () => setJobs(getJobs());
@@ -334,7 +336,9 @@ export default function Jobs() {
                   <TableHead>Payment</TableHead>
                   <TableHead>Warn</TableHead>
                   <TableHead className="text-right">Quote</TableHead>
-                  <TableHead className="text-right">Profit</TableHead>
+                  {isOwner && (
+                    <TableHead className="text-right">Profit</TableHead>
+                  )}
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -417,9 +421,11 @@ export default function Jobs() {
                       <TableCell className="text-right font-semibold">
                         {money(job.quotedAmount)}
                       </TableCell>
-                      <TableCell className="text-right font-semibold">
-                        {money(getActualFinancials(job).profit)}
-                      </TableCell>
+                      {isOwner && (
+                        <TableCell className="text-right font-semibold">
+                          {money(getActualFinancials(job).profit)}
+                        </TableCell>
+                      )}
                       <TableCell className="text-right">
                         <Button
                           variant="ghost"
@@ -436,7 +442,7 @@ export default function Jobs() {
                 {filteredJobs.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={13}
+                      colSpan={isOwner ? 13 : 12}
                       className="h-24 text-center text-muted-foreground"
                     >
                       No jobs match the current filters.

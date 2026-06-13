@@ -27,6 +27,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { useStaffSession } from "@/hooks/useStaffSession";
 import { getJobs } from "@/lib/jobStorage";
 import { loadSavedEstimates } from "@/utils/pricingStorage";
 import type { Job } from "@/types/jobs";
@@ -134,18 +135,21 @@ const cardDefs: Array<{
   icon: LucideIcon;
   get: (m: DayMetrics) => number;
   fmt: (m: DayMetrics) => string;
+  ownerOnly?: boolean;
 }> = [
   {
     label: "Total Revenue",
     icon: WalletCards,
     get: m => m.totalRevenue,
     fmt: m => currency.format(m.totalRevenue),
+    ownerOnly: true,
   },
   {
     label: "Collected Payments",
     icon: Banknote,
     get: m => m.collected,
     fmt: m => currency.format(m.collected),
+    ownerOnly: true,
   },
   {
     label: "Jobs Completed",
@@ -158,12 +162,14 @@ const cardDefs: Array<{
     icon: Percent,
     get: m => m.grossMargin,
     fmt: m => `${m.grossMargin}%`,
+    ownerOnly: true,
   },
   {
     label: "Average Job Size",
     icon: TrendingUp,
     get: m => m.averageJobSize,
     fmt: m => currency.format(m.averageJobSize),
+    ownerOnly: true,
   },
   {
     label: "New Clients",
@@ -258,6 +264,7 @@ function DeltaPill({ today, prev }: { today: number; prev: number }) {
 
 export default function Dashboard() {
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  const { isOwner } = useStaffSession();
   const jobs = getJobs();
   const estimates = loadSavedEstimates();
 
@@ -303,7 +310,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-[18px] [grid-template-columns:repeat(auto-fill,minmax(290px,1fr))]">
-        {cards(metrics, prevMetrics, series).map((card, index) => {
+        {cards(metrics, prevMetrics, series, isOwner).map((card, index) => {
           const Icon = card.icon;
           return (
             <section
@@ -334,8 +341,15 @@ export default function Dashboard() {
   );
 }
 
-function cards(metrics: DayMetrics, prevMetrics: DayMetrics, series: DayMetrics[]) {
-  return cardDefs.map(def => ({
+function cards(
+  metrics: DayMetrics,
+  prevMetrics: DayMetrics,
+  series: DayMetrics[],
+  isOwner: boolean
+) {
+  return cardDefs
+    .filter(def => isOwner || !def.ownerOnly)
+    .map(def => ({
     label: def.label,
     icon: def.icon,
     value: def.fmt(metrics),
