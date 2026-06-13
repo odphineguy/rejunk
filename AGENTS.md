@@ -93,11 +93,36 @@ settings, estimator) is the Supabase-backed `loadPricingSettings().disposalFacil
 type extends `DisposalFacility` with legacy display fields (`name`, `type`, `lat`, `lng`, …) for
 back-compat; both shapes coexist.
 
-### Auth
-There is **no login UI**. `lib/supabase.ts` `ensureSession()` does **transparent anonymous sign-in** so
-every visitor gets an `authenticated` session for RLS. This **requires the Anonymous provider to be
-enabled** in the Supabase dashboard (Auth → Providers); if it's off, the app silently falls back to
-local-only mode. `supabase` is `null` when env vars are absent, and callers treat null as "not configured".
+### Auth — three independent layers
+1. **Anonymous Supabase session (data / RLS).** `lib/supabase.ts` `ensureSession()` does **transparent
+   anonymous sign-in** so every visitor gets an `authenticated` session for row-level security. This
+   **requires the Anonymous provider enabled** (Auth → Providers); if off, the app falls back to
+   local-only mode. `supabase` is `null` when env vars are absent (callers treat null as "not configured").
+2. **Office login — "the front door."** Every internal office route is wrapped in `StaffSessionGate`; no
+   session → `/login` (`StaffLogin.tsx`). Sign-in is **email + 4-digit PIN verified SERVER-SIDE** against
+   the `staff` table (PBKDF2-SHA256, same hash scheme as drivers). The browser **never touches the `staff`
+   / `staff_sessions` tables** — they're RLS-locked with **no client policies** (migrations
+   `202606130001` + `202606130002`). All staff auth + provisioning go through **`POST /api/staff`**, an
+   action-dispatched endpoint (`login`, `validate`, `logout`, `grant`, `revoke`, `list`, `update-pin`,
+   `update-email`) that runs with the **service-role key**. Login returns an opaque token stored under
+   `rejunk_staff_session`; client side is `lib/staffSession.ts` + `lib/staffApi.ts` +
+   `hooks/useStaffSession.ts`. Like the maps proxy and driver activation, `/api/staff` lives in **three
+   kept-in-sync places**: shared logic `server/staffAccess.ts` (used by the Express route
+   `server/routes/staffAccess.ts` **and** the Vite dev middleware in `vite.config.ts`) plus a
+   **self-contained Vercel copy `api/staff.ts`** (Vercel can't import `../server/*` at runtime). **Two
+   roles:** `owner` sees everything; `office` (Office Staff) loses Pricing Settings / Pricebook / Payments
+   and all profit/money figures — hidden from the sidebar, blocked at the route via `OwnerOnly`
+   (`StaffApp.tsx`), and filtered out of the Jobs profit column, Dashboard money KPIs, and global search
+   (`useStaffSession().isOwner` gates all of it). Owners grant/revoke office logins from the **Employees
+   detail page** (`OfficeAccessPanel`, owner-only): grant creates the `staff` row and **emails a temp PIN
+   via Resend** (shown on-screen as a fallback); "Resend Login Email" re-issues a PIN and follows an
+   employee email change (matches the existing login by `employee_id` first, then email). Requires
+   `SUPABASE_SERVICE_ROLE_KEY` (+ `SUPABASE_URL`) in the server/Vercel env. **⚠️ Security history:** the
+   original `staff` table (`202606100003`) shipped with `using(true)` / `with check(true)` policies for any
+   anonymous user — anyone could read every PIN hash and self-provision an owner login. Closed 2026-06-13
+   by the table lockdown + moving auth server-side.
+3. **Driver login** — a separate app-level identity (see *Driver activation & live GPS* below). Driver and
+   staff sessions are fully independent; one grants nothing for the other.
 
 ### Driver activation & live GPS
 Drivers (not managers) have an app-level identity layered on top of the anonymous session. A manager
@@ -204,6 +229,14 @@ the bucket is **public-read** because `uploadJobPhoto` renders via `getPublicUrl
 bucket — photos can't be deleted from the client. Phase 1 uses `if not exists`/`on conflict`, so applying
 it later won't conflict.
 
+`202606100003_staff_auth.sql` (the office-login `staff` table) then
+`202606130001_staff_office_access.sql` + `202606130002_staff_sessions.sql` (the `office` role,
+`employee_id`/`must_change_pin` columns, the `staff_sessions` token table, and the **RLS lockdown**) are
+**applied to BOTH live DBs** (prod + test, 2026-06-13). The `13000x` pair closed a security hole and made
+the `staff`/`staff_sessions` tables server-only — see **Auth** above. Deploying these needed
+`SUPABASE_SERVICE_ROLE_KEY` + `SUPABASE_URL` added to the **Vercel** env (the office-login Vercel function
+`api/staff.ts` reads them), and a one-time re-login for everyone (old sessions carry no token).
+
 ## Deployment
 
 Production is a **static SPA on Vercel** (`vercel.json`: build `vite build`, output `dist/public`, SPA
@@ -239,6 +272,12 @@ the existing exception.)
 - `VITE_GOOGLE_MAPS_API_KEY` (client) or `GOOGLE_MAPS_API_KEY` (server, used only by the maps proxy).
 - `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` — Supabase client (anon key is publishable; protected by
   RLS). Without these, the app runs local-only.
+- `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` — **server-side only** (Express, Vite dev middleware, and
+  the `api/staff.ts` + driver Vercel functions). The service-role key bypasses RLS; it must **never** be
+  `VITE_`-prefixed. Used by the office-login endpoint (`/api/staff`) — if missing in the Vercel env, the
+  live office login returns 503 and nobody can sign in.
+- `RESEND_API_KEY` / `RESEND_FROM` — Resend transactional email (driver activation keys + office-login
+  PINs + website-lead notifications).
 - `BUILT_IN_FORGE_API_URL` / `BUILT_IN_FORGE_API_KEY` — Manus asset storage proxy (dev only).
 - `VITE_OAUTH_PORTAL_URL` / `VITE_APP_ID` — referenced by `client/src/const.ts` `getLoginUrl()`, but no
   auth flow uses them.
