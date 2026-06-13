@@ -115,7 +115,7 @@ export default function StaffLogin() {
                 setError(null);
                 setEmail(event.target.value);
               }}
-              className="h-12"
+              className="h-12 border-[#155e3f]/40 bg-white"
             />
           </div>
 
@@ -135,9 +135,15 @@ export default function StaffLogin() {
                 disabled={busy || lockedOut}
                 containerClassName="justify-center"
               >
+                {/* The default slot border (border-input) disappears on the cream
+                    background — pine borders + white fill so the boxes read as inputs. */}
                 <InputOTPGroup>
                   {[0, 1, 2, 3].map((index) => (
-                    <InputOTPSlot key={index} index={index} className="size-14 text-2xl font-bold" />
+                    <InputOTPSlot
+                      key={index}
+                      index={index}
+                      className="size-14 border-y-2 border-r-2 border-[#155e3f]/50 bg-white text-2xl font-bold first:border-l-2 data-[active=true]:border-[#155e3f] data-[active=true]:ring-[#155e3f]/30"
+                    />
                   ))}
                 </InputOTPGroup>
               </InputOTP>
@@ -153,7 +159,7 @@ export default function StaffLogin() {
           {!lockedOut && error && <p className="text-center text-sm font-medium text-destructive">{error}</p>}
 
           <Button
-            className="h-12 w-full bg-[#155e3f] text-white hover:bg-[#0c4a30]"
+            className="h-12 w-full bg-[#155e3f] text-base font-bold text-white hover:bg-[#0c4a30] disabled:opacity-100 disabled:bg-[#155e3f]/30 disabled:text-[#052a2b]/60"
             disabled={busy || lockedOut || pin.length !== PIN_LENGTH}
             onClick={() => void submit(pin)}
           >
