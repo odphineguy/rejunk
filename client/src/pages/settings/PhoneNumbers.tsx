@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -97,6 +97,7 @@ export default function PhoneNumbers() {
   );
   const [query, setQuery] = useState("");
   const [pageSize, setPageSize] = useState("10");
+  const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draft, setDraft] = useState<NumberDraft>(EMPTY_DRAFT);
 
@@ -115,6 +116,16 @@ export default function PhoneNumbers() {
       `${row.name} ${row.number}`.toLowerCase().includes(normalizedQuery)
     );
   }, [settings.numbers, query]);
+
+  const size = Number(pageSize);
+  const totalPages = Math.max(1, Math.ceil(filteredNumbers.length / size));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * size;
+  const pagedNumbers = filteredNumbers.slice(pageStart, pageStart + size);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, pageSize]);
 
   const toggleCallRecording = (id: string, callRecording: boolean) => {
     update({
@@ -218,7 +229,7 @@ export default function PhoneNumbers() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredNumbers.map((row, index) => (
+                {pagedNumbers.map((row, index) => (
                   <TableRow key={row.id} className={index % 2 === 1 ? "bg-muted/20" : undefined}>
                     <TableCell className="px-5 font-medium">{row.name}</TableCell>
                     <TableCell>{row.number}</TableCell>
@@ -260,15 +271,15 @@ export default function PhoneNumbers() {
         <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5 text-sm md:grid md:grid-cols-[1fr_auto_1fr] md:items-center">
           <span>
             {filteredNumbers.length
-              ? `Showing 1-${filteredNumbers.length} of ${filteredNumbers.length} results`
+              ? `Showing ${pageStart + 1}-${pageStart + pagedNumbers.length} of ${filteredNumbers.length} results`
               : "No results."}
           </span>
           <div className="flex items-center justify-center gap-4">
-            <Button variant="outline" size="icon" className="size-10 rounded-lg">
+            <Button variant="outline" size="icon" className="size-10 rounded-lg" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} aria-label="Previous page">
               <ChevronLeft className="size-4" />
             </Button>
-            <span>Page 1 of 1</span>
-            <Button variant="outline" size="icon" className="size-10 rounded-lg">
+            <span>Page {currentPage} of {totalPages}</span>
+            <Button variant="outline" size="icon" className="size-10 rounded-lg" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} aria-label="Next page">
               <ChevronRight className="size-4" />
             </Button>
           </div>

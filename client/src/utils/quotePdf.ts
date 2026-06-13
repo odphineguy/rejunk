@@ -89,6 +89,33 @@ function loadImageSize(
   });
 }
 
+/**
+ * The bundled Rejunk wordmark, pine on transparent — reads cleanly on the white
+ * PDF header. Used as the default letterhead when no company logo has been
+ * uploaded in Settings → Company. Fetched once and cached as a data URL because
+ * jsPDF's addImage needs raster bytes, not a URL.
+ */
+let defaultLogoPromise: Promise<string | null> | null = null;
+function loadDefaultLogoDataUrl(): Promise<string | null> {
+  if (defaultLogoPromise) return defaultLogoPromise;
+  defaultLogoPromise = (async () => {
+    try {
+      const res = await fetch(`${import.meta.env.BASE_URL}rejunk-whites.png`);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return await new Promise<string | null>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  })();
+  return defaultLogoPromise;
+}
+
 function formattedDate(): string {
   return new Date().toLocaleDateString("en-US", {
     year: "numeric",
@@ -123,15 +150,21 @@ export async function downloadQuotePdf(input: QuotePdfInput): Promise<string> {
   };
 
   // ── Letterhead ──────────────────────────────────────────────────────────
+  // Prefer the company logo uploaded in Settings → Company; otherwise fall back
+  // to the bundled Rejunk wordmark. The text wordmark below is a last resort if
+  // even the bundled asset can't load (e.g. offline).
   let headerBottom = y;
   let logoPlaced = false;
-  if (company.logoDataUrl?.startsWith("data:image")) {
+  const logoSource = company.logoDataUrl?.startsWith("data:image")
+    ? company.logoDataUrl
+    : await loadDefaultLogoDataUrl();
+  if (logoSource) {
     try {
-      const { width, height } = await loadImageSize(company.logoDataUrl);
+      const { width, height } = await loadImageSize(logoSource);
       const logoH = 13;
       const logoW = (width / height) * logoH;
-      const format = company.logoDataUrl.includes("image/jpeg") ? "JPEG" : "PNG";
-      doc.addImage(company.logoDataUrl, format, margin, y, logoW, logoH);
+      const format = logoSource.includes("image/jpeg") ? "JPEG" : "PNG";
+      doc.addImage(logoSource, format, margin, y, logoW, logoH);
       headerBottom = y + logoH;
       logoPlaced = true;
     } catch {

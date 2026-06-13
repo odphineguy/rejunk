@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Edit3,
   FileImage,
-  MoreHorizontal,
   PackageSearch,
   Plus,
   Save,
@@ -116,6 +117,7 @@ export default function Pricebook() {
   const [pricebook, setPricebook] = useState(() => getPricebook());
   const [query, setQuery] = useState("");
   const [pageSize, setPageSize] = useState("10");
+  const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState<PricebookTab>("items");
   const [editingItem, setEditingItem] = useState<Partial<PricebookItem> | null>(null);
   const [editingCategory, setEditingCategory] = useState<Partial<PricebookCategory> | null>(null);
@@ -149,6 +151,18 @@ export default function Pricebook() {
       return !normalizedQuery || searchable.includes(normalizedQuery);
     });
   }, [pricebook.categories, query]);
+
+  const activeList = activeTab === "items" ? filteredItems : filteredCategories;
+  const size = Number(pageSize);
+  const totalPages = Math.max(1, Math.ceil(activeList.length / size));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * size;
+  const pagedItems = filteredItems.slice(pageStart, pageStart + size);
+  const pagedCategories = filteredCategories.slice(pageStart, pageStart + size);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, pageSize, activeTab]);
 
   const removeItem = (itemId: string) => {
     setPricebook(deletePricebookItem(itemId));
@@ -201,9 +215,6 @@ export default function Pricebook() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="icon" className="size-10 rounded-lg">
-                <MoreHorizontal className="size-4" />
-              </Button>
             </div>
           </div>
 
@@ -219,14 +230,27 @@ export default function Pricebook() {
           <div className="mt-5">
             {activeTab === "items" ? (
               <ItemsTable
-                items={filteredItems}
+                items={pagedItems}
                 categories={categoryNameById}
                 onEdit={setEditingItem}
                 onDelete={removeItem}
               />
             ) : (
-              <CategoriesTable categories={filteredCategories} onEdit={setEditingCategory} onDelete={removeCategory} />
+              <CategoriesTable categories={pagedCategories} onEdit={setEditingCategory} onDelete={removeCategory} />
             )}
+          </div>
+
+          <div className="mt-5 flex flex-col gap-3 border-t border-border pt-5 text-sm md:flex-row md:items-center md:justify-between">
+            <span>{activeList.length ? `Showing ${pageStart + 1}-${pageStart + (activeTab === "items" ? pagedItems.length : pagedCategories.length)} of ${activeList.length} results` : "No results."}</span>
+            <div className="flex items-center justify-center gap-4">
+              <Button variant="outline" size="icon" className="size-10 rounded-lg" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} aria-label="Previous page">
+                <ChevronLeft className="size-4" />
+              </Button>
+              <span>Page {currentPage} of {totalPages}</span>
+              <Button variant="outline" size="icon" className="size-10 rounded-lg" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} aria-label="Next page">
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
           </div>
         </section>
 

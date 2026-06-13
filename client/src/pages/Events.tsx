@@ -117,6 +117,7 @@ function EventsList() {
   const [events, setEvents] = useState<EventRecord[]>(() => getEvents());
   const [query, setQuery] = useState("");
   const [pageSize, setPageSize] = useState("10");
+  const [page, setPage] = useState(1);
   const [, navigate] = useLocation();
 
   useEffect(() => {
@@ -132,6 +133,16 @@ function EventsList() {
       return !normalizedQuery || searchable.includes(normalizedQuery);
     });
   }, [events, query]);
+
+  const size = Number(pageSize);
+  const totalPages = Math.max(1, Math.ceil(filteredEvents.length / size));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * size;
+  const pagedEvents = filteredEvents.slice(pageStart, pageStart + size);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, pageSize]);
 
   const removeEvent = (event: React.MouseEvent, eventId: string) => {
     event.stopPropagation();
@@ -176,9 +187,6 @@ function EventsList() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="icon" className="size-10 rounded-lg">
-                <MoreHorizontal className="size-4" />
-              </Button>
             </div>
           </div>
 
@@ -194,7 +202,7 @@ function EventsList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredEvents.map((item) => (
+                {pagedEvents.map((item) => (
                   <TableRow key={item.id} className="cursor-pointer" onClick={() => navigate(`/events/${item.id}`)}>
                     <TableCell className="px-5 font-medium">{item.title}</TableCell>
                     <TableCell>{eventAddress(item)}</TableCell>
@@ -225,13 +233,13 @@ function EventsList() {
         </section>
 
         <section className="mt-5 flex flex-col gap-3 rounded-lg border border-border bg-card p-5 text-sm md:flex-row md:items-center md:justify-between">
-          <span>{filteredEvents.length ? `Showing 1-${filteredEvents.length} of ${filteredEvents.length} results` : "No results."}</span>
+          <span>{filteredEvents.length ? `Showing ${pageStart + 1}-${pageStart + pagedEvents.length} of ${filteredEvents.length} results` : "No results."}</span>
           <div className="flex items-center justify-center gap-4">
-            <Button variant="outline" size="icon" className="size-10 rounded-lg">
+            <Button variant="outline" size="icon" className="size-10 rounded-lg" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} aria-label="Previous page">
               <ChevronLeft className="size-4" />
             </Button>
-            <span>Page 1 of 1</span>
-            <Button variant="outline" size="icon" className="size-10 rounded-lg">
+            <span>Page {currentPage} of {totalPages}</span>
+            <Button variant="outline" size="icon" className="size-10 rounded-lg" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} aria-label="Next page">
               <ChevronRight className="size-4" />
             </Button>
           </div>

@@ -121,6 +121,10 @@ function InvoiceHeader({ crumb, actions }: { crumb?: string; actions?: React.Rea
 function InvoiceList() {
   const [invoices, setInvoices] = useState<InvoiceRecord[]>(() => getInvoices());
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("Status");
+  const [pageSize, setPageSize] = useState("10");
+  const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [, navigate] = useLocation();
 
   useEffect(() => {
@@ -132,10 +136,22 @@ function InvoiceList() {
   const filteredInvoices = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return invoices.filter((invoice) => {
+      const matchesStatus =
+        statusFilter === "Status" || invoice.status === statusFilter.toLowerCase();
       const searchable = [invoice.invoiceNumber, invoice.jobId, invoice.clientName, invoice.status, invoice.total].join(" ").toLowerCase();
-      return !normalizedQuery || searchable.includes(normalizedQuery);
+      return matchesStatus && (!normalizedQuery || searchable.includes(normalizedQuery));
     });
-  }, [invoices, query]);
+  }, [invoices, query, statusFilter]);
+
+  const size = Number(pageSize);
+  const totalPages = Math.max(1, Math.ceil(filteredInvoices.length / size));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * size;
+  const pagedInvoices = filteredInvoices.slice(pageStart, pageStart + size);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, statusFilter, pageSize]);
 
   const dueTotal = invoices.filter((invoice) => invoice.status !== "paid").reduce((sum, invoice) => sum + invoice.amountDue, 0);
   const overdueTotal = invoices.filter((invoice) => invoice.status === "overdue").reduce((sum, invoice) => sum + invoice.amountDue, 0);
@@ -143,7 +159,47 @@ function InvoiceList() {
   const removeInvoice = (event: React.MouseEvent, invoiceId: string) => {
     event.stopPropagation();
     setInvoices(deleteInvoice(invoiceId));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(invoiceId);
+      return next;
+    });
     toast.success("Invoice deleted");
+  };
+
+  const visibleIds = pagedInvoices.map((invoice) => invoice.id);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const someVisibleSelected = visibleIds.some((id) => selectedIds.has(id));
+
+  const toggleAllVisible = (checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) visibleIds.forEach((id) => next.add(id));
+      else visibleIds.forEach((id) => next.delete(id));
+      return next;
+    });
+  };
+
+  const toggleOne = (invoiceId: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(invoiceId);
+      else next.delete(invoiceId);
+      return next;
+    });
+  };
+
+  const deleteSelected = () => {
+    const count = selectedIds.size;
+    if (count === 0) return;
+    if (!window.confirm(`Delete ${count} invoice${count === 1 ? "" : "s"}? This can't be undone.`)) return;
+    let result = invoices;
+    selectedIds.forEach((id) => {
+      result = deleteInvoice(id);
+    });
+    setInvoices(result);
+    setSelectedIds(new Set());
+    toast.success(`${count} invoice${count === 1 ? "" : "s"} deleted`);
   };
 
   return (
@@ -179,20 +235,36 @@ function InvoiceList() {
               )}
             </div>
             <div className="flex flex-wrap gap-3">
-              <FilterSelect value="Tags" options={["Tags", "Overdue", "Paid"]} />
-              <FilterSelect value="10" options={["10", "25", "50"]} />
-              <Button variant="outline" size="icon" className="size-10 rounded-lg">
-                <MoreHorizontal className="size-4" />
-              </Button>
+              <FilterSelect value={statusFilter} onChange={setStatusFilter} options={["Status", "Draft", "Overdue", "Paid"]} />
+              <FilterSelect value={pageSize} onChange={setPageSize} options={["10", "25", "50"]} />
             </div>
           </div>
+
+          {selectedIds.size > 0 && (
+            <div className="mt-4 flex items-center justify-between rounded-lg border border-border bg-muted/40 px-4 py-2 text-sm">
+              <span className="font-medium">{selectedIds.size} selected</span>
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+                  Clear
+                </Button>
+                <Button variant="destructive" size="sm" onClick={deleteSelected}>
+                  <Trash2 className="size-4" />
+                  Delete selected
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div className="mt-6">
             <Table>
               <TableHeader className="bg-muted/30">
                 <TableRow>
                   <TableHead className="w-14 px-8">
-                    <Checkbox aria-label="Select all invoices" />
+                    <Checkbox
+                      aria-label="Select all invoices"
+                      checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
+                      onCheckedChange={(checked) => toggleAllVisible(checked === true)}
+                    />
                   </TableHead>
                   <TableHead>ID</TableHead>
                   <TableHead>Job ID</TableHead>
@@ -204,10 +276,14 @@ function InvoiceList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredInvoices.map((invoice) => (
+                {pagedInvoices.map((invoice) => (
                   <TableRow key={invoice.id} className="cursor-pointer" onClick={() => navigate(`/invoices/${invoice.id}`)}>
                     <TableCell className="px-8" onClick={(event) => event.stopPropagation()}>
-                      <Checkbox aria-label={`Select invoice ${invoice.invoiceNumber}`} />
+                      <Checkbox
+                        aria-label={`Select invoice ${invoice.invoiceNumber}`}
+                        checked={selectedIds.has(invoice.id)}
+                        onCheckedChange={(checked) => toggleOne(invoice.id, checked === true)}
+                      />
                     </TableCell>
                     <TableCell>{invoice.invoiceNumber}</TableCell>
                     <TableCell>{invoice.jobId}</TableCell>
@@ -230,13 +306,13 @@ function InvoiceList() {
         </section>
 
         <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5 text-sm md:flex-row md:items-center md:justify-between">
-          <span>{filteredInvoices.length ? `Showing 1-${filteredInvoices.length} of ${filteredInvoices.length} results` : "No results."}</span>
+          <span>{filteredInvoices.length ? `Showing ${pageStart + 1}-${pageStart + pagedInvoices.length} of ${filteredInvoices.length} results` : "No results."}</span>
           <div className="flex items-center justify-center gap-4">
-            <Button variant="outline" size="icon" className="size-10 rounded-lg">
+            <Button variant="outline" size="icon" className="size-10 rounded-lg" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} aria-label="Previous page">
               <ChevronLeft className="size-4" />
             </Button>
-            <span>Page 1 of 1</span>
-            <Button variant="outline" size="icon" className="size-10 rounded-lg">
+            <span>Page {currentPage} of {totalPages}</span>
+            <Button variant="outline" size="icon" className="size-10 rounded-lg" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} aria-label="Next page">
               <ChevronRight className="size-4" />
             </Button>
           </div>
@@ -488,9 +564,9 @@ function InvoiceMetric({ icon: Icon, iconClassName, amount, label }: { icon: typ
   );
 }
 
-function FilterSelect({ value, options }: { value: string; options: string[] }) {
+function FilterSelect({ value, onChange, options }: { value: string; onChange?: (value: string) => void; options: string[] }) {
   return (
-    <Select value={value}>
+    <Select value={value} onValueChange={onChange}>
       <SelectTrigger className="h-10 min-w-[90px] rounded-lg bg-card">
         <SelectValue />
       </SelectTrigger>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import {
   Building2,
@@ -65,6 +65,10 @@ import {
   saveClient,
 } from "@/lib/clientStorage";
 import { cn } from "@/lib/utils";
+import {
+  downloadClientsCsv,
+  importClientsFromCsv,
+} from "@/utils/clientCsv";
 import type {
   ClientKind,
   ClientRecord,
@@ -156,7 +160,18 @@ function ClientsList() {
   const [clients, setClients] = useState<ClientRecord[]>(() => getClients());
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | ClientKind>("client");
+  const [tagFilter, setTagFilter] = useState("Tags");
+  const [sortField, setSortField] = useState<
+    "Name" | "Company" | "Date Created"
+  >("Name");
+  const [sortDir, setSortDir] = useState<"Ascending" | "Descending">(
+    "Ascending"
+  );
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [, navigate] = useLocation();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const refresh = () => setClients(getClients());
@@ -164,10 +179,53 @@ function ClientsList() {
     return () => window.removeEventListener("clients-updated", refresh);
   }, []);
 
+  // Any filter/sort change drops the user back to the first page.
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, query, tagFilter, sortField, sortDir, pageSize]);
+
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    clients.forEach(client =>
+      (client.tags ?? []).forEach(tag => set.add(tag))
+    );
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [clients]);
+
+  const exportClients = () => {
+    const all = getClients();
+    if (all.length === 0) {
+      toast.info("No clients to export yet.");
+      return;
+    }
+    downloadClientsCsv(all);
+    toast.success(`Exported ${all.length} client${all.length === 1 ? "" : "s"}.`);
+  };
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = ""; // allow re-importing the same file
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const { imported, skipped } = importClientsFromCsv(text);
+      if (imported === 0) {
+        toast.error("No clients found in that file. Check the column headers.");
+        return;
+      }
+      const skippedNote = skipped > 0 ? ` (${skipped} row${skipped === 1 ? "" : "s"} skipped)` : "";
+      toast.success(`Imported ${imported} client${imported === 1 ? "" : "s"}.${skippedNote}`);
+    } catch {
+      toast.error("Couldn't read that file. Please upload a CSV.");
+    }
+  };
+
   const filteredClients = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return clients.filter(client => {
+    const result = clients.filter(client => {
       const matchesTab = activeTab === "all" || client.kind === activeTab;
+      const matchesTag =
+        tagFilter === "Tags" || (client.tags ?? []).includes(tagFilter);
       const searchable = [
         clientName(client),
         client.company,
@@ -179,15 +237,81 @@ function ClientsList() {
         .join(" ")
         .toLowerCase();
       return (
-        matchesTab && (!normalizedQuery || searchable.includes(normalizedQuery))
+        matchesTab &&
+        matchesTag &&
+        (!normalizedQuery || searchable.includes(normalizedQuery))
       );
     });
-  }, [activeTab, clients, query]);
+    const dir = sortDir === "Ascending" ? 1 : -1;
+    result.sort((a, b) => {
+      let cmp = 0;
+      if (sortField === "Name") {
+        cmp = clientName(a).localeCompare(clientName(b));
+      } else if (sortField === "Company") {
+        cmp = (a.company ?? "").localeCompare(b.company ?? "");
+      } else {
+        cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      }
+      return cmp * dir;
+    });
+    return result;
+  }, [activeTab, clients, query, tagFilter, sortField, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredClients.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pagedClients = filteredClients.slice(pageStart, pageStart + pageSize);
 
   const removeClient = (event: React.MouseEvent, clientId: string) => {
     event.stopPropagation();
     setClients(deleteClient(clientId));
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.delete(clientId);
+      return next;
+    });
     toast.success("Client deleted");
+  };
+
+  const visibleIds = pagedClients.map(client => client.id);
+  const allVisibleSelected =
+    visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id));
+  const someVisibleSelected = visibleIds.some(id => selectedIds.has(id));
+
+  const toggleAllVisible = (checked: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (checked) visibleIds.forEach(id => next.add(id));
+      else visibleIds.forEach(id => next.delete(id));
+      return next;
+    });
+  };
+
+  const toggleOne = (clientId: string, checked: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(clientId);
+      else next.delete(clientId);
+      return next;
+    });
+  };
+
+  const deleteSelected = () => {
+    const count = selectedIds.size;
+    if (count === 0) return;
+    if (
+      !window.confirm(
+        `Delete ${count} ${count === 1 ? "entry" : "entries"}? This can't be undone.`
+      )
+    )
+      return;
+    let result = clients;
+    selectedIds.forEach(id => {
+      result = deleteClient(id);
+    });
+    setClients(result);
+    setSelectedIds(new Set());
+    toast.success(`${count} ${count === 1 ? "entry" : "entries"} deleted`);
   };
 
   return (
@@ -195,8 +319,16 @@ function ClientsList() {
       <PageHeader
         actions={
           <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={handleImportFile}
+            />
             <Button
               variant="outline"
+              onClick={() => fileInputRef.current?.click()}
               className="rounded-lg border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]"
             >
               <Import className="size-4" />
@@ -204,6 +336,7 @@ function ClientsList() {
             </Button>
             <Button
               variant="outline"
+              onClick={exportClients}
               className="rounded-lg border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]"
             >
               <Upload className="size-4" />
@@ -245,25 +378,29 @@ function ClientsList() {
             </div>
             <div className="flex flex-wrap gap-3">
               <FilterSelect
-                value="Tags"
-                options={["Tags", "Rejunk", "Referral", "Website"]}
+                value={tagFilter}
+                onChange={setTagFilter}
+                options={["Tags", ...allTags]}
               />
               <FilterSelect
-                value="Name"
+                value={sortField}
+                onChange={value =>
+                  setSortField(value as "Name" | "Company" | "Date Created")
+                }
                 options={["Name", "Company", "Date Created"]}
               />
               <FilterSelect
-                value="Ascending"
+                value={sortDir}
+                onChange={value =>
+                  setSortDir(value as "Ascending" | "Descending")
+                }
                 options={["Ascending", "Descending"]}
               />
-              <FilterSelect value="10" options={["10", "25", "50"]} />
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-10 rounded-lg"
-              >
-                <MoreHorizontal className="size-4" />
-              </Button>
+              <FilterSelect
+                value={String(pageSize)}
+                onChange={value => setPageSize(Number(value))}
+                options={["10", "25", "50"]}
+              />
             </div>
           </div>
 
@@ -285,12 +422,47 @@ function ClientsList() {
             ))}
           </div>
 
+          {selectedIds.size > 0 && (
+            <div className="mt-4 flex items-center justify-between rounded-lg border border-border bg-muted/40 px-4 py-2 text-sm">
+              <span className="font-medium">{selectedIds.size} selected</span>
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedIds(new Set())}
+                >
+                  Clear
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={deleteSelected}
+                >
+                  <Trash2 className="size-4" />
+                  Delete selected
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div className="mt-5 overflow-hidden">
             <Table>
               <TableHeader className="bg-muted/30">
                 <TableRow>
                   <TableHead className="w-14 px-8">
-                    <Checkbox aria-label="Select all clients" />
+                    <Checkbox
+                      aria-label="Select all clients"
+                      checked={
+                        allVisibleSelected
+                          ? true
+                          : someVisibleSelected
+                            ? "indeterminate"
+                            : false
+                      }
+                      onCheckedChange={checked =>
+                        toggleAllVisible(checked === true)
+                      }
+                    />
                   </TableHead>
                   <TableHead>Name</TableHead>
                   {activeTab !== "lead" && <TableHead>Company</TableHead>}
@@ -302,7 +474,7 @@ function ClientsList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredClients.map(client => (
+                {pagedClients.map(client => (
                   <TableRow
                     key={client.id}
                     className="cursor-pointer"
@@ -312,7 +484,13 @@ function ClientsList() {
                       className="px-8"
                       onClick={event => event.stopPropagation()}
                     >
-                      <Checkbox aria-label={`Select ${clientName(client)}`} />
+                      <Checkbox
+                        aria-label={`Select ${clientName(client)}`}
+                        checked={selectedIds.has(client.id)}
+                        onCheckedChange={checked =>
+                          toggleOne(client.id, checked === true)
+                        }
+                      />
                     </TableCell>
                     <TableCell className="font-medium">
                       {clientName(client)}
@@ -369,7 +547,10 @@ function ClientsList() {
                           <FolderOpen className="size-5 text-[#155e3f]" />
                           There are no leads found. Please add some!
                         </div>
-                        <Button className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]">
+                        <Button
+                          onClick={() => fileInputRef.current?.click()}
+                          className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]"
+                        >
                           <Download className="size-4" />
                           Import Clients
                         </Button>
@@ -384,7 +565,7 @@ function ClientsList() {
         <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5 text-sm md:flex-row md:items-center md:justify-between">
           <span>
             {filteredClients.length
-              ? `Showing 1-${filteredClients.length} of ${filteredClients.length} results`
+              ? `Showing ${pageStart + 1}-${pageStart + pagedClients.length} of ${filteredClients.length} results`
               : "No results."}
           </span>
           <div className="flex items-center justify-center gap-4">
@@ -392,14 +573,22 @@ function ClientsList() {
               variant="outline"
               size="icon"
               className="size-10 rounded-lg"
+              disabled={currentPage <= 1}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              aria-label="Previous page"
             >
               <ChevronLeft className="size-4" />
             </Button>
-            <span>Page 1 of 1</span>
+            <span>
+              Page {currentPage} of {totalPages}
+            </span>
             <Button
               variant="outline"
               size="icon"
               className="size-10 rounded-lg"
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              aria-label="Next page"
             >
               <ChevronRight className="size-4" />
             </Button>
@@ -412,13 +601,15 @@ function ClientsList() {
 
 function FilterSelect({
   value,
+  onChange,
   options,
 }: {
   value: string;
+  onChange?: (value: string) => void;
   options: string[];
 }) {
   return (
-    <Select value={value}>
+    <Select value={value} onValueChange={onChange}>
       <SelectTrigger className="h-10 min-w-[110px] rounded-lg bg-card">
         <SelectValue />
       </SelectTrigger>

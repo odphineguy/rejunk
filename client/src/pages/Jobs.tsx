@@ -107,6 +107,7 @@ export default function Jobs() {
   const [settings, setSettings] = useState(() => loadPricingSettings());
   const [query, setQuery] = useState("");
   const [activeStatus, setActiveStatus] = useState<"all" | JobStatus>("all");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const refresh = () => setJobs(getJobs());
@@ -167,7 +168,53 @@ export default function Jobs() {
   const removeJob = (event: React.MouseEvent, jobId: string) => {
     event.stopPropagation();
     setJobs(deleteJob(jobId));
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.delete(jobId);
+      return next;
+    });
     toast.success("Job deleted");
+  };
+
+  const visibleIds = filteredJobs.map(job => job.id);
+  const allVisibleSelected =
+    visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id));
+  const someVisibleSelected = visibleIds.some(id => selectedIds.has(id));
+
+  const toggleAllVisible = (checked: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (checked) visibleIds.forEach(id => next.add(id));
+      else visibleIds.forEach(id => next.delete(id));
+      return next;
+    });
+  };
+
+  const toggleOne = (jobId: string, checked: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(jobId);
+      else next.delete(jobId);
+      return next;
+    });
+  };
+
+  const deleteSelected = () => {
+    const count = selectedIds.size;
+    if (count === 0) return;
+    if (
+      !window.confirm(
+        `Delete ${count} job${count === 1 ? "" : "s"}? This can't be undone.`
+      )
+    )
+      return;
+    let result = jobs;
+    selectedIds.forEach(id => {
+      result = deleteJob(id);
+    });
+    setJobs(result);
+    setSelectedIds(new Set());
+    toast.success(`${count} job${count === 1 ? "" : "s"} deleted`);
   };
 
   return (
@@ -236,11 +283,46 @@ export default function Jobs() {
               </TabsList>
             </Tabs>
 
+            {selectedIds.size > 0 && (
+              <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-4 py-2 text-sm">
+                <span className="font-medium">{selectedIds.size} selected</span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedIds(new Set())}
+                  >
+                    Clear
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={deleteSelected}
+                  >
+                    <Trash2 className="size-4" />
+                    Delete selected
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">
-                    <Checkbox aria-label="Select all jobs" />
+                    <Checkbox
+                      aria-label="Select all jobs"
+                      checked={
+                        allVisibleSelected
+                          ? true
+                          : someVisibleSelected
+                            ? "indeterminate"
+                            : false
+                      }
+                      onCheckedChange={checked =>
+                        toggleAllVisible(checked === true)
+                      }
+                    />
                   </TableHead>
                   <TableHead>ID</TableHead>
                   <TableHead>Customer</TableHead>
@@ -269,7 +351,13 @@ export default function Jobs() {
                       onClick={() => navigate(`/jobs/${job.id}`)}
                     >
                       <TableCell onClick={event => event.stopPropagation()}>
-                        <Checkbox aria-label={`Select ${job.jobNumber}`} />
+                        <Checkbox
+                          aria-label={`Select ${job.jobNumber}`}
+                          checked={selectedIds.has(job.id)}
+                          onCheckedChange={checked =>
+                            toggleOne(job.id, checked === true)
+                          }
+                        />
                       </TableCell>
                       <TableCell className="font-medium">
                         {job.jobNumber}
