@@ -1,4 +1,3 @@
-import { defaultDemoJobs } from "@/data/defaultJobs";
 import { actualChargedAmount, actualProfit, actualTotalCost } from "@/lib/jobIntelligence";
 import { deleteJobRemote, loadJobsRemote, upsertJobRemote } from "@/lib/dataStore";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -6,7 +5,6 @@ import type { Job } from "@/types/jobs";
 import type { SavedEstimate } from "@/types/pricing";
 
 const JOBS_KEY = "junk_estimator_jobs_v1";
-const JOBS_SEEDED_KEY = "junk_estimator_jobs_seeded_v1";
 
 const canUseLocalStorage = () => typeof window !== "undefined" && Boolean(window.localStorage);
 
@@ -61,7 +59,7 @@ function parseEstimateLocation(address: string | undefined) {
 // Synchronous in-memory cache. Pages read this synchronously; Supabase reads
 // happen through hydrateJobs() and writes are fire-and-forget below.
 // localStorage stays as an offline warm cache / fallback.
-let cachedJobs = normalizeJobs(readJson<Job[]>(JOBS_KEY, defaultDemoJobs));
+let cachedJobs = normalizeJobs(readJson<Job[]>(JOBS_KEY, []));
 
 function reportRemoteError(context: string) {
   return (error: unknown) => {
@@ -75,8 +73,10 @@ function reportRemoteError(context: string) {
  * rendering so pages mount with shared data. Falls back to the localStorage cache
  * when Supabase is unconfigured/unreachable.
  *
- * First run against an empty database promotes the local demo jobs to shared
- * data (one-time, guarded by a localStorage flag) so the Jobs page isn't empty.
+ * The database is the source of truth — an empty database means an empty Jobs
+ * page. (The old "promote local demo jobs into an empty DB" bootstrap was
+ * removed 2026-06-12 when prod/test databases were split: it would have pushed
+ * a browser's cached fake jobs into the clean production DB.)
  */
 export async function hydrateJobs(): Promise<void> {
   if (!isSupabaseConfigured) return;
@@ -87,15 +87,8 @@ export async function hydrateJobs(): Promise<void> {
   });
   if (!remote) return; // unreachable — keep the local cache
 
-  const alreadySeeded = canUseLocalStorage() && window.localStorage.getItem(JOBS_SEEDED_KEY) === "1";
-
-  if (remote.length === 0 && !alreadySeeded) {
-    if (canUseLocalStorage()) window.localStorage.setItem(JOBS_SEEDED_KEY, "1");
-    cachedJobs.forEach((job) => void upsertJobRemote(job).catch(reportRemoteError("jobs seed")));
-  } else {
-    cachedJobs = normalizeJobs(remote);
-    writeJson(JOBS_KEY, cachedJobs);
-  }
+  cachedJobs = normalizeJobs(remote);
+  writeJson(JOBS_KEY, cachedJobs);
 
   if (typeof window !== "undefined") window.dispatchEvent(new Event("jobs-updated"));
 }

@@ -55,8 +55,11 @@ The Estimate Builder switches on `EstimateMode = "junk" | "service"` (`client/sr
 distance logic that feed the builder.
 
 ### Persistence: Supabase-backed, localStorage as warm cache  ← the big change
-This is **NOT** a localStorage-only app anymore. Backend is **Supabase** (Postgres + Auth + RLS), project
-ref `nglmgglrexxumjndhyzo`. There is **no Express/REST API** — the browser talks to the DB directly,
+This is **NOT** a localStorage-only app anymore. Backend is **Supabase** (Postgres + Auth + RLS) with a
+**prod/test split since 2026-06-12**: the live site uses **`rejunk-prod`** (ref `iozmgsopcyezkntnqbgj`,
+via Vercel env), while local dev / `.env` uses the original **`get-junk-quote`** project (ref
+`nglmgglrexxumjndhyzo`) — now the test DB, full of fake data. Schema changes must be applied to BOTH
+(test first, then prod). There is **no Express/REST API** — the browser talks to the DB directly,
 guarded by row-level security. Two distinct persistence patterns coexist:
 
 1. **Supabase-backed modules** (the important data): `utils/pricingStorage.ts`, `lib/jobStorage.ts`,
@@ -210,7 +213,9 @@ serves `dist/public` + the maps proxy, but the live site does not use it. After 
 must be added to the Google key's referrer allowlist. Live URL: **https://rejunk.vercel.app**.
 
 > Working convention: **commit locally, push only on explicit request** — `main` auto-deploys to the live
-> site. Live and local currently **share one Supabase DB** (no prod/test split yet).
+> site. Since 2026-06-12 live (`rejunk-prod`) and local (`get-junk-quote`, the test DB) are **separate
+> Supabase projects** — local experiments can't touch production data, and schema changes must be applied
+> to both.
 
 ## Conventions
 

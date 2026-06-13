@@ -7,63 +7,6 @@ import { isSupabaseConfigured } from "@/lib/supabase";
 import type { ClientRecord, ContactLogEntry } from "@/types/clients";
 
 const CLIENTS_KEY = "junk_estimator_clients_v1";
-const CLIENTS_SEEDED_KEY = "junk_estimator_clients_seeded_v1";
-
-const now = "2026-06-01T18:45:00.000Z";
-
-const defaultClients: ClientRecord[] = [
-  {
-    id: "client-abel-morales",
-    kind: "client",
-    firstName: "Abel",
-    lastName: "Morales",
-    company: "Saguaro Transport",
-    email: "abel.morales196487@gmail.com",
-    phone: "(626) 559-1923",
-    smsSetting: "receive",
-    streetAddress: "13809 Barrydale St",
-    city: "West Puente Valley",
-    state: "CA",
-    zip: "91746",
-    leadSource: "Referral",
-    tags: ["rejunk"],
-    privateNotes: "Rejunk #1 Fan.",
-    createdAt: now,
-    updatedAt: now,
-  },
-  {
-    id: "client-jane-doe",
-    kind: "client",
-    firstName: "Jane",
-    lastName: "Doe",
-    company: "Example Inc.",
-    email: "jane.doe@example.com",
-    smsSetting: "receive",
-    createdAt: now,
-    updatedAt: now,
-  },
-  {
-    id: "client-john-doe",
-    kind: "client",
-    firstName: "John",
-    lastName: "Doe",
-    company: "Example Inc.",
-    email: "john.doe@example.com",
-    smsSetting: "receive",
-    createdAt: now,
-    updatedAt: now,
-  },
-  {
-    id: "client-sam-doe",
-    kind: "client",
-    firstName: "Sam",
-    lastName: "Doe",
-    email: "sam.doe@example.com",
-    smsSetting: "receive",
-    createdAt: now,
-    updatedAt: now,
-  },
-];
 
 const canUseLocalStorage = () =>
   typeof window !== "undefined" && Boolean(window.localStorage);
@@ -104,9 +47,7 @@ function noteId() {
 // Synchronous in-memory cache. Pages read this synchronously; Supabase reads
 // happen through hydrateClients() and writes are fire-and-forget below.
 // localStorage stays as an offline warm cache / fallback.
-let cachedClients = sortClients(
-  readJson<ClientRecord[]>(CLIENTS_KEY, defaultClients)
-);
+let cachedClients = sortClients(readJson<ClientRecord[]>(CLIENTS_KEY, []));
 
 function persistLocal() {
   writeJson(CLIENTS_KEY, cachedClients);
@@ -129,8 +70,10 @@ function reportRemoteError(context: string) {
  * BEFORE rendering so pages mount with shared data. Falls back to the
  * localStorage cache when Supabase is unconfigured/unreachable.
  *
- * First run against an empty database promotes the local demo clients to shared
- * data (one-time, guarded by a localStorage flag) so the Clients page isn't empty.
+ * The database is the source of truth — an empty database means an empty
+ * Clients page. (The old "promote local demo clients into an empty DB"
+ * bootstrap was removed 2026-06-12 when prod/test databases were split: it
+ * would have pushed cached fake clients into the clean production DB.)
  */
 export async function hydrateClients(): Promise<void> {
   if (!isSupabaseConfigured) return;
@@ -141,21 +84,8 @@ export async function hydrateClients(): Promise<void> {
   });
   if (!remote) return; // unreachable — keep the local cache
 
-  const alreadySeeded =
-    canUseLocalStorage() &&
-    window.localStorage.getItem(CLIENTS_SEEDED_KEY) === "1";
-
-  if (remote.length === 0 && !alreadySeeded) {
-    if (canUseLocalStorage())
-      window.localStorage.setItem(CLIENTS_SEEDED_KEY, "1");
-    cachedClients.forEach(
-      client =>
-        void upsertClientRemote(client).catch(reportRemoteError("clients seed"))
-    );
-  } else {
-    cachedClients = sortClients(remote);
-    writeJson(CLIENTS_KEY, cachedClients);
-  }
+  cachedClients = sortClients(remote);
+  writeJson(CLIENTS_KEY, cachedClients);
 
   if (typeof window !== "undefined")
     window.dispatchEvent(new Event("clients-updated"));
