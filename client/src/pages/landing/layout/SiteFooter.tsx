@@ -11,8 +11,9 @@ export function SiteFooter() {
     <footer style={{ background: P.pine, color: P.paperSoft }}>
       <div className="mx-auto grid max-w-6xl gap-10 px-5 py-12 md:grid-cols-3 md:px-8 md:py-16">
         <div>
-          {/* rejunk-mark.png is the transparent lime mark for dark surfaces. */}
-          <img src="/rejunk-mark.png" alt="Rejunk" className="h-10 w-auto" />
+          {/* progressive-logo-footer.png: wordmark on pine field (#052a2b) so it
+              blends seamlessly into the dark footer. */}
+          <img src="/progressive-logo-footer.png" alt="Progressive Transportation Services" className="h-16 w-auto" />
           <p className="mt-4 max-w-xs text-sm leading-relaxed">
             Junk removal, moving, and assembly & handyman across the {SERVICE_AREA} — with
             eco-friendly disposal built into every job.

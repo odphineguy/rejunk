@@ -21,11 +21,10 @@ export function SiteHeader() {
       style={{ background: "rgba(255,255,255,0.92)", borderColor: P.line }}
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3 md:px-8">
-        <Link href="/" aria-label="Rejunk home" onClick={() => setOpen(false)}>
-          {/* rejunk-whites.png: dark-on-transparent logo for white surfaces, trimmed
-              2026-06-12 (the original had ~100px of transparent padding baked in,
-              which made the mark render at half size). Compact header height. */}
-          <img src="/rejunk-whites.png" alt="Rejunk" className="h-9 w-auto md:h-10" />
+        <Link href="/" aria-label="Progressive Transportation Services home" onClick={() => setOpen(false)}>
+          {/* progressive-logo.png: cropped wordmark (swoosh + road underline) on white,
+              for the white marketing header. */}
+          <img src="/progressive-logo.png" alt="Progressive Transportation Services" className="h-12 w-auto md:h-14" />
         </Link>
 
         <nav className="hidden items-center gap-6 md:flex" aria-label="Main">

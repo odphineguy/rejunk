@@ -66,9 +66,9 @@ interface CompanyInfo {
 }
 
 const COMPANY_FALLBACK: CompanyInfo = {
-  companyName: "Rejunk",
+  companyName: "Progressive Transportation Services",
   companyAddress: "",
-  companyPhone: "(480) 351-0291",
+  companyPhone: "(602) 499-2672",
   companyEmail: "abe@saguarotransport.com",
   logoDataUrl: "",
 };
@@ -100,7 +100,7 @@ function loadDefaultLogoDataUrl(): Promise<string | null> {
   if (defaultLogoPromise) return defaultLogoPromise;
   defaultLogoPromise = (async () => {
     try {
-      const res = await fetch(`${import.meta.env.BASE_URL}rejunk-whites.png`);
+      const res = await fetch(`${import.meta.env.BASE_URL}progressive-logo.png`);
       if (!res.ok) return null;
       const blob = await res.blob();
       return await new Promise<string | null>((resolve, reject) => {
@@ -175,7 +175,7 @@ export async function downloadQuotePdf(input: QuotePdfInput): Promise<string> {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(22);
     doc.setTextColor(...PINE);
-    doc.text(company.companyName || "Rejunk", margin, y + 8);
+    doc.text(company.companyName || "Progressive Transportation Services", margin, y + 8);
     headerBottom = y + 11;
   }
 
@@ -401,7 +401,7 @@ export async function downloadQuotePdf(input: QuotePdfInput): Promise<string> {
     y
   );
 
-  const fileName = `${safeFileName(company.companyName || "Rejunk")}-Quote-${safeFileName(
+  const fileName = `${safeFileName(company.companyName || "Progressive-Transportation-Services")}-Quote-${safeFileName(
     input.customerName ?? "estimate"
   )}.pdf`;
   doc.save(fileName);

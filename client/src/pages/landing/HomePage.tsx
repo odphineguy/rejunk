@@ -44,7 +44,7 @@ const HOME_FAQS: Faq[] = [
   },
   {
     q: "Are you licensed and insured?",
-    a: "Yes. Rejunk is operated by Progressive Transportation Services LLC (USDOT 4421119, MC-1763629), licensed and insured.",
+    a: "Yes. Progressive Transportation Services LLC (USDOT 4421119, MC-1763629) is fully licensed and insured.",
   },
   {
     q: "What makes you eco-friendly?",

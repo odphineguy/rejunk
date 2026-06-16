@@ -3,9 +3,9 @@
  * Single source of truth so the real phone number is a one-line swap.
  */
 
-export const PHONE_DISPLAY = "(480) 351-0291";
-export const PHONE_HREF = "tel:+14803510291";
-export const SMS_HREF = "sms:+14803510291";
+export const PHONE_DISPLAY = "(602) 499-2672";
+export const PHONE_HREF = "tel:+16024992672";
+export const SMS_HREF = "sms:+16024992672";
 
 export const SERVICE_AREA = "Phoenix metro & East Valley";
 
@@ -30,34 +30,34 @@ export const ECO_STATS = [
 
 export const ECO_HEADING = "We know where your junk should actually go.";
 export const ECO_PARAGRAPH =
-  "Before Rejunk, our founder spent 17 years in waste collection at Waste Management. " +
+  "Before Progressive Transportation Services, our founder spent 17 years in waste collection at Waste Management. " +
   "That means every load we haul gets routed on purpose — metal to the scrap yard, " +
   "usable furniture to donation, green waste to composting, electronics to certified " +
   "recyclers — not just dumped at the nearest landfill.";
 
 export const PAGE_META = {
   home: {
-    title: "Rejunk — Junk Removal, Moving & Assembly in Phoenix, AZ",
+    title: "Progressive Transportation Services — Junk Removal, Moving & Assembly in Phoenix, AZ",
     description:
       "Junk removal, local moving, and assembly & handyman services across the Phoenix valley. Eco-friendly disposal, upfront pricing, usually same-day.",
   },
   junk: {
-    title: "Junk Removal in Phoenix, AZ — Same-Day Hauling | Rejunk",
+    title: "Junk Removal in Phoenix, AZ — Same-Day Hauling | Progressive Transportation Services",
     description:
       "Full cleanouts or single items, hauled the same day across Phoenix and the East Valley. We donate and recycle first — 17 years of waste-industry know-how.",
   },
   moving: {
-    title: "Local Moving & Delivery in Phoenix, AZ | Rejunk",
+    title: "Local Moving & Delivery in Phoenix, AZ | Progressive Transportation Services",
     description:
       "Local moves, in-home furniture moves, and big-item delivery across the Phoenix valley. Careful crews, upfront pricing.",
   },
   assembly: {
-    title: "Assembly & Handyman in Phoenix — Senior-Friendly | Rejunk",
+    title: "Assembly & Handyman in Phoenix — Senior-Friendly | Progressive Transportation Services",
     description:
       "Furniture assembly, TV mounting, grab bars, and small repairs across Phoenix. Patient, senior-friendly service — and we help everyone.",
   },
   estimate: {
-    title: "Get a Free Estimate | Rejunk Phoenix",
+    title: "Get a Free Estimate | Progressive Transportation Services Phoenix",
     description:
       "Tell us what you need hauled, moved, or built and we'll text or call you back with a quote — usually within the hour.",
   },
