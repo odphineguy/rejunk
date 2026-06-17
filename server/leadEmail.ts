@@ -12,7 +12,22 @@ const ALLOWED_SERVICES = ["Junk Removal", "Moving", "Assembly & Handyman"] as co
 
 // TODO: set LEAD_TO in the env (local .env + Vercel) — falls back to the owner.
 const DEFAULT_LEAD_TO = "abe@saguarotransport.com";
-const DEFAULT_FROM = "Rejunk Website <onboarding@resend.dev>";
+const LEAD_FROM_NAME = "Progressive Transportation Services";
+const DEFAULT_FROM_ADDRESS = "onboarding@resend.dev";
+
+/**
+ * Lead notifications should read as "Progressive Transportation Services" in the
+ * owner's inbox — but reuse the *verified sending address* from the shared
+ * RESEND_FROM (which is branded "Rejunk Dispatch" for driver/staff mail). So we
+ * keep the address, override only the display name. Falls back to the Resend
+ * sandbox address when RESEND_FROM is unset (local dev).
+ */
+function leadFromAddress(): string {
+  const configured = process.env.RESEND_FROM ?? "";
+  const inAngles = configured.match(/<([^>]+)>/)?.[1];
+  const address = inAngles ?? (configured.includes("@") ? configured.trim() : DEFAULT_FROM_ADDRESS);
+  return `${LEAD_FROM_NAME} <${address}>`;
+}
 
 export interface LeadPayload {
   services: string[];
@@ -102,7 +117,7 @@ export function buildLeadEmailHtml(lead: LeadPayload): string {
         <p style="margin:16px 0 0;font-size:13px;font-weight:600;color:${lead.smsConsent ? "#155e3f" : "#9a6a00"}">${lead.smsConsent ? "✓ Opted in to SMS updates" : "✗ Did not opt in to SMS — call only"}</p>
         <p style="margin:20px 0 0;font-size:13px;color:#5b6357">They were told to expect a text or call back within the hour during business hours.</p>
       </div>
-      <p style="text-align:center;font-size:12px;color:#8a917f;margin:16px 0 0">Rejunk website estimate form</p>
+      <p style="text-align:center;font-size:12px;color:#8a917f;margin:16px 0 0">Progressive Transportation Services website estimate form</p>
     </div>
   </body>
 </html>`;
@@ -115,7 +130,7 @@ export async function sendLeadEmail(lead: LeadPayload): Promise<{ sent: boolean;
     const resend = new Resend(apiKey);
     const subject = `New website lead — ${lead.services.join(" + ")}${lead.zip ? ` — ${lead.zip}` : ""}`;
     const { error } = await resend.emails.send({
-      from: process.env.RESEND_FROM || DEFAULT_FROM,
+      from: leadFromAddress(),
       to: process.env.LEAD_TO || DEFAULT_LEAD_TO,
       subject,
       html: buildLeadEmailHtml(lead),
