@@ -10,7 +10,7 @@ export const SMS_HREF = "sms:+14803510291";
 export const SERVICE_AREA = "Phoenix metro & East Valley";
 
 // Public Yelp listing (customer-facing). NOT the biz.yelp.com owner portal.
-export const YELP_URL = "https://www.yelp.com/biz/OtPGLVCzRtlFvdxO-Vcpbg";
+export const YELP_URL = "https://www.yelp.com/biz/progressive-transportation-services-phoenix";
 export const BRAND_NAME = "Progressive Transportation Services";
 export const LEGAL_OPERATOR = "Saguaro Transportation Services";
 export const LEGAL_DISCLOSURE =
