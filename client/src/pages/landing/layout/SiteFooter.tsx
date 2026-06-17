@@ -7,6 +7,7 @@ import {
   PHONE_HREF,
   SERVICE_AREA,
   SMS_HREF,
+  YELP_URL,
 } from "../content/site";
 import { PALETTE } from "../palette";
 
@@ -64,6 +65,25 @@ export function SiteFooter() {
             </li>
             <li>{SERVICE_AREA}</li>
           </ul>
+
+          <h2 className="font-display mt-6 text-sm font-bold uppercase tracking-wider" style={{ color: P.paper }}>
+            Find us on
+          </h2>
+          <div className="mt-3">
+            <a
+              href={YELP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Progressive Transportation Services on Yelp (opens in a new tab)"
+              className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-opacity hover:opacity-80"
+              style={{ background: "#ffffff", color: "#d32323" }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12.4 2.06c1.2.2 1.34.43 1.32 1.5l-.18 7.07c-.03 1.16-1.5 1.55-2.08.55L7.9 5.9c-.5-.86-.13-1.4.78-1.86A12.4 12.4 0 0 1 12.4 2.06zM6.43 8.3c.66-.1 1.02.27 2.66 2.2 1.1 1.3.62 2.36-.3 2.6L4.6 14.2c-1.04.28-1.56-.1-1.64-1.06a7.7 7.7 0 0 1 .6-3.5c.4-.86.78-1.18 2.86-1.34zm6.9 6.3c.55-.92 2-.6 2.34.27l1.66 4.13c.4 1-.02 1.5-.96 1.7a7.7 7.7 0 0 1-3.46.02c-.95-.2-1.2-.7-.9-1.66zm-2.74.93c.95-.32 1.86.5 1.5 1.55l-1.5 4.34c-.36 1.04-.97 1.16-1.82.62a7.7 7.7 0 0 1-2.3-2.46c-.5-.86-.32-1.44.6-2.04zm9.06-2.9c1 .33 1.16.93.66 1.84a7.7 7.7 0 0 1-2.18 2.4c-.78.56-1.4.42-1.96-.46l-2.32-3.6c-.64-1 .2-2.18 1.36-1.88z"/>
+              </svg>
+              Review us on Yelp
+            </a>
+          </div>
         </div>
       </div>
 
