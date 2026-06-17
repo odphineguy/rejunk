@@ -13,7 +13,7 @@ export const SERVICE_AREA = "Phoenix metro & East Valley";
 // Yelp: NOT the biz.yelp.com owner portal — this is the public listing.
 export const YELP_URL = "https://www.yelp.com/biz/progressive-transportation-services-phoenix";
 export const GOOGLE_BUSINESS_URL = "";
-export const FACEBOOK_URL = "";
+export const FACEBOOK_URL = "https://www.facebook.com/profile.php?id=61590042523931";
 export const BRAND_NAME = "Progressive Transportation Services";
 export const LEGAL_OPERATOR = "Saguaro Transportation Services";
 export const LEGAL_DISCLOSURE =
