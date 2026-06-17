@@ -1,6 +1,13 @@
 import { Link } from "wouter";
 
-import { NAV_ITEMS, PHONE_DISPLAY, PHONE_HREF, SERVICE_AREA, SMS_HREF } from "../content/site";
+import {
+  LEGAL_DISCLOSURE,
+  NAV_ITEMS,
+  PHONE_DISPLAY,
+  PHONE_HREF,
+  SERVICE_AREA,
+  SMS_HREF,
+} from "../content/site";
 import { PALETTE } from "../palette";
 
 const P = PALETTE;
@@ -75,9 +82,20 @@ export function SiteFooter() {
         <span className="hidden md:inline">·</span>
         <span>© {new Date().getFullYear()}</span>
         <span className="hidden md:inline">·</span>
+        <Link href="/terms" className="transition-opacity hover:opacity-100">
+          Terms
+        </Link>
+        <span className="hidden md:inline">·</span>
+        <Link href="/privacy" className="transition-opacity hover:opacity-100">
+          Privacy
+        </Link>
+        <span className="hidden md:inline">·</span>
         <Link href="/login" className="opacity-60 transition-opacity hover:opacity-100">
           Staff sign-in
         </Link>
+      </div>
+      <div className="border-t px-6 py-4 text-center text-xs" style={{ borderColor: P.pineLine }}>
+        <p>{LEGAL_DISCLOSURE}</p>
       </div>
     </footer>
   );

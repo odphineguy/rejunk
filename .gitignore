@@ -115,6 +115,10 @@ client/public/__manus__/version.json
 # Local-only tooling/data (not part of the app)
 .manus-logs/
 .memsearch/
+.claude/
+.agents/
+skills-lock.json
+supabase/.temp/
 
 # Sensitive: real fleet data (VINs, plates, insurance policy numbers) — keep out of a public repo
 Fleet - Sheet1.csv

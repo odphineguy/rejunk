@@ -10,6 +10,8 @@ export const PUBLIC_PATHS = [
   "/moving",
   "/assembly-handyman",
   "/estimate",
+  "/terms",
+  "/privacy",
 ] as const;
 
 export function isPublicPath(location: string): boolean {

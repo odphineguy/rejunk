@@ -2,6 +2,7 @@ import { Route, Switch } from "wouter";
 
 import EstimatePage from "./EstimatePage";
 import HomePage from "./HomePage";
+import LegalPage from "./LegalPage";
 import ServicePage from "./ServicePage";
 
 /**
@@ -18,6 +19,8 @@ export default function SiteRouter() {
       <Route path="/moving">{() => <ServicePage slug="moving" />}</Route>
       <Route path="/assembly-handyman">{() => <ServicePage slug="assembly-handyman" />}</Route>
       <Route path="/estimate" component={EstimatePage} />
+      <Route path="/terms">{() => <LegalPage kind="terms" />}</Route>
+      <Route path="/privacy">{() => <LegalPage kind="privacy" />}</Route>
       {/* Unreachable while publicPaths is exact-match; safe default anyway. */}
       <Route component={HomePage} />
     </Switch>

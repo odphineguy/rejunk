@@ -8,6 +8,10 @@ export const PHONE_HREF = "tel:+16024992672";
 export const SMS_HREF = "sms:+16024992672";
 
 export const SERVICE_AREA = "Phoenix metro & East Valley";
+export const BRAND_NAME = "Progressive Transportation Services";
+export const LEGAL_OPERATOR = "Saguaro Transportation Services";
+export const LEGAL_DISCLOSURE =
+  `${BRAND_NAME} is a service brand operated by ${LEGAL_OPERATOR}.`;
 
 export const NAV_ITEMS = [
   { label: "Junk Removal", href: "/junk-removal" },
@@ -60,5 +64,15 @@ export const PAGE_META = {
     title: "Get a Free Estimate | Progressive Transportation Services Phoenix",
     description:
       "Tell us what you need hauled, moved, or built and we'll text or call you back with a quote — usually within the hour.",
+  },
+  terms: {
+    title: "Terms of Service | Progressive Transportation Services",
+    description:
+      "Terms for Progressive Transportation Services junk removal, moving, assembly, handyman, and text messaging services.",
+  },
+  privacy: {
+    title: "Privacy Policy | Progressive Transportation Services",
+    description:
+      "Privacy practices for Progressive Transportation Services, including website leads, service communication, and SMS information.",
   },
 } as const;
