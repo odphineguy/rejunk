@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# Internal app + driver routes (auth-gated, nothing to index)
+Disallow: /login
+Disallow: /dashboard
+Disallow: /driver
+
+Sitemap: https://www.progressive-junk.xyz/sitemap.xml
