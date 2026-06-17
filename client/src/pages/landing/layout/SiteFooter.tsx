@@ -94,7 +94,7 @@ export function SiteFooter() {
       >
         <span>Progressive Transportation Services LLC</span>
         <span className="hidden md:inline">·</span>
-        <span>Chandler, AZ</span>
+        <span>Phoenix, AZ</span>
         <span className="hidden md:inline">·</span>
         <span>USDOT 4421119</span>
         <span className="hidden md:inline">·</span>
