@@ -431,7 +431,7 @@ export default function EstimatePage() {
                     onChange={event => setForm(prev => ({ ...prev, smsConsent: event.target.checked }))}
                   />
                   <span className="text-sm font-bold" style={{ color: P.ink }}>
-                    Text me about this quote.{" "}
+                    Text me about this quote from {BRAND_NAME} at {PHONE_DISPLAY}.{" "}
                     <span className="font-normal" style={{ color: P.inkSoft }}>
                       (Optional — we'll still call you either way.)
                     </span>
@@ -441,9 +441,9 @@ export default function EstimatePage() {
                 <p className="text-xs leading-5" style={{ color: P.inkSoft }}>
                   By submitting, you agree to be contacted about your request. If you check the box
                   above, you consent to receive service-related text messages (quote, scheduling,
-                  and ETA updates) from {BRAND_NAME}. Message frequency varies; message and data
-                  rates may apply. Reply STOP to opt out or HELP for help. Consent is not a
-                  condition of purchase. See our{" "}
+                  and ETA updates) from {BRAND_NAME}. Service-related text messages may come from{" "}
+                  {PHONE_DISPLAY}. Message frequency varies; message and data rates may apply. Reply
+                  STOP to opt out or HELP for help. Consent is not a condition of purchase. See our{" "}
                   <Link href="/terms" className="font-semibold underline" style={{ color: P.pine }}>
                     Terms
                   </Link>{" "}

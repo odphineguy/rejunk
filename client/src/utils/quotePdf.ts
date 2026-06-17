@@ -68,7 +68,7 @@ interface CompanyInfo {
 const COMPANY_FALLBACK: CompanyInfo = {
   companyName: "Progressive Transportation Services",
   companyAddress: "",
-  companyPhone: "(602) 499-2672",
+  companyPhone: "(480) 351-0291",
   companyEmail: "abe@saguarotransport.com",
   logoDataUrl: "",
 };

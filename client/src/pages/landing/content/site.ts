@@ -3,9 +3,9 @@
  * Single source of truth so the real phone number is a one-line swap.
  */
 
-export const PHONE_DISPLAY = "(602) 499-2672";
-export const PHONE_HREF = "tel:+16024992672";
-export const SMS_HREF = "sms:+16024992672";
+export const PHONE_DISPLAY = "(480) 351-0291";
+export const PHONE_HREF = "tel:+14803510291";
+export const SMS_HREF = "sms:+14803510291";
 
 export const SERVICE_AREA = "Phoenix metro & East Valley";
 export const BRAND_NAME = "Progressive Transportation Services";

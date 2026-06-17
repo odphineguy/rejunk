@@ -99,6 +99,7 @@ function TermsPage() {
           messages from {BRAND_NAME}, a service brand operated by {LEGAL_OPERATOR}. Messages may
           include quote responses, scheduling, appointment reminders, dispatch updates, arrival or
           ETA updates, service follow-up, invoice or payment reminders, and customer support.
+          Service-related text messages may be sent from {PHONE_DISPLAY}.
         </p>
         <p className="mt-3">
           Message frequency varies based on your request, typically 1-8 messages per service
@@ -183,7 +184,7 @@ function PrivacyPage() {
         <p className="mt-3">
           If you provide your mobile number, we may use it to send service-related text messages
           about quotes, scheduling, dispatch updates, arrival or ETA updates, service follow-up,
-          invoices, and customer support.
+          invoices, and customer support. These messages may be sent from {PHONE_DISPLAY}.
         </p>
         <p className="mt-3">
           We do not sell, rent, or share mobile phone numbers, SMS opt-in data, or SMS consent
