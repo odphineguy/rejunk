@@ -1,9 +1,10 @@
 import { useState } from "react";
+import { Link } from "wouter";
 
 import { saveClient } from "@/lib/clientStorage";
 
 import type { ImageBriefId } from "./content/imageBriefs";
-import { PAGE_META, PHONE_DISPLAY, PHONE_HREF, SMS_HREF } from "./content/site";
+import { BRAND_NAME, PAGE_META, PHONE_DISPLAY, PHONE_HREF, SMS_HREF } from "./content/site";
 import { ImagePlaceholder } from "./components/ImagePlaceholder";
 import { SiteLayout } from "./layout/SiteLayout";
 import { usePageMeta } from "./lib/usePageMeta";
@@ -85,6 +86,7 @@ function recordWebsiteLead(form: FormState) {
     `Website estimate request — ${form.services.join(" + ") || "no service selected"}.`,
     `Wants it: ${form.timing}.`,
     form.zip.trim() ? `ZIP ${form.zip.trim()}.` : "",
+    form.smsConsent ? "Opted in to SMS updates." : "Did NOT opt in to SMS.",
     detailLines.length ? `Details — ${detailLines.join(" · ")}` : "",
   ]
     .filter(Boolean)
@@ -114,6 +116,8 @@ interface FormState {
   name: string;
   phone: string;
   email: string;
+  /** SMS opt-in. Unchecked by default — consent must be affirmative (A2P 10DLC). */
+  smsConsent: boolean;
   /** Honeypot — humans never see or fill this. */
   company: string;
 }
@@ -126,6 +130,7 @@ const INITIAL_FORM: FormState = {
   name: "",
   phone: "",
   email: "",
+  smsConsent: false,
   company: "",
 };
 
@@ -190,6 +195,7 @@ export default function EstimatePage() {
           name: form.name.trim(),
           phone: form.phone.trim(),
           email: form.email.trim(),
+          smsConsent: form.smsConsent,
           company: form.company,
         }),
       });
@@ -416,6 +422,37 @@ export default function EstimatePage() {
                   value={form.company}
                   onChange={event => setForm(prev => ({ ...prev, company: event.target.value }))}
                 />
+
+                <label className="flex items-start gap-3 rounded-xl border p-4" style={{ borderColor: P.line }}>
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-5 w-5 shrink-0 accent-[#052a2b]"
+                    checked={form.smsConsent}
+                    onChange={event => setForm(prev => ({ ...prev, smsConsent: event.target.checked }))}
+                  />
+                  <span className="text-sm font-bold" style={{ color: P.ink }}>
+                    Text me about this quote.{" "}
+                    <span className="font-normal" style={{ color: P.inkSoft }}>
+                      (Optional — we'll still call you either way.)
+                    </span>
+                  </span>
+                </label>
+
+                <p className="text-xs leading-5" style={{ color: P.inkSoft }}>
+                  By submitting, you agree to be contacted about your request. If you check the box
+                  above, you consent to receive service-related text messages (quote, scheduling,
+                  and ETA updates) from {BRAND_NAME}. Message frequency varies; message and data
+                  rates may apply. Reply STOP to opt out or HELP for help. Consent is not a
+                  condition of purchase. See our{" "}
+                  <Link href="/terms" className="font-semibold underline" style={{ color: P.pine }}>
+                    Terms
+                  </Link>{" "}
+                  and{" "}
+                  <Link href="/privacy" className="font-semibold underline" style={{ color: P.pine }}>
+                    Privacy Policy
+                  </Link>
+                  .
+                </p>
 
                 {validationError && (
                   <p role="alert" className="text-sm font-semibold text-red-700">

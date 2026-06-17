@@ -22,13 +22,15 @@ export interface LeadPayload {
   name: string;
   phone: string;
   email: string;
+  /** SMS opt-in — affirmative consent recorded for A2P 10DLC. */
+  smsConsent: boolean;
   /** Honeypot field — non-empty means a bot filled the hidden input. */
   isBot: boolean;
 }
 
 export function validateLeadPayload(body: unknown): LeadPayload | null {
   if (!body || typeof body !== "object") return null;
-  const { services, details, zip, timing, name, phone, email, company } = body as Record<string, unknown>;
+  const { services, details, zip, timing, name, phone, email, smsConsent, company } = body as Record<string, unknown>;
 
   if (!Array.isArray(services) || services.length === 0 || services.length > 3) return null;
   const cleanServices = services.filter(
@@ -60,6 +62,7 @@ export function validateLeadPayload(body: unknown): LeadPayload | null {
     name: name.trim(),
     phone: (phone as string).trim(),
     email: typeof email === "string" ? email.trim() : "",
+    smsConsent: smsConsent === true,
     isBot: typeof company === "string" && company.trim().length > 0,
   };
 }
@@ -96,6 +99,7 @@ export function buildLeadEmailHtml(lead: LeadPayload): string {
           ${lead.email ? `<p style="margin:6px 0 0;font-size:14px"><a href="mailto:${escapeHtml(lead.email)}" style="color:#155e3f">${escapeHtml(lead.email)}</a></p>` : ""}
         </div>
         <table style="width:100%;border-collapse:collapse;font-size:14px">${detailRows}</table>
+        <p style="margin:16px 0 0;font-size:13px;font-weight:600;color:${lead.smsConsent ? "#155e3f" : "#9a6a00"}">${lead.smsConsent ? "✓ Opted in to SMS updates" : "✗ Did not opt in to SMS — call only"}</p>
         <p style="margin:20px 0 0;font-size:13px;color:#5b6357">They were told to expect a text or call back within the hour during business hours.</p>
       </div>
       <p style="text-align:center;font-size:12px;color:#8a917f;margin:16px 0 0">Rejunk website estimate form</p>
