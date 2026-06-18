@@ -358,9 +358,6 @@ export default function EstimateBuilder() {
   const [minimumProfit, setMinimumProfit] = useState(
     String(settings.defaults.minimumProfitDollars)
   );
-  // Cost Assumptions (hourly labor / gas / margin / min profit) collapse —
-  // these are settings-backed defaults, hidden by default behind a summary.
-  const [costOpen, setCostOpen] = useState(false);
   const [extraFees, setExtraFees] = useState<ExtraFee[]>(starterExtraFees);
   const [savedEstimates, setSavedEstimates] = useState<SavedEstimate[]>(() =>
     loadSavedEstimates()
@@ -380,12 +377,28 @@ export default function EstimateBuilder() {
       setSavedEstimates(loadSavedEstimates());
     };
 
+    // Operating costs live only in Estimate Settings now. When they change,
+    // re-sync the values the quote math uses so an open builder stays current.
+    const syncOperatingCosts = () => {
+      const next = loadPricingSettings();
+      setSettings(next);
+      setSavedEstimates(loadSavedEstimates());
+      setWorkers(String(next.defaults.workers));
+      setEstimatedHours(String(next.defaults.estimatedHours));
+      setHourlyLaborCost(String(next.defaults.hourlyLaborCost));
+      setFuelPrice(String(next.defaults.fuelPricePerGallon));
+      setTargetMargin(
+        String(Math.round(next.defaults.targetMarginDecimal * 100))
+      );
+      setMinimumProfit(String(next.defaults.minimumProfitDollars));
+    };
+
     window.addEventListener("focus", refreshSettings);
-    window.addEventListener("pricing-settings-updated", refreshSettings);
+    window.addEventListener("pricing-settings-updated", syncOperatingCosts);
 
     return () => {
       window.removeEventListener("focus", refreshSettings);
-      window.removeEventListener("pricing-settings-updated", refreshSettings);
+      window.removeEventListener("pricing-settings-updated", syncOperatingCosts);
     };
   }, []);
 
@@ -518,10 +531,6 @@ export default function EstimateBuilder() {
       return next;
     });
   }, [selectedFacilityRoute?.roundTripMiles, roundTripMiles]);
-  const milesAutoFilled =
-    selectedFacilityRoute?.roundTripMiles != null &&
-    roundTripMiles !== "" &&
-    roundTripMiles === lastAutoMilesRef.current;
 
   const recommendationBundle = useMemo(
     () =>
@@ -622,16 +631,6 @@ export default function EstimateBuilder() {
     setExtraFees(starterExtraFees);
     setSelectedSavedId(null);
     setRouteEstimates({});
-  };
-
-  // Reset only the per-estimate cost overrides back to the saved defaults.
-  const resetCostAssumptions = () => {
-    setHourlyLaborCost(String(settings.defaults.hourlyLaborCost));
-    setFuelPrice(String(settings.defaults.fuelPricePerGallon));
-    setTargetMargin(
-      String(Math.round(settings.defaults.targetMarginDecimal * 100))
-    );
-    setMinimumProfit(String(settings.defaults.minimumProfitDollars));
   };
 
   const customerQuoteText = () =>
@@ -1178,13 +1177,13 @@ export default function EstimateBuilder() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Disposal &amp; Labor</CardTitle>
+                  <CardTitle>Disposal Facility</CardTitle>
                   <CardDescription>
-                    Choose the facility and per-job labor for this estimate.
+                    Pick where this load gets dumped. Crew, labor, fuel, and
+                    margin all come from your Estimate Settings.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-5">
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <CardContent className="space-y-4">
                   <Field label="Disposal facility">
                     <Select
                       value={facilityId}
@@ -1209,155 +1208,31 @@ export default function EstimateBuilder() {
                       </SelectContent>
                     </Select>
                   </Field>
-                  <Field label="Workers">
-                    <Input
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={workers}
-                      onChange={event => setWorkers(event.target.value)}
-                    />
-                  </Field>
-                  <Field label="Labor hours">
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.25"
-                      value={estimatedHours}
-                      onChange={event => setEstimatedHours(event.target.value)}
-                    />
-                  </Field>
-                  <Field label="Round trip miles">
-                    <div className="space-y-1">
-                      <Input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={roundTripMiles}
-                        onChange={event => setRoundTripMiles(event.target.value)}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        {milesAutoFilled
-                          ? "Auto-filled from the real route to this facility. Type to override."
-                          : selectedFacilityRoute?.roundTripMiles != null
-                            ? `Manual override (route says ${Math.round(selectedFacilityRoute.roundTripMiles)} mi). Clear the field to use the route.`
-                            : "Enter manually — route distance unavailable."}
-                      </p>
-                    </div>
-                  </Field>
-                  <Field label="MPG">
-                    <Input
-                      type="number"
-                      min="1"
-                      step="0.5"
-                      value={mpg}
-                      onChange={event => setMpg(event.target.value)}
-                      placeholder={String(vehicle.mpgLoaded)}
-                    />
-                  </Field>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
+                    <span className="text-muted-foreground">
+                      Round trip distance
+                    </span>
+                    <span className="font-medium text-foreground">
+                      {selectedFacilityRoute?.roundTripMiles != null
+                        ? `${Math.round(selectedFacilityRoute.roundTripMiles)} mi · auto`
+                        : selectedFacility
+                          ? "Distance unavailable"
+                          : "Select a facility"}
+                    </span>
                   </div>
 
-                  <Collapsible open={costOpen} onOpenChange={setCostOpen}>
-                    <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3 text-left text-sm transition-colors hover:bg-muted/50">
-                      <span className="min-w-0 truncate">
-                        <span className="font-medium text-foreground">
-                          Cost assumptions
-                        </span>
-                        <span className="text-muted-foreground">
-                          {` · ${money(numericValue(hourlyLaborCost))}/hr · ${numericValue(targetMargin)}% margin · ${money(numericValue(minimumProfit))} min · ${money(numericValue(fuelPrice))} gas`}
-                        </span>
-                      </span>
-                      <ChevronDown
-                        className={`size-4 shrink-0 text-muted-foreground transition-transform ${costOpen ? "rotate-180" : ""}`}
-                      />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="pt-4">
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <Field label="Hourly labor cost">
-                          <Input
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={hourlyLaborCost}
-                            onChange={event =>
-                              setHourlyLaborCost(event.target.value)
-                            }
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Default: {money(settings.defaults.hourlyLaborCost)}
-                          </p>
-                        </Field>
-                        <Field label="Gas price">
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={fuelPrice}
-                            onChange={event => setFuelPrice(event.target.value)}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Default:{" "}
-                            {money(settings.defaults.fuelPricePerGallon)}
-                          </p>
-                        </Field>
-                        <Field label="Target margin %">
-                          <Input
-                            type="number"
-                            min="0"
-                            max="95"
-                            step="1"
-                            value={targetMargin}
-                            onChange={event =>
-                              setTargetMargin(event.target.value)
-                            }
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Default:{" "}
-                            {Math.round(
-                              settings.defaults.targetMarginDecimal * 100
-                            )}
-                            %
-                          </p>
-                        </Field>
-                        <Field label="Minimum profit">
-                          <Input
-                            type="number"
-                            min="0"
-                            step="25"
-                            value={minimumProfit}
-                            onChange={event =>
-                              setMinimumProfit(event.target.value)
-                            }
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Default:{" "}
-                            {money(settings.defaults.minimumProfitDollars)}
-                          </p>
-                        </Field>
-                      </div>
-                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-auto px-2 py-1 text-xs"
-                          onClick={resetCostAssumptions}
-                        >
-                          Reset to defaults
-                        </Button>
-                        <p className="text-xs text-muted-foreground">
-                          Change defaults in{" "}
-                          <Link
-                            href="/settings/estimates"
-                            className="font-medium text-[var(--moss-deep)] hover:underline"
-                          >
-                            Estimate Settings
-                          </Link>
-                          .
-                        </p>
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
+                  <p className="text-xs text-muted-foreground">
+                    Crew size, labor hours, hourly labor cost, gas price, target
+                    margin, and minimum profit are set in{" "}
+                    <Link
+                      href="/settings/estimates"
+                      className="font-medium text-[var(--moss-deep)] hover:underline"
+                    >
+                      Estimate Settings
+                    </Link>
+                    .
+                  </p>
                 </CardContent>
               </Card>
 
