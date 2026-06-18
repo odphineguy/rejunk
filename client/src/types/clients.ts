@@ -7,6 +7,7 @@ export type LeadSource =
   | "Google Ads"
   | "Referral"
   | "Website"
+  | "AI Estimate"
   | "Thumbtack"
   | "Googe Maps";
 

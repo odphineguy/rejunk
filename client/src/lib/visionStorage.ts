@@ -27,6 +27,9 @@ export async function analyzePhotos(input: {
   photos: string[];
   details?: string;
   settings: VisionSettings;
+  /** "public" for the marketing-site estimator — the server rate-limits those
+   * by IP. Omitted for the logged-in staff Vision tab (never throttled). */
+  source?: "public";
 }): Promise<VisionAnalysisResult> {
   const response = await fetch("/api/vision-analyze", {
     method: "POST",
@@ -38,6 +41,7 @@ export async function analyzePhotos(input: {
       temperature: input.settings.temperature,
       maxTokens: input.settings.maxTokens,
       systemInstructions: input.settings.systemInstructions,
+      source: input.source ?? "",
     }),
   });
 
@@ -50,7 +54,11 @@ export async function analyzePhotos(input: {
     const message =
       (data && "error" in data && data.error) ||
       `Analysis failed (${response.status}).`;
-    throw new Error(message);
+    // Attach the HTTP status so callers can special-case e.g. 429 (rate limit)
+    // without string-matching the message.
+    const error = new Error(message) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
   }
   return data as VisionAnalysisResult;
 }

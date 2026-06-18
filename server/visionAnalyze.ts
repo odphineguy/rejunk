@@ -19,6 +19,9 @@ export interface VisionPayload {
   temperature: number;
   maxTokens: number;
   systemInstructions: string;
+  /** "public" for the marketing-site estimator (rate-limited by IP in the
+   * Vercel function), "" for the logged-in staff Vision tab. */
+  source: string;
 }
 
 export function validateVisionPayload(body: unknown): VisionPayload | null {
@@ -46,6 +49,7 @@ export function validateVisionPayload(body: unknown): VisionPayload | null {
     temperature: typeof b.temperature === "number" ? b.temperature : 0.3,
     maxTokens: typeof b.maxTokens === "number" ? b.maxTokens : 1500,
     systemInstructions,
+    source: b.source === "public" ? "public" : "",
   };
 }
 

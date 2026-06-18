@@ -10,6 +10,7 @@ export const PUBLIC_PATHS = [
   "/moving",
   "/assembly-handyman",
   "/estimate",
+  "/instant-estimate",
   "/terms",
   "/privacy",
 ] as const;

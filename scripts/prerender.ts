@@ -33,6 +33,7 @@ const ROUTES: Array<{ path: string; meta: { title: string; description: string }
   { path: "/moving", meta: PAGE_META.moving },
   { path: "/assembly-handyman", meta: PAGE_META.assembly },
   { path: "/estimate", meta: PAGE_META.estimate },
+  { path: "/instant-estimate", meta: PAGE_META.instantEstimate },
   { path: "/terms", meta: PAGE_META.terms },
   { path: "/privacy", meta: PAGE_META.privacy },
 ];

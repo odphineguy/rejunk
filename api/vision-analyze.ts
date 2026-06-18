@@ -23,6 +23,9 @@ interface VisionPayload {
   temperature: number;
   maxTokens: number;
   systemInstructions: string;
+  /** "public" for the marketing-site estimator (rate-limited by IP below), ""
+   * for the logged-in staff Vision tab (never throttled). */
+  source: string;
 }
 
 function validateVisionPayload(body: unknown): VisionPayload | null {
@@ -50,7 +53,39 @@ function validateVisionPayload(body: unknown): VisionPayload | null {
     temperature: typeof b.temperature === "number" ? b.temperature : 0.3,
     maxTokens: typeof b.maxTokens === "number" ? b.maxTokens : 1500,
     systemInstructions,
+    source: b.source === "public" ? "public" : "",
   };
+}
+
+/**
+ * Best-effort per-IP rate limit for the PUBLIC marketing estimator only — a
+ * backstop against someone scripting the unauthenticated endpoint to burn
+ * OpenAI credit. Staff Vision-tab calls send no `source`, so they're never
+ * throttled. NOTE: this is in-memory, so on serverless it only holds within a
+ * warm instance and resets on cold start — good enough to blunt casual abuse,
+ * not a substitute for durable rate limiting (Vercel KV / Upstash) if real
+ * abuse ever shows up.
+ */
+const RATE_WINDOW_MS = 5 * 60 * 1000;
+const RATE_MAX = 20;
+const rateHits = new Map<string, number[]>();
+
+function clientIp(req: VercelRequest): string {
+  const xff = req.headers?.["x-forwarded-for"];
+  const raw = Array.isArray(xff) ? xff[0] : xff;
+  return raw?.split(",")[0]?.trim() || "unknown";
+}
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const recent = (rateHits.get(ip) ?? []).filter(t => now - t < RATE_WINDOW_MS);
+  if (recent.length >= RATE_MAX) {
+    rateHits.set(ip, recent);
+    return true;
+  }
+  recent.push(now);
+  rateHits.set(ip, recent);
+  return false;
 }
 
 type ContentPart =
@@ -181,7 +216,11 @@ function normalizeResult(raw: unknown) {
   };
 }
 
-type VercelRequest = { method?: string; body?: unknown };
+type VercelRequest = {
+  method?: string;
+  body?: unknown;
+  headers?: Record<string, string | string[] | undefined>;
+};
 type VercelResponse = {
   status: (code: number) => VercelResponse;
   json: (body: unknown) => void;
@@ -196,6 +235,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const payload = validateVisionPayload(body);
   if (!payload) {
     res.status(400).json({ error: "Send 1-10 image data URLs plus the system instructions." });
+    return;
+  }
+  if (payload.source === "public" && isRateLimited(clientIp(req))) {
+    res.status(429).json({
+      error: "You've run a lot of estimates in a short time. Please wait a few minutes, or call/text us for a quote.",
+    });
     return;
   }
   const result = await runVisionAnalysis(payload);

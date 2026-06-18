@@ -71,6 +71,11 @@ export const PAGE_META = {
     description:
       "Tell us what you need hauled, moved, or built and we'll text or call you back with a quote — usually within the hour.",
   },
+  instantEstimate: {
+    title: "AI Instant Estimate — Junk Removal Price from a Photo | Progressive Transportation Services",
+    description:
+      "Upload a few photos of your junk and our AI gives you a ballpark price in seconds. Free, no obligation — a real person follows up to confirm.",
+  },
   terms: {
     title: "Terms of Service | Progressive Transportation Services",
     description:

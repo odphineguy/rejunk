@@ -54,12 +54,16 @@ export function SiteHeader() {
           >
             {PHONE_DISPLAY}
           </a>
+          {/* Top-right CTA is the AI Instant Estimate (the photo-based price
+              tool). The plain "Get a Free Estimate" callback flow lives in the
+              hero + footer, so this isn't a duplicate of it. */}
           <Link
-            href="/estimate"
+            href="/instant-estimate"
             className="rounded-xl px-4 py-2.5 text-sm font-bold shadow-sm transition-transform hover:scale-[1.03]"
             style={{ background: P.lime, color: P.pine }}
           >
-            Get a Free Estimate
+            <span className="sm:hidden">AI Estimate</span>
+            <span className="hidden sm:inline">AI Instant Estimate</span>
           </Link>
           <button
             type="button"
@@ -99,6 +103,26 @@ export function SiteHeader() {
                 </Link>
               </li>
             ))}
+            <li>
+              <Link
+                href="/instant-estimate"
+                className="mt-1 block rounded-lg px-3 py-3 text-center text-base font-bold"
+                style={{ background: P.lime, color: P.pine }}
+                onClick={() => setOpen(false)}
+              >
+                AI Instant Estimate
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/estimate"
+                className="block rounded-lg px-3 py-3 text-base font-semibold"
+                style={{ color: P.ink }}
+                onClick={() => setOpen(false)}
+              >
+                Get a Free Estimate
+              </Link>
+            </li>
             <li>
               <a
                 href={PHONE_HREF}

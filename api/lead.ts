@@ -44,11 +44,16 @@ interface LeadPayload {
   email: string;
   smsConsent: boolean;
   isBot: boolean;
+  /** Where the lead came from, e.g. "AI Estimate". Empty = the regular form. */
+  source: string;
+  /** Plain-text AI estimate summary (items + ballpark price), when present. */
+  aiSummary: string;
 }
 
 function validateLeadPayload(body: unknown): LeadPayload | null {
   if (!body || typeof body !== "object") return null;
-  const { services, details, zip, timing, name, phone, email, smsConsent, company } = body as Record<string, unknown>;
+  const { services, details, zip, timing, name, phone, email, smsConsent, company, source, aiSummary } =
+    body as Record<string, unknown>;
 
   if (!Array.isArray(services) || services.length === 0 || services.length > 3) return null;
   const cleanServices = services.filter(
@@ -82,6 +87,8 @@ function validateLeadPayload(body: unknown): LeadPayload | null {
     email: typeof email === "string" ? email.trim() : "",
     smsConsent: smsConsent === true,
     isBot: typeof company === "string" && company.trim().length > 0,
+    source: typeof source === "string" ? source.slice(0, 60).trim() : "",
+    aiSummary: typeof aiSummary === "string" ? aiSummary.slice(0, 4000).trim() : "",
   };
 }
 
@@ -91,6 +98,12 @@ function escapeHtml(value: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+/** Heading/subject label — distinguishes the AI photo estimator from the
+ * regular callback form so the owner can tell at a glance which arrived. */
+function leadKindLabel(lead: LeadPayload): string {
+  return lead.source === "AI Estimate" || lead.aiSummary ? "New AI estimate lead" : "New website lead";
 }
 
 function buildLeadEmailHtml(lead: LeadPayload): string {
@@ -104,18 +117,26 @@ function buildLeadEmailHtml(lead: LeadPayload): string {
     })
     .join("");
 
+  const aiBlock = lead.aiSummary
+    ? `<div style="background:#eef6ee;border:1px solid #cfe6cf;border-radius:10px;padding:16px;margin:0 0 20px">
+          <p style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#155e3f">AI photo estimate</p>
+          <p style="margin:0;font-size:14px;color:#1c1c1c;white-space:pre-wrap">${escapeHtml(lead.aiSummary)}</p>
+        </div>`
+    : "";
+
   return `<!doctype html>
 <html>
   <body style="margin:0;padding:0;background:#f4f6f3;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#1c1c1c">
     <div style="max-width:520px;margin:0 auto;padding:24px 16px">
       <div style="background:#ffffff;border-radius:12px;border:1px solid #e2e6df;padding:28px 24px">
-        <h1 style="margin:0 0 4px;font-size:20px">New website lead</h1>
+        <h1 style="margin:0 0 4px;font-size:20px">${leadKindLabel(lead)}</h1>
         <p style="margin:0 0 20px;font-size:14px;color:#5b6357">${escapeHtml(lead.services.join(" + "))}${lead.zip ? ` — ${escapeHtml(lead.zip)}` : ""} · wants it: ${escapeHtml(lead.timing)}</p>
         <div style="background:#f0f4ec;border-radius:10px;padding:16px;margin:0 0 20px">
           <p style="margin:0 0 6px;font-size:16px;font-weight:700">${escapeHtml(lead.name)}</p>
           <p style="margin:0;font-size:15px"><a href="tel:${escapeHtml(lead.phone)}" style="color:#155e3f;font-weight:600">${escapeHtml(lead.phone)}</a></p>
           ${lead.email ? `<p style="margin:6px 0 0;font-size:14px"><a href="mailto:${escapeHtml(lead.email)}" style="color:#155e3f">${escapeHtml(lead.email)}</a></p>` : ""}
         </div>
+        ${aiBlock}
         <table style="width:100%;border-collapse:collapse;font-size:14px">${detailRows}</table>
         <p style="margin:16px 0 0;font-size:13px;font-weight:600;color:${lead.smsConsent ? "#155e3f" : "#9a6a00"}">${lead.smsConsent ? "✓ Opted in to SMS updates" : "✗ Did not opt in to SMS — call only"}</p>
         <p style="margin:20px 0 0;font-size:13px;color:#5b6357">They were told to expect a text or call back within the hour during business hours.</p>
@@ -155,7 +176,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   try {
     const resend = new Resend(apiKey);
-    const subject = `New website lead — ${lead.services.join(" + ")}${lead.zip ? ` — ${lead.zip}` : ""}`;
+    const subject = `${leadKindLabel(lead)} — ${lead.services.join(" + ")}${lead.zip ? ` — ${lead.zip}` : ""}`;
     const { error } = await resend.emails.send({
       from: leadFromAddress(),
       to: process.env.LEAD_TO || DEFAULT_LEAD_TO,

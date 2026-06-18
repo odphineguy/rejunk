@@ -83,6 +83,7 @@ const leadSources: LeadSource[] = [
   "Google Ads",
   "Referral",
   "Website",
+  "AI Estimate",
   "Thumbtack",
   "Googe Maps",
 ];
