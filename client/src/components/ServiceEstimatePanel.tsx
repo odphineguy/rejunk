@@ -460,6 +460,14 @@ export function ServiceEstimatePanel({
       toast.error("Add at least one service item before saving.");
       return;
     }
+    if (!jobAddress.trim()) {
+      toast.error(
+        mode === "moving"
+          ? "Enter a pickup address to save the estimate."
+          : "Enter a job address to save the estimate."
+      );
+      return;
+    }
     const now = new Date().toISOString();
     const primaryName = result.lineItems[0]?.name ?? (mode === "moving" ? "Moving" : "Service");
     const estimate: SavedEstimate = {

@@ -30,6 +30,7 @@ import CalendarSettings from "./pages/settings/CalendarSettings";
 import CompanySettings from "./pages/settings/CompanySettings";
 import ContactFormSettings from "./pages/settings/ContactFormSettings";
 import EmailTemplates from "./pages/settings/EmailTemplates";
+import EstimateSettings from "./pages/settings/EstimateSettings";
 import InvoiceSettings from "./pages/settings/InvoiceSettings";
 import JobSettings from "./pages/settings/JobSettings";
 import OnlineBooking from "./pages/settings/OnlineBooking";
@@ -98,6 +99,7 @@ function StaffRouter() {
       <Route path={"/settings/sms"} component={SmsNotifications} />
       <Route path={"/settings/email-templates"} component={EmailTemplates} />
       <Route path={"/settings/calendar"} component={CalendarSettings} />
+      <Route path={"/settings/estimates"} component={EstimateSettings} />
       <Route path={"/settings/contact-form"} component={ContactFormSettings} />
       <Route path={"/settings/affiliate"} component={AffiliateSettings} />
       <Route path={"/settings/reviews"} component={ReviewSettings} />
