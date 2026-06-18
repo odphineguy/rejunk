@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import {
   BarChart3,
-  Boxes,
   DollarSign,
   FileDown,
   ImagePlus,
@@ -12,10 +11,8 @@ import {
   MessageSquare,
   Plus,
   RotateCcw,
-  Scale,
   TrendingUp,
   Trash2,
-  Truck,
   Upload,
   X,
 } from "lucide-react";
@@ -25,7 +22,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { loadPricingSettings } from "@/utils/pricingStorage";
-import { findVolumeBenchmark } from "@/utils/pricingCalculator";
 import { downloadQuotePdf } from "@/utils/quotePdf";
 import { analyzePhotos, loadVisionSettings } from "@/lib/visionStorage";
 import type { VisionAnalysisResult } from "@/types/vision";
@@ -101,7 +97,7 @@ function VisionCard({
   title,
   children,
 }: {
-  icon: typeof Upload;
+  icon?: typeof Upload;
   title: string;
   children: React.ReactNode;
 }) {
@@ -109,7 +105,7 @@ function VisionCard({
     <Card>
       <CardContent className="p-5">
         <div className="mb-4 flex items-center gap-2.5">
-          <Icon className="size-5 text-[var(--moss-deep)]" />
+          {Icon && <Icon className="size-5 text-[var(--moss-deep)]" />}
           <h3 className="font-display text-lg font-bold text-[var(--moss-deep)]">{title}</h3>
         </div>
         {children}
@@ -144,10 +140,17 @@ export function VisionEstimatePanel() {
   const tons = totalWeightLbs / 2000;
   const landfillCost = tons * ratePerTon;
   const loadFraction = truckCapacity > 0 ? totalCubicYards / truckCapacity : 0;
-  const minPricing =
-    findVolumeBenchmark(pricing.volumePricingBenchmarks, loadFraction)?.price ??
-    pricing.volumePricingBenchmarks[0]?.price ??
-    0;
+  // Snap the analyzed volume to the CLOSEST benchmark (not the next bucket up),
+  // so a near-empty load lands on the Minimum charge instead of jumping to the
+  // 1/8-load price.
+  const benchmarks = pricing.volumePricingBenchmarks;
+  const minPricing = benchmarks.length
+    ? benchmarks.reduce((closest, b) =>
+        Math.abs(b.fraction - loadFraction) < Math.abs(closest.fraction - loadFraction)
+          ? b
+          : closest
+      ).price
+    : 0;
 
   const addFiles = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
@@ -388,22 +391,11 @@ export function VisionEstimatePanel() {
               ))}
             </div>
           )}
-
-          <div className="mt-4 grid grid-cols-3 gap-3">
-            <Total icon={Boxes} label="Cubic Yards" value={totalCubicYards.toFixed(1)} />
-            <Total icon={Scale} label="Weight (lbs)" value={String(Math.round(totalWeightLbs))} />
-            <Total icon={Truck} label="Weight (tons)" value={tons.toFixed(2)} />
-          </div>
         </VisionCard>
 
-        <VisionCard icon={Truck} title="Recommended Truck Load">
+        <VisionCard title="Recommended Truck Load">
           <div className="flex items-center justify-between rounded-lg border border-[var(--moss-deep)]/20 bg-[#f0f4ec] px-4 py-4">
-            <div className="flex items-center gap-3">
-              <span className="flex size-10 items-center justify-center rounded-lg bg-white text-[var(--moss-deep)]">
-                <Truck className="size-5" />
-              </span>
-              <span className="font-semibold text-foreground">Minimum Pricing</span>
-            </div>
+            <span className="font-semibold text-foreground">Minimum Pricing</span>
             <span className="font-display text-2xl font-bold text-[var(--moss-deep)]">
               {money(minPricing)}
             </span>
@@ -584,24 +576,6 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
     <div className="flex items-center justify-between py-3">
       <dt className={strong ? "font-bold text-foreground" : "text-sm text-muted-foreground"}>{label}</dt>
       <dd className={strong ? "font-bold text-[var(--moss-deep)]" : "font-medium text-foreground"}>{value}</dd>
-    </div>
-  );
-}
-
-function Total({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Boxes;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-lg border border-border bg-muted/30 p-3 text-center">
-      <Icon className="mx-auto mb-1 size-5 text-[var(--moss-deep)]" />
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-lg font-bold text-foreground">{value}</p>
     </div>
   );
 }

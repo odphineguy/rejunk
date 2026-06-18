@@ -910,7 +910,7 @@ export default function EstimateBuilder() {
             role="tab"
             aria-selected={mode === "junk"}
             onClick={() => setMode("junk")}
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "junk" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "junk" ? "bg-[var(--moss-deep)] text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
           >
             Junk Removal
           </button>
@@ -919,7 +919,7 @@ export default function EstimateBuilder() {
             role="tab"
             aria-selected={mode === "moving"}
             onClick={() => setMode("moving")}
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "moving" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "moving" ? "bg-[var(--moss-deep)] text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
           >
             Moving
           </button>
@@ -928,7 +928,7 @@ export default function EstimateBuilder() {
             role="tab"
             aria-selected={mode === "service"}
             onClick={() => setMode("service")}
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "service" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "service" ? "bg-[var(--moss-deep)] text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
           >
             Assembly &amp; Handyman
           </button>
@@ -937,7 +937,7 @@ export default function EstimateBuilder() {
             role="tab"
             aria-selected={mode === "vision"}
             onClick={() => setMode("vision")}
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "vision" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "vision" ? "bg-[var(--moss-deep)] text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
           >
             Vision
           </button>
