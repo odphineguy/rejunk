@@ -4,6 +4,14 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   SettingsShell,
   SettingsSaveButton,
@@ -15,8 +23,11 @@ import {
   loadPricingSettings,
   savePricingSettings,
 } from "@/utils/pricingStorage";
+import { loadVisionSettings, saveVisionSettings } from "@/lib/visionStorage";
 import { defaultPricingSettings } from "@/data/defaultPricing";
+import { defaultVisionSettings } from "@/data/defaultVisionSettings";
 import type { PricingSettings } from "@/types/pricing";
+import type { VisionSettings } from "@/types/vision";
 
 /**
  * Estimate Settings — owns the business-level operating-cost defaults that the
@@ -56,6 +67,28 @@ const num = (value: string) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
+
+// Vision settings, as strings for editable inputs.
+type VisionForm = {
+  model: string;
+  temperature: string;
+  maxTokens: string;
+  systemInstructions: string;
+  visualBreakdownInstructions: string;
+};
+
+function toVisionForm(value: VisionSettings): VisionForm {
+  return {
+    model: value.model,
+    temperature: String(value.temperature),
+    maxTokens: String(value.maxTokens),
+    systemInstructions: value.systemInstructions,
+    visualBreakdownInstructions: value.visualBreakdownInstructions,
+  };
+}
+
 export default function EstimateSettings() {
   const [form, setForm] = useState<DefaultsForm>(() =>
     toForm(loadPricingSettings().defaults)
@@ -63,6 +96,13 @@ export default function EstimateSettings() {
 
   const update = (patch: Partial<DefaultsForm>) =>
     setForm((prev) => ({ ...prev, ...patch }));
+
+  const [vision, setVision] = useState<VisionForm>(() =>
+    toVisionForm(loadVisionSettings())
+  );
+
+  const updateVision = (patch: Partial<VisionForm>) =>
+    setVision((prev) => ({ ...prev, ...patch }));
 
   const save = () => {
     // Re-read at save time so we never clobber concurrent changes to
@@ -81,7 +121,14 @@ export default function EstimateSettings() {
         defaultFacilityRatePerTon: num(form.defaultFacilityRatePerTon),
       },
     });
-    toast.success("Estimate defaults saved");
+    saveVisionSettings({
+      model: vision.model,
+      temperature: clamp(num(vision.temperature), 0, 1),
+      maxTokens: clamp(Math.round(num(vision.maxTokens)), 500, 16000),
+      systemInstructions: vision.systemInstructions,
+      visualBreakdownInstructions: vision.visualBreakdownInstructions,
+    });
+    toast.success("Estimate settings saved");
   };
 
   const resetDefaults = () => {
@@ -226,10 +273,113 @@ export default function EstimateSettings() {
           </div>
         </SettingsCard>
 
-        <SettingsCard title="Vision AI" icon={Camera} className="opacity-70">
-          <p className="text-sm text-muted-foreground">
-            Photo-based estimation settings. Coming soon.
+        <SettingsCard title="Vision AI" icon={Camera}>
+          <p className="mb-5 text-sm text-muted-foreground">
+            Settings for the photo-based estimator (the Vision tab in the
+            Estimate Builder). The AI reads junk photos and returns an item
+            breakdown using these.
           </p>
+          <div className="space-y-5">
+            <SettingsField
+              label="Vision model"
+              help="GPT-4.1 Mini matches GPT-4o accuracy at much lower cost and latency, with a 1M-token context for multi-angle photo sets. GPT-4.1 is the most accurate; GPT-4o is the older model."
+            >
+              <Select
+                value={vision.model}
+                onValueChange={(value) => updateVision({ model: value })}
+              >
+                <SelectTrigger className="w-full rounded-lg bg-card">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gpt-4.1-mini">GPT-4.1 Mini (Recommended)</SelectItem>
+                  <SelectItem value="gpt-4.1">GPT-4.1 (highest accuracy)</SelectItem>
+                  <SelectItem value="gpt-4o">GPT-4o (older)</SelectItem>
+                </SelectContent>
+              </Select>
+            </SettingsField>
+
+            <div className="grid gap-5 sm:grid-cols-2">
+              <SettingsField
+                label="Temperature"
+                help="Lower = more consistent. Higher = more variation. 0.3 is a good default."
+              >
+                <Input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={vision.temperature}
+                  onChange={(event) => updateVision({ temperature: event.target.value })}
+                  className="rounded-lg"
+                />
+              </SettingsField>
+
+              <SettingsField
+                label="Max response tokens"
+                help="500-16,000. 1,500 is usually enough; raise it for very detailed breakdowns."
+              >
+                <Input
+                  type="number"
+                  min="500"
+                  max="16000"
+                  step="100"
+                  value={vision.maxTokens}
+                  onChange={(event) => updateVision({ maxTokens: event.target.value })}
+                  className="rounded-lg"
+                />
+              </SettingsField>
+            </div>
+
+            <SettingsField
+              label="System instructions"
+              help="The exact prompt sent to the AI for every photo analysis."
+            >
+              <Textarea
+                value={vision.systemInstructions}
+                onChange={(event) =>
+                  updateVision({ systemInstructions: event.target.value })
+                }
+                className="min-h-[200px] rounded-lg font-mono text-xs leading-5"
+              />
+              <Button
+                variant="link"
+                className="h-auto p-0 text-xs text-muted-foreground hover:text-[var(--moss-deep)]"
+                onClick={() =>
+                  updateVision({
+                    systemInstructions: defaultVisionSettings.systemInstructions,
+                  })
+                }
+              >
+                Reset to default prompt
+              </Button>
+            </SettingsField>
+
+            <SettingsField
+              label="Visual breakdown instructions"
+              help="Prompt for the upcoming truck-packing visual (Pack Smarter / Tetris Mode). Saved now, used later."
+            >
+              <Textarea
+                value={vision.visualBreakdownInstructions}
+                onChange={(event) =>
+                  updateVision({ visualBreakdownInstructions: event.target.value })
+                }
+                className="min-h-[160px] rounded-lg font-mono text-xs leading-5"
+              />
+              <Button
+                variant="link"
+                className="h-auto p-0 text-xs text-muted-foreground hover:text-[var(--moss-deep)]"
+                onClick={() =>
+                  updateVision({
+                    visualBreakdownInstructions:
+                      defaultVisionSettings.visualBreakdownInstructions,
+                  })
+                }
+              >
+                Reset to default prompt
+              </Button>
+            </SettingsField>
+          </div>
         </SettingsCard>
       </div>
     </SettingsShell>

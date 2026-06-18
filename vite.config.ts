@@ -363,7 +363,54 @@ function vitePluginLeadApi(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy(), vitePluginMapsProxy(), vitePluginDriverApi(), vitePluginStaffApi(), vitePluginLeadApi()];
+// Dev-server twin of the Vercel api/vision-analyze.ts function (photo-based
+// estimating via OpenAI). The deployed static site uses the Vercel function
+// instead. Reads OPENAI_API_KEY from process.env (copied from .env below).
+function vitePluginVisionApi(): Plugin {
+  return {
+    name: "rejunk-vision-api",
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use("/api/vision-analyze", (req, res) => {
+        if (req.method !== "POST") {
+          res.writeHead(405, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "POST only" }));
+          return;
+        }
+        let body = "";
+        req.on("data", (chunk) => {
+          body += chunk.toString();
+        });
+        req.on("end", () => {
+          void (async () => {
+            try {
+              const { runVisionAnalysis, validateVisionPayload } = await import(
+                "./server/visionAnalyze"
+              );
+              const payload = validateVisionPayload(JSON.parse(body || "{}"));
+              if (!payload) {
+                res.writeHead(400, { "Content-Type": "application/json" });
+                res.end(
+                  JSON.stringify({
+                    error: "Send 1-10 image data URLs plus the system instructions.",
+                  }),
+                );
+                return;
+              }
+              const result = await runVisionAnalysis(payload);
+              res.writeHead(result.status, { "Content-Type": "application/json" });
+              res.end(JSON.stringify(result.body));
+            } catch (error) {
+              res.writeHead(500, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: String(error) }));
+            }
+          })();
+        });
+      });
+    },
+  };
+}
+
+const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy(), vitePluginMapsProxy(), vitePluginDriverApi(), vitePluginStaffApi(), vitePluginLeadApi(), vitePluginVisionApi()];
 
 export default defineConfig(({ mode }) => {
   // Vite only hands VITE_-prefixed values to the browser. The dev maps + storage

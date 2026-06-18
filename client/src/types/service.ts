@@ -2,8 +2,9 @@ import type { PricebookCrewSize, PricebookItem, PricebookItemType, PricebookPric
 
 /** Which estimator the EstimateBuilder is currently in. "service" and "moving"
  * share the Pricebook engine (serviceCalculator); "moving" just scopes the UI
- * to the moving categories and enforces the 2-hour moving minimum. */
-export type EstimateMode = "junk" | "service" | "moving";
+ * to the moving categories and enforces the 2-hour moving minimum. "vision" is
+ * the photo-based AI estimator (VisionEstimatePanel) — independent of both. */
+export type EstimateMode = "junk" | "service" | "moving" | "vision";
 
 export type StairFloor = "none" | "2nd" | "3rd" | "above_3rd";
 

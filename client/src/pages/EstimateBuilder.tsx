@@ -58,6 +58,7 @@ import { downloadQuotePdf } from "@/utils/quotePdf";
 import { materialIcon } from "@/lib/materialIcons";
 import { createJobFromEstimate, getJobByEstimateId } from "@/lib/jobStorage";
 import { ServiceEstimatePanel } from "@/components/ServiceEstimatePanel";
+import { VisionEstimatePanel } from "@/components/VisionEstimatePanel";
 import { PhotoRequiredBanner } from "@/components/PhotoRequiredBanner";
 import type {
   EstimateWarning,
@@ -931,9 +932,19 @@ export default function EstimateBuilder() {
           >
             Assembly &amp; Handyman
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "vision"}
+            onClick={() => setMode("vision")}
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "vision" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Vision
+          </button>
         </div>
       }
     >
+        {mode !== "vision" && (
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Job Info</CardTitle>
@@ -986,8 +997,13 @@ export default function EstimateBuilder() {
             </div>
           </CardContent>
         </Card>
+        )}
 
-        {mode !== "junk" ? (
+        {mode === "vision" ? (
+          <div className="mx-auto max-w-3xl">
+            <VisionEstimatePanel />
+          </div>
+        ) : mode !== "junk" ? (
           <div className="space-y-6">
             <ServiceEstimatePanel
               // key resets the panel's line items when switching Moving <-> Assembly.
