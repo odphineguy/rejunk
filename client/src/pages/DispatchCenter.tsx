@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { JobStatusBadge } from "@/components/JobBadges";
 import { animateMarkerTo, createDriverMarkerContent, MapView } from "@/components/Map";
 import { OperationsShell } from "@/components/OperationsShell";
 import { Badge } from "@/components/ui/badge";
@@ -797,65 +796,45 @@ export default function DispatchCenter() {
                 {rows.map(row => {
                   const metrics = jobOperationalMetrics(row.driverJob);
                   const active = selectedJobId === row.job.id;
+                  const crew =
+                    row.driverJob.assignedCrew
+                      .map(crew => crew.displayName)
+                      .join(", ") || "Unassigned";
+                  const warnings: string[] = [];
+                  if (metrics.openIssueCount > 0)
+                    warnings.push(
+                      pluralize(metrics.openIssueCount, "open issue")
+                    );
+                  if (!row.location.coords)
+                    warnings.push(reasonLabel(row.location.reason));
                   return (
                     <button
                       key={row.job.id}
                       onClick={() => openMarker(row)}
                       className={cn(
-                        "w-full rounded-md border p-3 text-left text-sm transition-colors hover:bg-muted",
+                        "w-full rounded-md border px-3 py-2 text-left text-sm transition-colors hover:bg-muted",
                         active ? "border-primary bg-primary/5" : "border-border"
                       )}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="font-semibold">
-                            {formatWindow(
-                              row.job.scheduledStart,
-                              row.job.scheduledEnd
-                            )}{" "}
-                            · {row.job.customerName}
-                          </div>
-                          <div className="text-muted-foreground">
-                            {row.job.serviceType?.replaceAll("_", " ") ||
-                              row.job.materialName ||
-                              "Service"}
-                          </div>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <div className="min-w-0 truncate font-semibold">
+                          {row.job.customerName}
                         </div>
-                        <JobStatusBadge status={row.job.status} />
+                        <span className="shrink-0 text-xs uppercase tracking-wide text-muted-foreground">
+                          {row.job.status.replaceAll("_", " ")}
+                        </span>
                       </div>
-                      <div className="mt-2 text-muted-foreground">
-                        {row.driverJob.assignedCrew
-                          .map(crew => crew.displayName)
-                          .join(", ") || "Unassigned"}{" "}
-                        ·{" "}
-                        {row.job.vehicleName ||
-                          row.job.assignment?.vehicleName ||
-                          "Vehicle TBD"}
+                      <div className="truncate text-muted-foreground">
+                        {row.location.address || "No address"}
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <Badge variant="outline">
-                          {pluralize(
-                            metrics.customerStopCount,
-                            "service location"
-                          )}
-                        </Badge>
-                        <Badge variant="outline">
-                          {pluralize(
-                            metrics.disposalEventCount,
-                            "disposal trip"
-                          )}
-                        </Badge>
-                        {metrics.openIssueCount > 0 && (
-                          <Badge className="bg-red-100 text-red-700">
-                            {pluralize(metrics.openIssueCount, "open issue")}
-                          </Badge>
-                        )}
-                        {!row.location.coords && (
-                          <Badge className="bg-amber-100 text-amber-800">
-                            {reasonLabel(row.location.reason)}
-                          </Badge>
-                        )}
+                      <div className="truncate text-xs text-muted-foreground">
+                        {crew}
                       </div>
+                      {warnings.length > 0 && (
+                        <div className="truncate text-xs font-medium text-foreground">
+                          {warnings.join(" · ")}
+                        </div>
+                      )}
                     </button>
                   );
                 })}

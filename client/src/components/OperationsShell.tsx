@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { WeatherChip } from "@/components/WeatherChip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -300,6 +301,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <GlobalSearch />
             <div className="flex flex-wrap items-center gap-2.5">
               <AddNewMenu />
+              <WeatherChip />
               <button
                 className="relative flex size-11 items-center justify-center rounded-[11px] border border-border bg-card text-muted-foreground transition-colors hover:border-[var(--line-strong)] hover:bg-muted"
                 aria-label="Notifications"
