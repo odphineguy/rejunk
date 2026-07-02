@@ -113,6 +113,7 @@ client/public/__manus__/version.json
 .project-config.json
 
 # Local-only tooling/data (not part of the app)
+vision/
 .manus-logs/
 .memsearch/
 .claude/
