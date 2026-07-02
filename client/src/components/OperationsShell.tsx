@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  Bell,
   Banknote,
   BriefcaseBusiness,
   Calculator,
@@ -28,6 +27,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { WeatherChip } from "@/components/WeatherChip";
+import { NotificationsBell } from "@/components/NotificationsBell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -302,13 +302,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="flex flex-wrap items-center gap-2.5">
               <AddNewMenu />
               <WeatherChip />
-              <button
-                className="relative flex size-11 items-center justify-center rounded-[11px] border border-border bg-card text-muted-foreground transition-colors hover:border-[var(--line-strong)] hover:bg-muted"
-                aria-label="Notifications"
-              >
-                <Bell className="size-[18px]" />
-                <span className="absolute right-2.5 top-2 size-2 rounded-full border-2 border-card bg-[var(--amber)]" />
-              </button>
+              <NotificationsBell />
               <AccountMenu />
             </div>
           </div>

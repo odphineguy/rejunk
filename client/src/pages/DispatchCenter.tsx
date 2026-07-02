@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import {
-  AlertTriangle,
   ChevronDown,
   ChevronUp,
   LocateFixed,
@@ -25,10 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  getDispatchOperationalCache,
-  saveServiceStopCoordinates,
-} from "@/lib/dispatchOperations";
+import { saveServiceStopCoordinates } from "@/lib/dispatchOperations";
 import {
   fetchLiveDriverSessions,
   isSessionLive,
@@ -55,7 +51,7 @@ import {
   type LocationUnavailableReason,
 } from "@/lib/locationValidation";
 import { cn } from "@/lib/utils";
-import type { DriverJob, JobIssue } from "@/types/driver";
+import type { DriverJob } from "@/types/driver";
 import type { Job } from "@/types/jobs";
 import { toDriverJob } from "@/lib/driverStorage";
 
@@ -189,22 +185,6 @@ export default function DispatchCenter() {
           new Date(b.job.scheduledStart ?? b.job.updatedAt).getTime()
       );
   }, [jobs, locationCacheVersion, query, selectedDate, statusFilter]);
-
-  const exceptions = useMemo(() => {
-    const cache = getDispatchOperationalCache();
-    return cache.issues
-      .filter(
-        issue =>
-          issue.requiresDispatchResponse && issue.issueStatus !== "resolved"
-      )
-      .map(issue => ({
-        issue,
-        row: rows.find(row => row.job.id === issue.jobId),
-      }))
-      .filter((entry): entry is { issue: JobIssue; row: DispatchRow } =>
-        Boolean(entry.row)
-      );
-  }, [rows]);
 
   const unmappedRows = rows.filter(row => !row.location.coords);
   const autoGeocodableRows = unmappedRows.filter(row =>
@@ -669,44 +649,6 @@ export default function DispatchCenter() {
           </div>
 
           <aside className="min-h-0 space-y-3 overflow-y-auto">
-            <Card className="border-red-200">
-              <CardContent className="space-y-3 p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-base font-semibold text-foreground">
-                    <AlertTriangle className="size-4 text-red-600" />
-                    Exceptions
-                  </div>
-                  <Badge className="bg-red-100 text-red-700">
-                    {exceptions.length}
-                  </Badge>
-                </div>
-                {exceptions.map(({ issue, row }) => (
-                  <button
-                    key={issue.id}
-                    className="w-full rounded-md border border-border p-3 text-left text-sm hover:bg-muted"
-                    onClick={() => openMarker(row)}
-                  >
-                    <div className="font-semibold">{row.job.customerName}</div>
-                    <div className="text-muted-foreground">
-                      {issue.issueType.replaceAll("_", " ")} ·{" "}
-                      {(issue.issueStatus ?? "awaiting_dispatch").replaceAll(
-                        "_",
-                        " "
-                      )}
-                    </div>
-                    <Button asChild size="sm" className="mt-2">
-                      <Link href={`/jobs/${row.job.id}`}>Open resolution</Link>
-                    </Button>
-                  </button>
-                ))}
-                {exceptions.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    No open blockers.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
             {showDrivers && (
               <Card>
                 <CardContent className="space-y-2 p-4">
