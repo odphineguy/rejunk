@@ -17,6 +17,8 @@ export const YELP_URL =
 export const GOOGLE_BUSINESS_URL = "";
 export const FACEBOOK_URL =
   "https://www.facebook.com/profile.php?id=61590042523931";
+export const THUMBTACK_PROFILE_URL =
+  "https://www.thumbtack.com/az/chandler/moving-companies/progressive-transportation-services/service/580274029751476226";
 export const BRAND_NAME = "Progressive Transportation Services";
 export const LEGAL_OPERATOR = "Saguaro Transportation Services";
 export const LEGAL_DISCLOSURE = `${BRAND_NAME} is a service brand operated by ${LEGAL_OPERATOR}.`;

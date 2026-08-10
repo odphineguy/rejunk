@@ -1,7 +1,7 @@
 import { TESTIMONIALS, type Testimonial } from "../content/testimonials";
-import { THUMBTACK_PROOF } from "../content/site";
 import { PALETTE } from "../palette";
 import { Reveal } from "./Reveal";
+import { ThumbtackReviewWidget } from "./ThumbtackReviewWidget";
 
 const P = PALETTE;
 
@@ -28,60 +28,60 @@ export function Testimonials({ tag }: { tag: Testimonial["tags"][number] }) {
                 Five stars from people who hired us.
               </h2>
             </div>
-            <div className="flex flex-wrap items-center gap-3 md:justify-end">
-              <span className="bg-[#1aa67a] px-2.5 py-1 text-[0.66rem] font-extrabold uppercase tracking-[0.16em] text-white">
-                {THUMBTACK_PROOF.badge}
-              </span>
-              <span
-                className="font-bold"
-                style={{ color: P.lime }}
-                aria-label="5 out of 5 stars"
-              >
-                ★★★★★
-              </span>
-              <span className="text-sm" style={{ color: P.paperSoft }}>
-                {THUMBTACK_PROOF.rating} · {THUMBTACK_PROOF.reviews} ·{" "}
-                {THUMBTACK_PROOF.hires}
-              </span>
+            <div className="justify-self-start md:justify-self-end">
+              <ThumbtackReviewWidget type="star" />
             </div>
           </div>
         </Reveal>
 
-        <div
-          className={`grid ${items.length > 1 ? "md:grid-cols-3" : "max-w-3xl"}`}
-        >
-          {items.map((item, index) => (
-            <Reveal
-              key={`${item.name}-${item.quote}`}
-              delay={index * 0.08}
-              className="h-full"
-            >
-              <figure
-                className={`flex h-full flex-col py-8 ${index < items.length - 1 ? "border-b md:border-b-0" : ""} ${items.length > 1 && index > 0 ? "md:border-l md:pl-10" : ""} ${items.length > 1 && index < items.length - 1 ? "md:pr-10" : ""}`}
-                style={{ borderColor: P.pineLine }}
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div
+            className={`grid ${items.length > 1 ? "md:grid-cols-3" : "max-w-3xl"}`}
+          >
+            {items.map((item, index) => (
+              <Reveal
+                key={`${item.name}-${item.quote}`}
+                delay={index * 0.08}
+                className="h-full"
               >
-                <span
-                  className="text-sm tracking-[0.12em]"
-                  style={{ color: P.lime }}
-                  aria-hidden="true"
+                <figure
+                  className={`flex h-full flex-col py-8 ${index < items.length - 1 ? "border-b md:border-b-0" : ""} ${items.length > 1 && index > 0 ? "md:border-l md:pl-10" : ""} ${items.length > 1 && index < items.length - 1 ? "md:pr-10" : ""}`}
+                  style={{ borderColor: P.pineLine }}
                 >
-                  ★★★★★
-                </span>
-                <blockquote className="mt-5 flex-1 text-lg leading-relaxed text-[#eef4ef]">
-                  “{item.quote}”
-                </blockquote>
-                <figcaption className="mt-6">
-                  <span className="font-bold text-[#f4f7f2]">{item.name}</span>
                   <span
-                    className="mt-1 block text-sm"
-                    style={{ color: P.paperSoft }}
+                    className="text-sm tracking-[0.12em]"
+                    style={{ color: P.lime }}
+                    aria-hidden="true"
                   >
-                    {item.area}
+                    ★★★★★
                   </span>
-                </figcaption>
-              </figure>
-            </Reveal>
-          ))}
+                  <blockquote className="mt-5 flex-1 text-lg leading-relaxed text-[#eef4ef]">
+                    “{item.quote}”
+                  </blockquote>
+                  <figcaption className="mt-6">
+                    <span className="font-bold text-[#f4f7f2]">
+                      {item.name}
+                    </span>
+                    <span
+                      className="mt-1 block text-sm"
+                      style={{ color: P.paperSoft }}
+                    >
+                      {item.area}
+                    </span>
+                  </figcaption>
+                </figure>
+              </Reveal>
+            ))}
+          </div>
+
+          <Reveal delay={0.18}>
+            <div
+              className="flex items-start justify-center border-t pt-8 lg:justify-end lg:border-t-0 lg:border-l lg:pt-8 lg:pl-10"
+              style={{ borderColor: P.pineLine }}
+            >
+              <ThumbtackReviewWidget type="one" />
+            </div>
+          </Reveal>
         </div>
       </div>
     </section>
