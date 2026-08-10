@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { useLocation } from "wouter";
 
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -25,8 +25,33 @@ function AppFallback() {
 
 function App() {
   const [location] = useLocation();
-  const isDriverRoute = location === "/driver" || location.startsWith("/driver/");
+  const isDriverRoute =
+    location === "/driver" || location.startsWith("/driver/");
   const isLandingRoute = isPublicPath(location);
+
+  useEffect(() => {
+    let robots = document.head.querySelector<HTMLMetaElement>(
+      'meta[name="robots"]'
+    );
+    if (!robots) {
+      robots = document.createElement("meta");
+      robots.name = "robots";
+      document.head.appendChild(robots);
+    }
+
+    robots.content = isLandingRoute
+      ? "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+      : "noindex, nofollow, noarchive";
+
+    if (!isLandingRoute) {
+      document.head
+        .querySelector<HTMLLinkElement>('link[rel="canonical"]')
+        ?.remove();
+      document.head
+        .querySelector<HTMLScriptElement>('script[id="structured-data"]')
+        ?.remove();
+    }
+  }, [isLandingRoute]);
 
   return (
     <ErrorBoundary>

@@ -11,10 +11,16 @@
       name="description"
       content="Junk removal, local moving, and furniture assembly across the Phoenix valley. Upfront pricing, careful crews, and same-day availability."
     />
+    <meta
+      name="robots"
+      content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+    />
     <link rel="canonical" href="https://www.progressive-junk.xyz/" />
+    <link rel="describedby" href="/llms.txt" type="text/plain" />
 
     <!-- Open Graph (link previews on Facebook, iMessage, WhatsApp, LinkedIn) -->
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_US" />
     <meta
       property="og:site_name"
       content="Progressive Transportation Services"
@@ -34,6 +40,10 @@
     />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Progressive Transportation Services junk removal, moving, and furniture assembly crew in Phoenix, Arizona"
+    />
     <meta name="twitter:card" content="summary_large_image" />
     <meta
       name="twitter:title"
@@ -47,6 +57,10 @@
       name="twitter:image"
       content="https://www.progressive-junk.xyz/og-image.jpg"
     />
+    <meta
+      name="twitter:image:alt"
+      content="Progressive Transportation Services crew in Phoenix, Arizona"
+    />
 
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
@@ -55,8 +69,8 @@
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#052a2b" />
 
-    <!-- LocalBusiness structured data: powers Google local/rich results. -->
-    <script type="application/ld+json">
+    <!-- Build-time fallback; prerender.ts replaces this with route-specific JSON-LD. -->
+    <script id="structured-data" type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "MovingCompany",

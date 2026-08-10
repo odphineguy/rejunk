@@ -1,9 +1,31 @@
+# Search and answer-engine crawlers. These agents also match the wildcard,
+# but listing them makes the site's discovery policy explicit.
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: Claude-SearchBot
+User-agent: Claude-User
 User-agent: *
 Allow: /
 
-# Internal app + driver routes (auth-gated, nothing to index)
+# Internal office, driver, and API routes contain no public marketing content.
 Disallow: /login
 Disallow: /dashboard
+Disallow: /map
+Disallow: /estimate-builder
+Disallow: /jobs
+Disallow: /dispatch
+Disallow: /schedule
+Disallow: /messages
+Disallow: /clients
+Disallow: /employees
+Disallow: /invoices
+Disallow: /payments
+Disallow: /pricebook
+Disallow: /events
+Disallow: /settings
 Disallow: /driver
+Disallow: /api/
 
 Sitemap: https://www.progressive-junk.xyz/sitemap.xml
