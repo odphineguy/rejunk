@@ -5,10 +5,10 @@ import {
   GOOGLE_BUSINESS_URL,
   LEGAL_DISCLOSURE,
   NAV_ITEMS,
+  BOOKING_URL,
   PHONE_DISPLAY,
   PHONE_HREF,
   SERVICE_AREA,
-  SMS_HREF,
   YELP_URL,
 } from "../content/site";
 import { PALETTE } from "../palette";
@@ -26,7 +26,11 @@ const ICON_PATHS = {
 
 const SOCIAL_LINKS = [
   { label: "Yelp", href: YELP_URL, path: ICON_PATHS.yelp },
-  { label: "Google Business Profile", href: GOOGLE_BUSINESS_URL, path: ICON_PATHS.google },
+  {
+    label: "Google Business Profile",
+    href: GOOGLE_BUSINESS_URL,
+    path: ICON_PATHS.google,
+  },
   { label: "Facebook", href: FACEBOOK_URL, path: ICON_PATHS.facebook },
 ].filter(link => link.href);
 
@@ -38,27 +42,53 @@ export function SiteFooter() {
         <div>
           {/* progressive-logo-footer.png: wordmark on pine field (#052a2b) so it
               blends seamlessly into the dark footer. */}
-          <img src="/progressive-logo-footer.png" alt="Progressive Transportation Services" className="h-16 w-auto" />
+          <img
+            src="/progressive-logo-footer.png"
+            alt="Progressive Transportation Services"
+            className="h-16 w-auto"
+          />
           <p className="mt-4 max-w-xs text-sm leading-relaxed">
-            Junk removal, moving, and assembly & handyman across the {SERVICE_AREA} — with
-            eco-friendly disposal built into every job.
+            Junk removal, local moving, and furniture assembly across the{" "}
+            {SERVICE_AREA}. Straightforward prices, careful crews, and work done
+            all the way through.
           </p>
         </div>
 
         <nav aria-label="Footer services">
-          <h2 className="font-display text-sm font-bold uppercase tracking-wider" style={{ color: P.paper }}>
+          <h2
+            className="font-display text-sm font-bold uppercase tracking-wider"
+            style={{ color: P.paper }}
+          >
             Services
           </h2>
           <ul className="mt-4 flex flex-col gap-2 text-sm">
             {NAV_ITEMS.map(item => (
               <li key={item.href}>
-                <Link href={item.href} className="transition-opacity hover:opacity-70">
+                <Link
+                  href={item.href}
+                  className="transition-opacity hover:opacity-70"
+                >
                   {item.label}
                 </Link>
               </li>
             ))}
             <li>
-              <Link href="/estimate" className="font-semibold transition-opacity hover:opacity-70" style={{ color: P.lime }}>
+              <a
+                href={BOOKING_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold transition-opacity hover:opacity-70"
+                style={{ color: P.lime }}
+              >
+                Book online ↗
+              </a>
+            </li>
+            <li>
+              <Link
+                href="/estimate"
+                className="font-semibold transition-opacity hover:opacity-70"
+                style={{ color: P.lime }}
+              >
                 Get a Free Estimate
               </Link>
             </li>
@@ -66,18 +96,20 @@ export function SiteFooter() {
         </nav>
 
         <div>
-          <h2 className="font-display text-sm font-bold uppercase tracking-wider" style={{ color: P.paper }}>
+          <h2
+            className="font-display text-sm font-bold uppercase tracking-wider"
+            style={{ color: P.paper }}
+          >
             Talk to us
           </h2>
           <ul className="mt-4 flex flex-col gap-2 text-sm">
             <li>
-              <a href={PHONE_HREF} className="font-semibold" style={{ color: P.paper }}>
-                Call {PHONE_DISPLAY}
-              </a>
-            </li>
-            <li>
-              <a href={SMS_HREF} className="transition-opacity hover:opacity-70">
-                Text us a photo of the job
+              <a
+                href={PHONE_HREF}
+                className="transition-opacity hover:opacity-70"
+                style={{ color: P.paper }}
+              >
+                {PHONE_DISPLAY}
               </a>
             </li>
             <li>{SERVICE_AREA}</li>
@@ -85,7 +117,10 @@ export function SiteFooter() {
 
           {SOCIAL_LINKS.length > 0 && (
             <>
-              <h2 className="font-display mt-6 text-sm font-bold uppercase tracking-wider" style={{ color: P.paper }}>
+              <h2
+                className="font-display mt-6 text-sm font-bold uppercase tracking-wider"
+                style={{ color: P.paper }}
+              >
                 Find us on
               </h2>
               <div className="mt-3 flex items-center gap-3">
@@ -99,7 +134,13 @@ export function SiteFooter() {
                     className="flex h-10 w-10 items-center justify-center rounded-full border transition-opacity hover:opacity-70"
                     style={{ borderColor: P.pineLine }}
                   >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="#ffffff" aria-hidden="true">
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="#ffffff"
+                      aria-hidden="true"
+                    >
                       <path d={link.path} />
                     </svg>
                   </a>
@@ -133,11 +174,17 @@ export function SiteFooter() {
           Privacy
         </Link>
         <span className="hidden md:inline">·</span>
-        <Link href="/login" className="opacity-60 transition-opacity hover:opacity-100">
+        <Link
+          href="/login"
+          className="opacity-60 transition-opacity hover:opacity-100"
+        >
           Staff sign-in
         </Link>
       </div>
-      <div className="border-t px-6 py-4 text-center text-xs" style={{ borderColor: P.pineLine }}>
+      <div
+        className="border-t px-6 py-4 text-center text-xs"
+        style={{ borderColor: P.pineLine }}
+      >
         <p>{LEGAL_DISCLOSURE}</p>
       </div>
     </footer>

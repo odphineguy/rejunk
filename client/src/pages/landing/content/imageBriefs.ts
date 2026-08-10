@@ -1,12 +1,10 @@
 /**
  * Single source of truth for every photo slot on the public site.
  *
- * `src` is a Higgsfield-generated photo (Nano Banana Pro, 2026-06-12) hosted on
- * Higgsfield's CDN — nothing is committed to the repo (Manus deploy-timeout
- * rule) and full-res originals are backed up locally in landing-assets/
- * (git-ignored). If a URL ever dies, components/ImagePlaceholder falls back
- * to the labeled placeholder box automatically. To replace a shot with a
- * premium branded image later, just swap its `src`.
+ * Hosted photos use Higgsfield's CDN. Local working copies remain in the
+ * git-ignored landing-assets/ + client/public/landing-preview/ directories.
+ * If a URL ever dies, components/ImagePlaceholder falls back to a labeled
+ * placeholder automatically.
  */
 
 export interface ImageBrief {
@@ -18,17 +16,21 @@ export interface ImageBrief {
   src?: string;
 }
 
-const CDN = "https://d8j0ntlcm91z4.cloudfront.net/user_3ExzaXyax9ozCubCJKvOqbDVKlr";
+const CDN =
+  "https://d8j0ntlcm91z4.cloudfront.net/user_3ExzaXyax9ozCubCJKvOqbDVKlr";
+const UPLOAD_CDN =
+  "https://d2ol7oe51mr4n9.cloudfront.net/user_3ExzaXyax9ozCubCJKvOqbDVKlr";
 
 export const IMAGE_BRIEFS = {
   "home-hero": {
     brief:
-      "Two uniformed Rejunk crew members carrying a sofa from a Phoenix suburban home toward the truck, golden-hour light.",
-    aspect: "4 / 3",
-    src: `${CDN}/hf_20260612_223425_d515bbae-382a-4008-8d78-4202dc0af89b_min.webp`,
+      "Two uniformed crew members carrying a sofa beside a white moving truck in a Phoenix neighborhood.",
+    aspect: "16 / 9",
+    src: `${UPLOAD_CDN}/5e1c2c4b-6f5f-4dd5-9ac9-322b98942165.png`,
   },
   "home-svc-junk": {
-    brief: "Crew loading garage-cleanout items into the truck, driveway setting.",
+    brief:
+      "Crew loading garage-cleanout items into the truck, driveway setting.",
     aspect: "3 / 2",
     src: `${CDN}/hf_20260612_223428_41675ed6-9114-4abf-a45c-302f4e75ec73_min.webp`,
   },
@@ -38,9 +40,28 @@ export const IMAGE_BRIEFS = {
     src: `${CDN}/hf_20260612_223432_3f5a5e54-8aa0-4a91-9756-6e03d6583c3d_min.webp`,
   },
   "home-svc-assembly": {
-    brief: "Technician assembling flat-pack furniture in a bright living room, tools laid out neatly.",
+    brief:
+      "Technician assembling flat-pack furniture in a bright living room, tools laid out neatly.",
     aspect: "3 / 2",
     src: `${CDN}/hf_20260612_223435_7fd37ca5-6064-4a7f-8e1c-a146cbd9c1b4_min.webp`,
+  },
+  "home-tile-junk": {
+    brief:
+      "Two uniformed crew members carrying an old chair and boxes out of a Phoenix garage.",
+    aspect: "4 / 5",
+    src: `${UPLOAD_CDN}/6bbefb67-f3ec-4291-9ea1-1b0e5dcb0788.png`,
+  },
+  "home-tile-moving": {
+    brief:
+      "Two uniformed movers carefully guiding a wrapped dresser through a home's front door.",
+    aspect: "4 / 5",
+    src: `${UPLOAD_CDN}/6feb7b95-adcb-4dae-ae0f-1dbbb7970595.png`,
+  },
+  "home-tile-assembly": {
+    brief:
+      "Uniformed furniture assembler tightening the final fastener on a modern wood bed frame.",
+    aspect: "4 / 5",
+    src: `${UPLOAD_CDN}/11230ab0-70d4-4d1d-ac12-4c60999c15c3.png`,
   },
   "home-eco": {
     brief:
@@ -54,7 +75,8 @@ export const IMAGE_BRIEFS = {
     src: `${CDN}/hf_20260612_223454_b8427407-d800-461a-a1c2-9b98c756b33f_min.webp`,
   },
   "junk-hero": {
-    brief: "Before/after split: cluttered garage vs. the same garage cleared out.",
+    brief:
+      "Before/after split: cluttered garage vs. the same garage cleared out.",
     aspect: "4 / 3",
     src: `${CDN}/hf_20260612_223458_3d4939c6-5d48-452e-8532-82bb89ceb1b2_min.webp`,
   },
@@ -72,9 +94,9 @@ export const IMAGE_BRIEFS = {
   },
   "assembly-hero": {
     brief:
-      "Technician installing a grab bar while an older homeowner looks on, relaxed.",
+      "Professional furniture assembler building a shelving unit in a bright living room.",
     aspect: "4 / 3",
-    src: `${CDN}/hf_20260612_223607_3f393ce3-2b1b-4360-bc4f-e7a1d518ec53_min.webp`,
+    src: `${CDN}/hf_20260612_223435_7fd37ca5-6064-4a7f-8e1c-a146cbd9c1b4_min.webp`,
   },
   "assembly-seniors": {
     brief:

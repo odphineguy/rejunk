@@ -4,7 +4,12 @@ import { Link } from "wouter";
 import { saveClient } from "@/lib/clientStorage";
 
 import type { ImageBriefId } from "./content/imageBriefs";
-import { BRAND_NAME, PAGE_META, PHONE_DISPLAY, PHONE_HREF, SMS_HREF } from "./content/site";
+import {
+  BOOKING_URL,
+  BRAND_NAME,
+  PAGE_META,
+  PHONE_DISPLAY,
+} from "./content/site";
 import { ImagePlaceholder } from "./components/ImagePlaceholder";
 import { SiteLayout } from "./layout/SiteLayout";
 import { usePageMeta } from "./lib/usePageMeta";
@@ -16,8 +21,8 @@ const P = PALETTE;
  * Estimate request flow — deliberately NOT a live price quote (the quoting
  * engine isn't public-ready yet). Step 1 mirrors the proven "select all that
  * apply" pattern; step 2 captures details + contact; the lead is emailed to
- * the owner via POST /api/lead. If the send fails, we fall back to call/text
- * so a lead is never dead-ended.
+ * the owner via POST /api/lead. If the send fails, the visitor can retry the
+ * form or continue to online booking.
  *
  * Plain controlled inputs on purpose — no react-hook-form/zod, keeps the
  * marketing chunk light.
@@ -35,21 +40,24 @@ const SERVICE_OPTIONS: Array<{
     label: "Junk Removal",
     sub: "single items to full cleanouts",
     imageId: "estimate-junk",
-    detailPrompt: "What are we hauling? (e.g. sofa, fridge, garage full of boxes)",
+    detailPrompt:
+      "What are we hauling? (e.g. sofa, fridge, garage full of boxes)",
   },
   {
     key: "Moving",
     label: "Moving",
     sub: "local moves & big-item delivery",
     imageId: "estimate-moving",
-    detailPrompt: "What's the move? (e.g. 1-bedroom apartment, one couch across town)",
+    detailPrompt:
+      "What's the move? (e.g. 1-bedroom apartment, one couch across town)",
   },
   {
-    key: "Assembly & Handyman",
-    label: "Assembly & Handyman",
-    sub: "assembly, mounting, small fixes",
+    key: "Assembly",
+    label: "Assembly",
+    sub: "furniture, shelving & outdoor sets",
     imageId: "estimate-assembly",
-    detailPrompt: "What needs doing? (e.g. IKEA dresser, TV mount, grab bars)",
+    detailPrompt:
+      "What needs assembling? (e.g. IKEA dresser, bed frame, patio set)",
   },
 ];
 
@@ -155,7 +163,9 @@ export default function EstimatePage() {
     }));
   };
 
-  const selectedOptions = SERVICE_OPTIONS.filter(option => form.services.includes(option.key));
+  const selectedOptions = SERVICE_OPTIONS.filter(option =>
+    form.services.includes(option.key)
+  );
 
   const submit = async () => {
     if (!form.name.trim()) {
@@ -166,7 +176,10 @@ export default function EstimatePage() {
       setValidationError("Please enter a phone number we can reach you at.");
       return;
     }
-    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+    if (
+      form.email.trim() &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())
+    ) {
       setValidationError("That email doesn't look right — or leave it blank.");
       return;
     }
@@ -214,7 +227,10 @@ export default function EstimatePage() {
         <div className="mx-auto max-w-4xl">
           {step === "services" && (
             <>
-              <h1 className="font-display text-4xl font-bold tracking-tight md:text-5xl" style={{ color: P.pine }}>
+              <h1
+                className="font-display text-4xl font-bold tracking-tight md:text-5xl"
+                style={{ color: P.pine }}
+              >
                 How can we help you?
               </h1>
               <p className="mt-3 text-base" style={{ color: P.inkSoft }}>
@@ -235,26 +251,34 @@ export default function EstimatePage() {
                         background: selected ? P.limeSoft : P.paperBg,
                       }}
                     >
-                      <ImagePlaceholder id={option.imageId} className="rounded-none border-0" />
+                      <ImagePlaceholder
+                        id={option.imageId}
+                        className="rounded-none border-0"
+                      />
                       <div className="flex items-center justify-between gap-2 p-5">
                         <div>
-                          <h2 className="font-display text-lg font-bold" style={{ color: P.ink }}>
+                          <h2
+                            className="font-display text-lg font-bold"
+                            style={{ color: P.ink }}
+                          >
                             {option.label}
                           </h2>
-                          <p className="mt-0.5 text-xs" style={{ color: P.inkSoft }}>
+                          <p
+                            className="mt-0.5 text-xs"
+                            style={{ color: P.inkSoft }}
+                          >
                             {option.sub}
                           </p>
                         </div>
                         <span
                           aria-hidden="true"
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 font-bold"
+                          className="shrink-0 px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wider"
                           style={{
-                            borderColor: selected ? P.pine : P.line,
-                            background: selected ? P.pine : "transparent",
-                            color: selected ? P.lime : "transparent",
+                            background: selected ? P.pine : P.mist,
+                            color: selected ? P.lime : P.inkSoft,
                           }}
                         >
-                          ✓
+                          {selected ? "Selected" : "Choose"}
                         </span>
                       </div>
                     </button>
@@ -271,29 +295,21 @@ export default function EstimatePage() {
                 >
                   Get my estimate
                 </button>
-                <p className="text-sm" style={{ color: P.inkSoft }}>
-                  Prefer to talk?{" "}
-                  <a href={PHONE_HREF} className="font-bold" style={{ color: P.pine }}>
-                    Call {PHONE_DISPLAY}
-                  </a>{" "}
-                  or{" "}
-                  <a href={SMS_HREF} className="font-bold" style={{ color: P.pine }}>
-                    text us a photo
-                  </a>
-                  .
-                </p>
               </div>
             </>
           )}
 
           {step === "details" && (
             <>
-              <h1 className="font-display text-4xl font-bold tracking-tight md:text-5xl" style={{ color: P.pine }}>
+              <h1
+                className="font-display text-4xl font-bold tracking-tight md:text-5xl"
+                style={{ color: P.pine }}
+              >
                 A few details
               </h1>
               <p className="mt-3 text-base" style={{ color: P.inkSoft }}>
-                {form.services.join(" + ")} — tell us a little more and we'll text or call back
-                with your quote, usually within the hour.
+                {form.services.join(" + ")} — tell us a little more and we'll
+                text or call back with your quote, usually within the hour.
               </p>
 
               <form
@@ -305,8 +321,17 @@ export default function EstimatePage() {
               >
                 {selectedOptions.map(option => (
                   <label key={option.key} className="flex flex-col gap-1.5">
-                    <span className="text-sm font-bold" style={{ color: P.ink }}>
-                      {option.label} <span className="font-normal" style={{ color: P.inkSoft }}>(optional)</span>
+                    <span
+                      className="text-sm font-bold"
+                      style={{ color: P.ink }}
+                    >
+                      {option.label}{" "}
+                      <span
+                        className="font-normal"
+                        style={{ color: P.inkSoft }}
+                      >
+                        (optional)
+                      </span>
                     </span>
                     <textarea
                       rows={2}
@@ -318,7 +343,10 @@ export default function EstimatePage() {
                       onChange={event =>
                         setForm(prev => ({
                           ...prev,
-                          details: { ...prev.details, [option.key]: event.target.value },
+                          details: {
+                            ...prev.details,
+                            [option.key]: event.target.value,
+                          },
                         }))
                       }
                     />
@@ -327,8 +355,17 @@ export default function EstimatePage() {
 
                 <div className="grid gap-5 sm:grid-cols-2">
                   <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-bold" style={{ color: P.ink }}>
-                      ZIP code <span className="font-normal" style={{ color: P.inkSoft }}>(optional)</span>
+                    <span
+                      className="text-sm font-bold"
+                      style={{ color: P.ink }}
+                    >
+                      ZIP code{" "}
+                      <span
+                        className="font-normal"
+                        style={{ color: P.inkSoft }}
+                      >
+                        (optional)
+                      </span>
                     </span>
                     <input
                       inputMode="numeric"
@@ -337,11 +374,19 @@ export default function EstimatePage() {
                       className={inputClass}
                       style={{ borderColor: P.line }}
                       value={form.zip}
-                      onChange={event => setForm(prev => ({ ...prev, zip: event.target.value.replace(/\D/g, "") }))}
+                      onChange={event =>
+                        setForm(prev => ({
+                          ...prev,
+                          zip: event.target.value.replace(/\D/g, ""),
+                        }))
+                      }
                     />
                   </label>
                   <fieldset className="flex flex-col gap-1.5">
-                    <legend className="text-sm font-bold" style={{ color: P.ink }}>
+                    <legend
+                      className="text-sm font-bold"
+                      style={{ color: P.ink }}
+                    >
                       When do you need it?
                     </legend>
                     <div className="mt-1.5 flex gap-2">
@@ -350,11 +395,17 @@ export default function EstimatePage() {
                           key={option}
                           type="button"
                           aria-pressed={form.timing === option}
-                          onClick={() => setForm(prev => ({ ...prev, timing: option }))}
+                          onClick={() =>
+                            setForm(prev => ({ ...prev, timing: option }))
+                          }
                           className="flex-1 rounded-xl border-2 px-3 py-3 text-sm font-bold transition-colors"
                           style={{
-                            borderColor: form.timing === option ? P.pine : P.line,
-                            background: form.timing === option ? P.limeSoft : "transparent",
+                            borderColor:
+                              form.timing === option ? P.pine : P.line,
+                            background:
+                              form.timing === option
+                                ? P.limeSoft
+                                : "transparent",
                             color: P.ink,
                           }}
                         >
@@ -367,7 +418,10 @@ export default function EstimatePage() {
 
                 <div className="grid gap-5 sm:grid-cols-2">
                   <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-bold" style={{ color: P.ink }}>
+                    <span
+                      className="text-sm font-bold"
+                      style={{ color: P.ink }}
+                    >
                       Your name
                     </span>
                     <input
@@ -376,11 +430,16 @@ export default function EstimatePage() {
                       className={inputClass}
                       style={{ borderColor: P.line }}
                       value={form.name}
-                      onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
+                      onChange={event =>
+                        setForm(prev => ({ ...prev, name: event.target.value }))
+                      }
                     />
                   </label>
                   <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-bold" style={{ color: P.ink }}>
+                    <span
+                      className="text-sm font-bold"
+                      style={{ color: P.ink }}
+                    >
                       Phone (we'll text your quote here)
                     </span>
                     <input
@@ -391,14 +450,22 @@ export default function EstimatePage() {
                       className={inputClass}
                       style={{ borderColor: P.line }}
                       value={form.phone}
-                      onChange={event => setForm(prev => ({ ...prev, phone: event.target.value }))}
+                      onChange={event =>
+                        setForm(prev => ({
+                          ...prev,
+                          phone: event.target.value,
+                        }))
+                      }
                     />
                   </label>
                 </div>
 
                 <label className="flex flex-col gap-1.5">
                   <span className="text-sm font-bold" style={{ color: P.ink }}>
-                    Email <span className="font-normal" style={{ color: P.inkSoft }}>(optional)</span>
+                    Email{" "}
+                    <span className="font-normal" style={{ color: P.inkSoft }}>
+                      (optional)
+                    </span>
                   </span>
                   <input
                     type="email"
@@ -407,7 +474,9 @@ export default function EstimatePage() {
                     className={inputClass}
                     style={{ borderColor: P.line }}
                     value={form.email}
-                    onChange={event => setForm(prev => ({ ...prev, email: event.target.value }))}
+                    onChange={event =>
+                      setForm(prev => ({ ...prev, email: event.target.value }))
+                    }
                   />
                 </label>
 
@@ -420,18 +489,29 @@ export default function EstimatePage() {
                   aria-hidden="true"
                   className="absolute -left-[9999px] h-0 w-0 opacity-0"
                   value={form.company}
-                  onChange={event => setForm(prev => ({ ...prev, company: event.target.value }))}
+                  onChange={event =>
+                    setForm(prev => ({ ...prev, company: event.target.value }))
+                  }
                 />
 
-                <label className="flex items-start gap-3 rounded-xl border p-4" style={{ borderColor: P.line }}>
+                <label
+                  className="flex items-start gap-3 rounded-xl border p-4"
+                  style={{ borderColor: P.line }}
+                >
                   <input
                     type="checkbox"
                     className="mt-0.5 h-5 w-5 shrink-0 accent-[#052a2b]"
                     checked={form.smsConsent}
-                    onChange={event => setForm(prev => ({ ...prev, smsConsent: event.target.checked }))}
+                    onChange={event =>
+                      setForm(prev => ({
+                        ...prev,
+                        smsConsent: event.target.checked,
+                      }))
+                    }
                   />
                   <span className="text-sm font-bold" style={{ color: P.ink }}>
-                    Text me about this quote from {BRAND_NAME} at {PHONE_DISPLAY}.{" "}
+                    Text me about this quote from {BRAND_NAME} at{" "}
+                    {PHONE_DISPLAY}.{" "}
                     <span className="font-normal" style={{ color: P.inkSoft }}>
                       (Optional — we'll still call you either way.)
                     </span>
@@ -439,23 +519,36 @@ export default function EstimatePage() {
                 </label>
 
                 <p className="text-xs leading-5" style={{ color: P.inkSoft }}>
-                  By submitting, you agree to be contacted about your request. If you check the box
-                  above, you consent to receive service-related text messages (quote, scheduling,
-                  and ETA updates) from {BRAND_NAME}. Service-related text messages may come from{" "}
-                  {PHONE_DISPLAY}. Message frequency varies; message and data rates may apply. Reply
-                  STOP to opt out or HELP for help. Consent is not a condition of purchase. See our{" "}
-                  <Link href="/terms" className="font-semibold underline" style={{ color: P.pine }}>
+                  By submitting, you agree to be contacted about your request.
+                  If you check the box above, you consent to receive
+                  service-related text messages (quote, scheduling, and ETA
+                  updates) from {BRAND_NAME}. Service-related text messages may
+                  come from {PHONE_DISPLAY}. Message frequency varies; message
+                  and data rates may apply. Reply STOP to opt out or HELP for
+                  help. Consent is not a condition of purchase. See our{" "}
+                  <Link
+                    href="/terms"
+                    className="font-semibold underline"
+                    style={{ color: P.pine }}
+                  >
                     Terms
                   </Link>{" "}
                   and{" "}
-                  <Link href="/privacy" className="font-semibold underline" style={{ color: P.pine }}>
+                  <Link
+                    href="/privacy"
+                    className="font-semibold underline"
+                    style={{ color: P.pine }}
+                  >
                     Privacy Policy
                   </Link>
                   .
                 </p>
 
                 {validationError && (
-                  <p role="alert" className="text-sm font-semibold text-red-700">
+                  <p
+                    role="alert"
+                    className="text-sm font-semibold text-red-700"
+                  >
                     {validationError}
                   </p>
                 )}
@@ -486,48 +579,56 @@ export default function EstimatePage() {
             <div className="mx-auto max-w-xl py-10 text-center">
               {sendFailed ? (
                 <>
-                  <h1 className="font-display text-4xl font-bold tracking-tight" style={{ color: P.pine }}>
-                    Almost there — call or text us
+                  <h1
+                    className="font-display text-4xl font-bold tracking-tight"
+                    style={{ color: P.pine }}
+                  >
+                    That request didn’t go through.
                   </h1>
                   <p className="mt-4 text-base" style={{ color: P.inkSoft }}>
-                    The request didn't go through on our end. So you're not stuck waiting, reach
-                    us directly and we'll get your quote going right away.
+                    Please return to the form and try again, or book a service
+                    online if you already know what you need.
                   </p>
                 </>
               ) : (
                 <>
-                  <span
-                    aria-hidden="true"
-                    className="mx-auto flex h-16 w-16 items-center justify-center rounded-full text-3xl font-bold"
-                    style={{ background: P.lime, color: P.pine }}
+                  <p
+                    className="text-xs font-bold uppercase tracking-[0.2em]"
+                    style={{ color: P.pine }}
                   >
-                    ✓
-                  </span>
-                  <h1 className="font-display mt-6 text-4xl font-bold tracking-tight" style={{ color: P.pine }}>
+                    Request received
+                  </p>
+                  <h1
+                    className="font-display mt-3 text-4xl font-bold tracking-tight"
+                    style={{ color: P.pine }}
+                  >
                     Got it, {form.name.split(" ")[0] || "neighbor"}.
                   </h1>
                   <p className="mt-4 text-base" style={{ color: P.inkSoft }}>
-                    We'll text or call you at <strong style={{ color: P.ink }}>{form.phone}</strong> with
-                    your quote — usually within the hour during business hours. Want it even
-                    faster?
+                    We’ll follow up at{" "}
+                    <strong style={{ color: P.ink }}>{form.phone}</strong> with
+                    your quote, usually within the hour during business hours.
                   </p>
                 </>
               )}
               <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
                 <a
-                  href={PHONE_HREF}
+                  href={BOOKING_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="rounded-xl px-8 py-4 text-lg font-bold shadow-lg transition-transform hover:scale-[1.03]"
                   style={{ background: P.pine, color: P.paper }}
                 >
-                  Call {PHONE_DISPLAY}
+                  Book online
                 </a>
-                <a
-                  href={SMS_HREF}
+                <button
+                  type="button"
+                  onClick={() => setStep("services")}
                   className="rounded-xl border-2 px-8 py-4 text-lg font-bold transition-transform hover:scale-[1.03]"
                   style={{ borderColor: P.pine, color: P.pine }}
                 >
-                  Text us a photo
-                </a>
+                  Start another estimate
+                </button>
               </div>
             </div>
           )}

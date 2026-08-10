@@ -15,21 +15,24 @@ const OVERVIEW: Array<{
 }> = [
   {
     title: "Junk Removal",
-    blurb: "Full cleanouts or single items, hauled off the same day — and routed to donation and recycling first.",
+    blurb:
+      "Full cleanouts or single items, hauled off the same day — and routed to donation and recycling first.",
     href: "/junk-removal",
-    imageId: "home-svc-junk",
+    imageId: "home-tile-junk",
   },
   {
     title: "Moving & Delivery",
-    blurb: "Local moves and big-item deliveries anywhere in the valley, padded and placed where you want them.",
+    blurb:
+      "Local moves and big-item deliveries anywhere in the valley, padded and placed where you want them.",
     href: "/moving",
-    imageId: "home-svc-moving",
+    imageId: "home-tile-moving",
   },
   {
-    title: "Assembly & Handyman",
-    blurb: "Furniture assembly, mounting, and small fixes — with patient, senior-friendly service as our specialty.",
+    title: "Assembly",
+    blurb:
+      "Furniture, shelving, bed frames, patio sets, and more — built carefully and ready to use.",
     href: "/assembly-handyman",
-    imageId: "home-svc-assembly",
+    imageId: "home-tile-assembly",
   },
 ];
 
@@ -39,28 +42,43 @@ export function ServiceOverviewGrid() {
     <section className="px-5 py-14 md:px-8 md:py-20">
       <div className="mx-auto max-w-6xl">
         <Reveal>
-          <h2 className="font-display text-3xl font-bold tracking-tight md:text-4xl" style={{ color: P.pine }}>
-            Three crews' worth of help, one call
+          <h2
+            className="font-display max-w-2xl text-4xl font-bold tracking-tight md:text-5xl"
+            style={{ color: P.pine }}
+          >
+            One local crew for the jobs that take muscle and patience.
           </h2>
         </Reveal>
-        <div className="mt-8 grid gap-6 md:grid-cols-3">
+        <div className="mt-10 grid gap-3 md:grid-cols-3">
           {OVERVIEW.map((service, index) => (
-            <Reveal key={service.href} delay={index * 0.08}>
+            <Reveal key={service.href} delay={index * 0.08} className="h-full">
               <Link
                 href={service.href}
-                className="group flex h-full flex-col overflow-hidden rounded-2xl border transition-shadow hover:shadow-lg"
-                style={{ borderColor: P.line }}
+                className="group relative flex h-full min-h-[440px] overflow-hidden rounded-[0.65rem]"
               >
-                <ImagePlaceholder id={service.imageId} className="rounded-none border-0 border-b-2" />
-                <div className="flex flex-1 flex-col p-6">
-                  <h3 className="font-display text-xl font-bold" style={{ color: P.ink }}>
+                <ImagePlaceholder
+                  id={service.imageId}
+                  className="absolute inset-0 h-full rounded-none border-0 transition-transform duration-700 group-hover:scale-[1.03]"
+                />
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background:
+                      "linear-gradient(0deg, rgba(3,25,26,.9) 0%, rgba(3,25,26,.12) 72%)",
+                  }}
+                />
+                <div className="relative mt-auto flex w-full flex-col p-6 text-[#f4f7f2] md:p-7">
+                  <h3 className="font-display text-3xl font-bold">
                     {service.title}
                   </h3>
-                  <p className="mt-2 flex-1 text-sm leading-relaxed" style={{ color: P.inkSoft }}>
+                  <p className="mt-2 max-w-sm text-sm leading-relaxed text-[#d2e0d8]">
                     {service.blurb}
                   </p>
-                  <span className="mt-4 text-sm font-bold group-hover:underline" style={{ color: P.pine }}>
-                    Learn more →
+                  <span className="mt-5 text-sm font-bold text-[#83e282]">
+                    Explore service{" "}
+                    <span className="inline-block transition-transform duration-300 group-hover:translate-x-1">
+                      →
+                    </span>
                   </span>
                 </div>
               </Link>

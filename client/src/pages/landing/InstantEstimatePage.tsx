@@ -4,10 +4,18 @@ import { Link } from "wouter";
 import { saveClient } from "@/lib/clientStorage";
 import { hydrateSettings } from "@/lib/settingsStorage";
 import { analyzePhotos, loadVisionSettings } from "@/lib/visionStorage";
-import { hydratePricingData, loadPricingSettings } from "@/utils/pricingStorage";
+import {
+  hydratePricingData,
+  loadPricingSettings,
+} from "@/utils/pricingStorage";
 import type { VisionAnalysisResult } from "@/types/vision";
 
-import { BRAND_NAME, PAGE_META, PHONE_DISPLAY, PHONE_HREF, SMS_HREF } from "./content/site";
+import {
+  BOOKING_URL,
+  BRAND_NAME,
+  PAGE_META,
+  PHONE_DISPLAY,
+} from "./content/site";
 import { SiteLayout } from "./layout/SiteLayout";
 import { usePageMeta } from "./lib/usePageMeta";
 import { PALETTE } from "./palette";
@@ -37,9 +45,11 @@ const HYDRATE_TIMEOUT_MS = 2500;
 const TIMING_OPTIONS = ["Today", "This week", "Flexible"] as const;
 
 const money = (value: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
-    Number.isFinite(value) ? value : 0,
-  );
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(Number.isFinite(value) ? value : 0);
 
 type UploadedPhoto = { id: string; dataUrl: string };
 
@@ -73,7 +83,11 @@ const makeId = () =>
     : `id-${Date.now()}-${Math.round(performance.now())}`;
 
 /** Downscale + re-encode to keep the upload payload small (and OpenAI cost low). */
-async function compressImage(file: File, maxDim = 1280, quality = 0.72): Promise<string> {
+async function compressImage(
+  file: File,
+  maxDim = 1280,
+  quality = 0.72
+): Promise<string> {
   const original = await readFileAsDataUrl(file);
   try {
     const img = await loadImage(original);
@@ -127,16 +141,26 @@ interface PriceEstimate {
 function buildEstimate(result: VisionAnalysisResult): PriceEstimate {
   const pricing = loadPricingSettings();
   const truckCapacity =
-    (pricing.vehicles.find(v => v.isDefault) ?? pricing.vehicles[0])?.usableCubicYards ?? 9;
+    (pricing.vehicles.find(v => v.isDefault) ?? pricing.vehicles[0])
+      ?.usableCubicYards ?? 9;
 
-  const totalCubicYards = result.itemBreakdown.reduce((sum, it) => sum + it.cubicYards, 0);
+  const totalCubicYards = result.itemBreakdown.reduce(
+    (sum, it) => sum + it.cubicYards,
+    0
+  );
   const loadFraction = truckCapacity > 0 ? totalCubicYards / truckCapacity : 0;
 
-  const benchmarks = [...pricing.volumePricingBenchmarks].sort((a, b) => a.fraction - b.fraction);
+  const benchmarks = [...pricing.volumePricingBenchmarks].sort(
+    (a, b) => a.fraction - b.fraction
+  );
   // Round UP to the first bucket that fully covers the analyzed volume (never
   // below it), falling back to the largest bucket for over-full loads.
-  const bucket = benchmarks.find(b => b.fraction >= loadFraction) ?? benchmarks[benchmarks.length - 1];
-  const aboveBucket = benchmarks.find(b => bucket && b.fraction > bucket.fraction);
+  const bucket =
+    benchmarks.find(b => b.fraction >= loadFraction) ??
+    benchmarks[benchmarks.length - 1];
+  const aboveBucket = benchmarks.find(
+    b => bucket && b.fraction > bucket.fraction
+  );
 
   const lower = bucket?.price ?? 0;
   const upper = aboveBucket?.price ?? Math.round(lower * 1.3);
@@ -144,7 +168,13 @@ function buildEstimate(result: VisionAnalysisResult): PriceEstimate {
   const pct = Math.min(100, Math.max(0, Math.round(loadFraction * 100)));
   const loadLabel = `about ${totalCubicYards.toFixed(1)} yd³ (≈ ${pct}% of a truck)`;
 
-  return { totalCubicYards, hasPrice: lower > 0, lower, upper: Math.max(upper, lower), loadLabel };
+  return {
+    totalCubicYards,
+    hasPrice: lower > 0,
+    lower,
+    upper: Math.max(upper, lower),
+    loadLabel,
+  };
 }
 
 function summarizeItems(result: VisionAnalysisResult): string {
@@ -179,8 +209,12 @@ export default function InstantEstimatePage() {
   // cache at submit time; falls back to bundled defaults if this hasn't landed
   // yet — the page still works either way.
   useEffect(() => {
-    const ready = Promise.all([hydratePricingData(), hydrateSettings()]).then(() => undefined);
-    const timeout = new Promise<void>(resolve => setTimeout(resolve, HYDRATE_TIMEOUT_MS));
+    const ready = Promise.all([hydratePricingData(), hydrateSettings()]).then(
+      () => undefined
+    );
+    const timeout = new Promise<void>(resolve =>
+      setTimeout(resolve, HYDRATE_TIMEOUT_MS)
+    );
     void Promise.race([ready, timeout]).catch(() => undefined);
   }, []);
 
@@ -205,7 +239,8 @@ export default function InstantEstimatePage() {
     }
   };
 
-  const removePhoto = (id: string) => setPhotos(prev => prev.filter(p => p.id !== id));
+  const removePhoto = (id: string) =>
+    setPhotos(prev => prev.filter(p => p.id !== id));
 
   /**
    * Mirror the request into the shared `clients` table as a `kind:"lead"` so it
@@ -226,7 +261,9 @@ export default function InstantEstimatePage() {
       email: form.email.trim() || undefined,
       zip: form.zip.trim() || undefined,
       leadSource: "AI Estimate",
-      contactLog: [{ id: makeId(), createdAt: new Date().toISOString(), text: summary }],
+      contactLog: [
+        { id: makeId(), createdAt: new Date().toISOString(), text: summary },
+      ],
     });
   };
 
@@ -236,7 +273,9 @@ export default function InstantEstimatePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         services: ["Junk Removal"],
-        details: form.details.trim() ? { "Junk Removal": form.details.trim() } : {},
+        details: form.details.trim()
+          ? { "Junk Removal": form.details.trim() }
+          : {},
         zip: form.zip.trim(),
         timing: form.timing,
         name: form.name.trim(),
@@ -252,7 +291,9 @@ export default function InstantEstimatePage() {
 
   const submit = async () => {
     if (!photos.length) {
-      setValidationError("Add at least one photo so the AI can size up the job.");
+      setValidationError(
+        "Add at least one photo so the AI can size up the job."
+      );
       return;
     }
     if (!form.name.trim()) {
@@ -296,7 +337,7 @@ export default function InstantEstimatePage() {
         setValidationError(
           error instanceof Error
             ? error.message
-            : "You've run a lot of estimates in a short time. Please wait a few minutes, or call/text us.",
+            : "You've run a lot of estimates in a short time. Please wait a few minutes, or call/text us."
         );
         setAnalyzing(false);
         return;
@@ -334,14 +375,25 @@ export default function InstantEstimatePage() {
         total: estimate.lower,
         rangeLower: estimate.lower,
         rangeUpper: estimate.upper,
-        facts: [{ label: "Estimated volume", value: `${estimate.totalCubicYards.toFixed(1)} yd³` }],
+        facts: [
+          {
+            label: "Estimated volume",
+            value: `${estimate.totalCubicYards.toFixed(1)} yd³`,
+          },
+        ],
         includes: ["Labor", "Loading", "Haul-away", "Standard disposal"],
-        notes: [summarizeItems(result) && `Items: ${summarizeItems(result)}`, form.details.trim()]
-          .filter(Boolean)
-          .join("\n") || undefined,
+        notes:
+          [
+            summarizeItems(result) && `Items: ${summarizeItems(result)}`,
+            form.details.trim(),
+          ]
+            .filter(Boolean)
+            .join("\n") || undefined,
       });
     } catch {
-      setValidationError("Couldn't build the PDF — please call or text us and we'll send it.");
+      setValidationError(
+        "Couldn't build the PDF — please call or text us and we'll send it."
+      );
     } finally {
       setDownloadingPdf(false);
     }
@@ -365,40 +417,64 @@ export default function InstantEstimatePage() {
           <div className="mx-auto max-w-3xl">
             {aiFailed || !result || !estimate ? (
               <div className="text-center">
-                <span
-                  aria-hidden="true"
-                  className="mx-auto flex h-16 w-16 items-center justify-center rounded-full text-3xl font-bold"
-                  style={{ background: P.lime, color: P.pine }}
+                <p
+                  className="text-xs font-bold uppercase tracking-[0.2em]"
+                  style={{ color: P.pine }}
                 >
-                  ✓
-                </span>
-                <h1 className="font-display mt-6 text-4xl font-bold tracking-tight" style={{ color: P.pine }}>
+                  Request received
+                </p>
+                <h1
+                  className="font-display mt-3 text-4xl font-bold tracking-tight"
+                  style={{ color: P.pine }}
+                >
                   Got it, {form.name.split(" ")[0] || "neighbor"}.
                 </h1>
-                <p className="mx-auto mt-4 max-w-xl text-base" style={{ color: P.inkSoft }}>
-                  Our AI couldn't size this one up from the photos, but we've got your request and your
-                  photos help. We'll text or call you at <strong style={{ color: P.ink }}>{form.phone}</strong>{" "}
-                  with your quote — usually within the hour during business hours.
+                <p
+                  className="mx-auto mt-4 max-w-xl text-base"
+                  style={{ color: P.inkSoft }}
+                >
+                  Our AI couldn't size this one up from the photos, but we've
+                  got your request and your photos help. We'll text or call you
+                  at <strong style={{ color: P.ink }}>{form.phone}</strong> with
+                  your quote — usually within the hour during business hours.
                 </p>
                 <Cta startOver={startOver} />
               </div>
             ) : (
               <>
                 <div className="text-center">
-                  <p className="text-xs font-semibold uppercase tracking-[0.25em]" style={{ color: P.pine }}>
+                  <p
+                    className="text-xs font-semibold uppercase tracking-[0.25em]"
+                    style={{ color: P.pine }}
+                  >
                     Your AI instant estimate
                   </p>
-                  <h1 className="font-display mt-3 text-4xl font-bold tracking-tight md:text-5xl" style={{ color: P.pine }}>
-                    {estimate.hasPrice ? `${money(estimate.lower)} – ${money(estimate.upper)}` : "We'll send your quote"}
+                  <h1
+                    className="font-display mt-3 text-4xl font-bold tracking-tight md:text-5xl"
+                    style={{ color: P.pine }}
+                  >
+                    {estimate.hasPrice
+                      ? `${money(estimate.lower)} – ${money(estimate.upper)}`
+                      : "We'll send your quote"}
                   </h1>
-                  <p className="mx-auto mt-3 max-w-xl text-base" style={{ color: P.inkSoft }}>
-                    Estimated for {estimate.loadLabel}. This is a ballpark from your photos — we'll
-                    confirm the final price on site before any work or extra charges.
+                  <p
+                    className="mx-auto mt-3 max-w-xl text-base"
+                    style={{ color: P.inkSoft }}
+                  >
+                    Estimated for {estimate.loadLabel}. This is a ballpark from
+                    your photos — we'll confirm the final price on site before
+                    any work or extra charges.
                   </p>
                 </div>
 
-                <div className="mt-10 rounded-2xl border p-6" style={{ borderColor: P.line, background: P.mist }}>
-                  <h2 className="font-display text-lg font-bold" style={{ color: P.pine }}>
+                <div
+                  className="mt-10 rounded-2xl border p-6"
+                  style={{ borderColor: P.line, background: P.mist }}
+                >
+                  <h2
+                    className="font-display text-lg font-bold"
+                    style={{ color: P.pine }}
+                  >
                     What we spotted
                   </h2>
                   <ul className="mt-4 divide-y" style={{ borderColor: P.line }}>
@@ -409,13 +485,16 @@ export default function InstantEstimatePage() {
                         style={{ color: P.ink }}
                       >
                         <span className="font-semibold">{it.item}</span>
-                        <span style={{ color: P.inkSoft }}>Qty {it.quantity}</span>
+                        <span style={{ color: P.inkSoft }}>
+                          Qty {it.quantity}
+                        </span>
                       </li>
                     ))}
                   </ul>
                   <p className="mt-4 text-xs" style={{ color: P.inkSoft }}>
-                    Don't see everything? Add it when we call, or text us more photos — heavy or hidden
-                    items (safes, concrete, dirt) can change the price.
+                    Don’t see everything? We’ll confirm the full list before
+                    the job. Heavy or hidden items such as safes, concrete, or
+                    dirt can change the price.
                   </p>
                 </div>
 
@@ -427,24 +506,40 @@ export default function InstantEstimatePage() {
                     className="rounded-xl px-8 py-4 text-center text-lg font-bold shadow-lg transition-transform enabled:hover:scale-[1.03] disabled:opacity-60"
                     style={{ background: P.lime, color: P.pine }}
                   >
-                    {downloadingPdf ? "Building PDF…" : "Download estimate (PDF)"}
+                    {downloadingPdf
+                      ? "Building PDF…"
+                      : "Download estimate (PDF)"}
                   </button>
                   <a
-                    href={PHONE_HREF}
+                    href={BOOKING_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="rounded-xl border-2 px-8 py-4 text-center text-lg font-bold transition-transform hover:scale-[1.03]"
                     style={{ borderColor: P.pine, color: P.pine }}
                   >
-                    Book it — call {PHONE_DISPLAY}
+                    Book this service
                   </a>
                 </div>
                 {validationError && (
-                  <p role="alert" className="mt-4 text-sm font-semibold text-red-700">
+                  <p
+                    role="alert"
+                    className="mt-4 text-sm font-semibold text-red-700"
+                  >
                     {validationError}
                   </p>
                 )}
-                <p className="mt-6 text-center text-sm" style={{ color: P.inkSoft }}>
-                  We've emailed your details to our team — expect a quick follow-up.{" "}
-                  <button type="button" onClick={startOver} className="font-bold underline" style={{ color: P.pine }}>
+                <p
+                  className="mt-6 text-center text-sm"
+                  style={{ color: P.inkSoft }}
+                >
+                  We've emailed your details to our team — expect a quick
+                  follow-up.{" "}
+                  <button
+                    type="button"
+                    onClick={startOver}
+                    className="font-bold underline"
+                    style={{ color: P.pine }}
+                  >
                     Estimate another job
                   </button>
                 </p>
@@ -461,15 +556,22 @@ export default function InstantEstimatePage() {
     <SiteLayout>
       <section className="px-5 py-10 md:px-8 md:py-16">
         <div className="mx-auto max-w-3xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.25em]" style={{ color: P.pine }}>
+          <p
+            className="text-xs font-semibold uppercase tracking-[0.25em]"
+            style={{ color: P.pine }}
+          >
             AI Instant Estimate
           </p>
-          <h1 className="font-display mt-3 text-4xl font-bold tracking-tight md:text-5xl" style={{ color: P.pine }}>
+          <h1
+            className="font-display mt-3 text-4xl font-bold tracking-tight md:text-5xl"
+            style={{ color: P.pine }}
+          >
             Snap a few photos, get a ballpark price.
           </h1>
           <p className="mt-3 max-w-xl text-base" style={{ color: P.inkSoft }}>
-            Upload photos of your junk and our AI sizes up the load — then we email your estimate and
-            a real person follows up to lock in the price. Free, no obligation.
+            Upload photos of your junk and our AI sizes up the load — then we
+            email your estimate and a real person follows up to lock in the
+            price. Free, no obligation.
           </p>
 
           <form
@@ -480,8 +582,14 @@ export default function InstantEstimatePage() {
             }}
           >
             {/* Photos */}
-            <div className="rounded-2xl border p-5" style={{ borderColor: P.line }}>
-              <h2 className="font-display text-lg font-bold" style={{ color: P.pine }}>
+            <div
+              className="rounded-2xl border p-5"
+              style={{ borderColor: P.line }}
+            >
+              <h2
+                className="font-display text-lg font-bold"
+                style={{ color: P.pine }}
+              >
                 1. Add photos
               </h2>
               <div
@@ -494,7 +602,8 @@ export default function InstantEstimatePage() {
                 style={{ borderColor: P.line, background: P.mist }}
               >
                 <p className="text-sm" style={{ color: P.inkSoft }}>
-                  Drag photos here, or use the button below. Up to {MAX_PHOTOS}, 20MB each.
+                  Drag photos here, or use the button below. Up to {MAX_PHOTOS},
+                  20MB each.
                 </p>
               </div>
               <input
@@ -543,9 +652,21 @@ export default function InstantEstimatePage() {
             </div>
 
             {/* Details */}
-            <div className="rounded-2xl border p-5" style={{ borderColor: P.line }}>
-              <h2 className="font-display text-lg font-bold" style={{ color: P.pine }}>
-                2. Anything we should know? <span className="text-sm font-normal" style={{ color: P.inkSoft }}>(optional)</span>
+            <div
+              className="rounded-2xl border p-5"
+              style={{ borderColor: P.line }}
+            >
+              <h2
+                className="font-display text-lg font-bold"
+                style={{ color: P.pine }}
+              >
+                2. Anything we should know?{" "}
+                <span
+                  className="text-sm font-normal"
+                  style={{ color: P.inkSoft }}
+                >
+                  (optional)
+                </span>
               </h2>
               <textarea
                 rows={3}
@@ -554,29 +675,43 @@ export default function InstantEstimatePage() {
                 className={`mt-3 ${inputClass}`}
                 style={{ borderColor: P.line }}
                 value={form.details}
-                onChange={event => setForm(prev => ({ ...prev, details: event.target.value }))}
+                onChange={event =>
+                  setForm(prev => ({ ...prev, details: event.target.value }))
+                }
               />
             </div>
 
             {/* Contact */}
-            <div className="rounded-2xl border p-5" style={{ borderColor: P.line }}>
-              <h2 className="font-display text-lg font-bold" style={{ color: P.pine }}>
+            <div
+              className="rounded-2xl border p-5"
+              style={{ borderColor: P.line }}
+            >
+              <h2
+                className="font-display text-lg font-bold"
+                style={{ color: P.pine }}
+              >
                 3. Where do we send it?
               </h2>
               <div className="mt-4 grid gap-5 sm:grid-cols-2">
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-bold" style={{ color: P.ink }}>Your name</span>
+                  <span className="text-sm font-bold" style={{ color: P.ink }}>
+                    Your name
+                  </span>
                   <input
                     autoComplete="name"
                     maxLength={120}
                     className={inputClass}
                     style={{ borderColor: P.line }}
                     value={form.name}
-                    onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
+                    onChange={event =>
+                      setForm(prev => ({ ...prev, name: event.target.value }))
+                    }
                   />
                 </label>
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-bold" style={{ color: P.ink }}>Email (we'll send your estimate here)</span>
+                  <span className="text-sm font-bold" style={{ color: P.ink }}>
+                    Email (we'll send your estimate here)
+                  </span>
                   <input
                     type="email"
                     autoComplete="email"
@@ -584,11 +719,15 @@ export default function InstantEstimatePage() {
                     className={inputClass}
                     style={{ borderColor: P.line }}
                     value={form.email}
-                    onChange={event => setForm(prev => ({ ...prev, email: event.target.value }))}
+                    onChange={event =>
+                      setForm(prev => ({ ...prev, email: event.target.value }))
+                    }
                   />
                 </label>
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-bold" style={{ color: P.ink }}>Phone (we'll call/text to confirm)</span>
+                  <span className="text-sm font-bold" style={{ color: P.ink }}>
+                    Phone (we'll call/text to confirm)
+                  </span>
                   <input
                     type="tel"
                     autoComplete="tel"
@@ -597,12 +736,17 @@ export default function InstantEstimatePage() {
                     className={inputClass}
                     style={{ borderColor: P.line }}
                     value={form.phone}
-                    onChange={event => setForm(prev => ({ ...prev, phone: event.target.value }))}
+                    onChange={event =>
+                      setForm(prev => ({ ...prev, phone: event.target.value }))
+                    }
                   />
                 </label>
                 <label className="flex flex-col gap-1.5">
                   <span className="text-sm font-bold" style={{ color: P.ink }}>
-                    ZIP code <span className="font-normal" style={{ color: P.inkSoft }}>(optional)</span>
+                    ZIP code{" "}
+                    <span className="font-normal" style={{ color: P.inkSoft }}>
+                      (optional)
+                    </span>
                   </span>
                   <input
                     inputMode="numeric"
@@ -611,24 +755,34 @@ export default function InstantEstimatePage() {
                     className={inputClass}
                     style={{ borderColor: P.line }}
                     value={form.zip}
-                    onChange={event => setForm(prev => ({ ...prev, zip: event.target.value.replace(/\D/g, "") }))}
+                    onChange={event =>
+                      setForm(prev => ({
+                        ...prev,
+                        zip: event.target.value.replace(/\D/g, ""),
+                      }))
+                    }
                   />
                 </label>
               </div>
 
               <fieldset className="mt-5">
-                <legend className="text-sm font-bold" style={{ color: P.ink }}>When do you need it?</legend>
+                <legend className="text-sm font-bold" style={{ color: P.ink }}>
+                  When do you need it?
+                </legend>
                 <div className="mt-2 flex gap-2">
                   {TIMING_OPTIONS.map(option => (
                     <button
                       key={option}
                       type="button"
                       aria-pressed={form.timing === option}
-                      onClick={() => setForm(prev => ({ ...prev, timing: option }))}
+                      onClick={() =>
+                        setForm(prev => ({ ...prev, timing: option }))
+                      }
                       className="flex-1 rounded-xl border-2 px-3 py-3 text-sm font-bold transition-colors"
                       style={{
                         borderColor: form.timing === option ? P.pine : P.line,
-                        background: form.timing === option ? P.limeSoft : "transparent",
+                        background:
+                          form.timing === option ? P.limeSoft : "transparent",
                         color: P.ink,
                       }}
                     >
@@ -648,15 +802,25 @@ export default function InstantEstimatePage() {
               aria-hidden="true"
               className="absolute -left-[9999px] h-0 w-0 opacity-0"
               value={form.company}
-              onChange={event => setForm(prev => ({ ...prev, company: event.target.value }))}
+              onChange={event =>
+                setForm(prev => ({ ...prev, company: event.target.value }))
+              }
             />
 
-            <label className="flex items-start gap-3 rounded-xl border p-4" style={{ borderColor: P.line }}>
+            <label
+              className="flex items-start gap-3 rounded-xl border p-4"
+              style={{ borderColor: P.line }}
+            >
               <input
                 type="checkbox"
                 className="mt-0.5 h-5 w-5 shrink-0 accent-[#052a2b]"
                 checked={form.smsConsent}
-                onChange={event => setForm(prev => ({ ...prev, smsConsent: event.target.checked }))}
+                onChange={event =>
+                  setForm(prev => ({
+                    ...prev,
+                    smsConsent: event.target.checked,
+                  }))
+                }
               />
               <span className="text-sm font-bold" style={{ color: P.ink }}>
                 Text me about this quote from {BRAND_NAME} at {PHONE_DISPLAY}.{" "}
@@ -667,17 +831,34 @@ export default function InstantEstimatePage() {
             </label>
 
             <p className="text-xs leading-5" style={{ color: P.inkSoft }}>
-              By submitting, you agree to be contacted about your request. If you check the box above,
-              you consent to receive service-related text messages (quote, scheduling, and ETA updates)
-              from {BRAND_NAME}. Message frequency varies; message and data rates may apply. Reply STOP
-              to opt out or HELP for help. Consent is not a condition of purchase. See our{" "}
-              <Link href="/terms" className="font-semibold underline" style={{ color: P.pine }}>Terms</Link>{" "}
+              By submitting, you agree to be contacted about your request. If
+              you check the box above, you consent to receive service-related
+              text messages (quote, scheduling, and ETA updates) from{" "}
+              {BRAND_NAME}. Message frequency varies; message and data rates may
+              apply. Reply STOP to opt out or HELP for help. Consent is not a
+              condition of purchase. See our{" "}
+              <Link
+                href="/terms"
+                className="font-semibold underline"
+                style={{ color: P.pine }}
+              >
+                Terms
+              </Link>{" "}
               and{" "}
-              <Link href="/privacy" className="font-semibold underline" style={{ color: P.pine }}>Privacy Policy</Link>.
+              <Link
+                href="/privacy"
+                className="font-semibold underline"
+                style={{ color: P.pine }}
+              >
+                Privacy Policy
+              </Link>
+              .
             </p>
 
             {validationError && (
-              <p role="alert" className="text-sm font-semibold text-red-700">{validationError}</p>
+              <p role="alert" className="text-sm font-semibold text-red-700">
+                {validationError}
+              </p>
             )}
 
             <div className="flex flex-col items-start gap-4">
@@ -687,14 +868,10 @@ export default function InstantEstimatePage() {
                 className="rounded-xl px-10 py-4 text-lg font-bold shadow-lg transition-transform enabled:hover:scale-[1.03] disabled:opacity-60"
                 style={{ background: P.lime, color: P.pine }}
               >
-                {analyzing ? "Analyzing your photos…" : "Get my instant estimate"}
+                {analyzing
+                  ? "Analyzing your photos…"
+                  : "Get my instant estimate"}
               </button>
-              <p className="text-sm" style={{ color: P.inkSoft }}>
-                Prefer to talk?{" "}
-                <a href={PHONE_HREF} className="font-bold" style={{ color: P.pine }}>Call {PHONE_DISPLAY}</a>{" "}
-                or{" "}
-                <a href={SMS_HREF} className="font-bold" style={{ color: P.pine }}>text us a photo</a>.
-              </p>
             </div>
           </form>
         </div>
@@ -708,22 +885,22 @@ function Cta({ startOver }: { startOver: () => void }) {
     <>
       <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
         <a
-          href={PHONE_HREF}
+          href={BOOKING_URL}
+          target="_blank"
+          rel="noopener noreferrer"
           className="rounded-xl px-8 py-4 text-lg font-bold shadow-lg transition-transform hover:scale-[1.03]"
           style={{ background: P.pine, color: P.paper }}
         >
-          Call {PHONE_DISPLAY}
-        </a>
-        <a
-          href={SMS_HREF}
-          className="rounded-xl border-2 px-8 py-4 text-lg font-bold transition-transform hover:scale-[1.03]"
-          style={{ borderColor: P.pine, color: P.pine }}
-        >
-          Text us a photo
+          Book online
         </a>
       </div>
       <p className="mt-6 text-center text-sm" style={{ color: P.inkSoft }}>
-        <button type="button" onClick={startOver} className="font-bold underline" style={{ color: P.pine }}>
+        <button
+          type="button"
+          onClick={startOver}
+          className="font-bold underline"
+          style={{ color: P.pine }}
+        >
           Try the instant estimate again
         </button>
       </p>
@@ -735,7 +912,7 @@ function Cta({ startOver }: { startOver: () => void }) {
 function buildLeadSummary(
   analysis: VisionAnalysisResult | null,
   priced: PriceEstimate | null,
-  details: string,
+  details: string
 ): string {
   if (!analysis || !priced || analysis.itemBreakdown.length === 0) {
     return [

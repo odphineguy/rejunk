@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 
-import { NAV_ITEMS, PHONE_DISPLAY, PHONE_HREF } from "../content/site";
+import { BOOKING_URL, NAV_ITEMS } from "../content/site";
 import { PALETTE } from "../palette";
 
 const P = PALETTE;
 
 /**
- * Sticky white marketing header: logo, service-line nav, phone, and the lime
- * estimate CTA. Mobile gets a simple disclosure menu (no shadcn Sheet — keeps
+ * Sticky white marketing header: logo, service-line nav, and one booking CTA.
+ * Mobile gets a simple disclosure menu (no shadcn Sheet — keeps
  * the chunk light). The staff entrance lives in the footer.
  */
 export function SiteHeader() {
@@ -17,14 +17,22 @@ export function SiteHeader() {
 
   return (
     <header
-      className="sticky top-0 z-40 border-b backdrop-blur"
-      style={{ background: "rgba(255,255,255,0.92)", borderColor: P.line }}
+      className="sticky top-0 z-40 border-b bg-[#f8faf7]/95 backdrop-blur"
+      style={{ borderColor: P.line }}
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3 md:px-8">
-        <Link href="/" aria-label="Progressive Transportation Services home" onClick={() => setOpen(false)}>
+        <Link
+          href="/"
+          aria-label="Progressive Transportation Services home"
+          onClick={() => setOpen(false)}
+        >
           {/* progressive-logo.png: cropped wordmark (swoosh + road underline) on white,
               for the white marketing header. */}
-          <img src="/progressive-logo.png" alt="Progressive Transportation Services" className="h-12 w-auto md:h-14" />
+          <img
+            src="/progressive-logo.png"
+            alt="Progressive Transportation Services"
+            className="h-12 w-auto md:h-14"
+          />
         </Link>
 
         <nav className="hidden items-center gap-6 md:flex" aria-label="Main">
@@ -48,23 +56,20 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-3">
           <a
-            href={PHONE_HREF}
-            className="hidden text-sm font-bold lg:block"
-            style={{ color: P.pine }}
-          >
-            {PHONE_DISPLAY}
-          </a>
-          {/* Top-right CTA is the AI Instant Estimate (the photo-based price
-              tool). The plain "Get a Free Estimate" callback flow lives in the
-              hero + footer, so this isn't a duplicate of it. */}
-          <Link
-            href="/instant-estimate"
-            className="rounded-xl px-4 py-2.5 text-sm font-bold shadow-sm transition-transform hover:scale-[1.03]"
+            href={BOOKING_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group inline-flex min-h-11 items-stretch overflow-hidden rounded-[0.35rem] text-sm font-bold shadow-sm transition-transform hover:-translate-y-0.5"
             style={{ background: P.lime, color: P.pine }}
           >
-            <span className="sm:hidden">AI Estimate</span>
-            <span className="hidden sm:inline">AI Instant Estimate</span>
-          </Link>
+            <span className="flex items-center px-4">Book online</span>
+            <span
+              className="hidden w-10 items-center justify-center border-l border-[#052a2b]/15 transition-transform group-hover:translate-x-0.5 sm:flex"
+              aria-hidden="true"
+            >
+              ↗
+            </span>
+          </a>
           <button
             type="button"
             className="rounded-lg border p-2 md:hidden"
@@ -73,11 +78,27 @@ export function SiteHeader() {
             aria-label={open ? "Close menu" : "Open menu"}
             onClick={() => setOpen(value => !value)}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+            >
               {open ? (
-                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path
+                  d="M6 6l12 12M18 6L6 18"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
               ) : (
-                <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path
+                  d="M4 7h16M4 12h16M4 17h16"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
               )}
             </svg>
           </button>
@@ -104,32 +125,15 @@ export function SiteHeader() {
               </li>
             ))}
             <li>
-              <Link
-                href="/instant-estimate"
-                className="mt-1 block rounded-lg px-3 py-3 text-center text-base font-bold"
-                style={{ background: P.lime, color: P.pine }}
-                onClick={() => setOpen(false)}
-              >
-                AI Instant Estimate
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/estimate"
-                className="block rounded-lg px-3 py-3 text-base font-semibold"
-                style={{ color: P.ink }}
-                onClick={() => setOpen(false)}
-              >
-                Get a Free Estimate
-              </Link>
-            </li>
-            <li>
               <a
-                href={PHONE_HREF}
-                className="block rounded-lg px-3 py-3 text-base font-bold"
-                style={{ color: P.pine }}
+                href={BOOKING_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 flex items-center justify-between rounded-[0.35rem] px-4 py-3 text-base font-bold"
+                style={{ background: P.lime, color: P.pine }}
               >
-                Call {PHONE_DISPLAY}
+                <span>Book online</span>
+                <span aria-hidden="true">↗</span>
               </a>
             </li>
           </ul>

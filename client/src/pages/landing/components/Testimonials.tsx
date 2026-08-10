@@ -1,57 +1,83 @@
 import { TESTIMONIALS, type Testimonial } from "../content/testimonials";
+import { THUMBTACK_PROOF } from "../content/site";
 import { PALETTE } from "../palette";
 import { Reveal } from "./Reveal";
 
 const P = PALETTE;
 
-/** Real customer review cards, filtered by page tag — see testimonials.ts. */
+/** Real Thumbtack reviews presented as editorial proof rather than card tiles. */
 export function Testimonials({ tag }: { tag: Testimonial["tags"][number] }) {
-  const items = TESTIMONIALS.filter(t => t.tags.includes(tag)).slice(0, 3);
+  const items = TESTIMONIALS.filter(testimonial =>
+    testimonial.tags.includes(tag)
+  ).slice(0, 3);
   if (items.length === 0) return null;
 
   return (
-    <section className="px-5 py-14 md:px-8 md:py-20">
+    <section
+      className="px-5 py-16 md:px-8 md:py-24"
+      style={{ background: P.pine, color: P.paper }}
+    >
       <div className="mx-auto max-w-6xl">
         <Reveal>
-          <h2 className="font-display text-3xl font-bold tracking-tight md:text-4xl" style={{ color: P.pine }}>
-            What neighbors say
-          </h2>
-        </Reveal>
-        <div className="mt-8 grid gap-5 md:grid-cols-3">
-          {items.map((item, index) => (
-            <Reveal key={item.name} delay={index * 0.08}>
-              <figure
-                className="flex h-full flex-col justify-between rounded-2xl border p-6"
-                style={{ borderColor: P.line, background: P.mist }}
+          <div
+            className="grid gap-7 border-b pb-8 md:grid-cols-[1fr_auto] md:items-end"
+            style={{ borderColor: P.pineLine }}
+          >
+            <div>
+              <h2 className="font-display max-w-xl text-4xl font-bold tracking-tight md:text-5xl">
+                Five stars from people who hired us.
+              </h2>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 md:justify-end">
+              <span className="bg-[#1aa67a] px-2.5 py-1 text-[0.66rem] font-extrabold uppercase tracking-[0.16em] text-white">
+                {THUMBTACK_PROOF.badge}
+              </span>
+              <span
+                className="font-bold"
+                style={{ color: P.lime }}
+                aria-label="5 out of 5 stars"
               >
-                <div>
-                  <div
-                    className="flex gap-0.5"
-                    role="img"
-                    aria-label={`${item.stars} out of 5 stars`}
+                ★★★★★
+              </span>
+              <span className="text-sm" style={{ color: P.paperSoft }}>
+                {THUMBTACK_PROOF.rating} · {THUMBTACK_PROOF.reviews} ·{" "}
+                {THUMBTACK_PROOF.hires}
+              </span>
+            </div>
+          </div>
+        </Reveal>
+
+        <div
+          className={`grid ${items.length > 1 ? "md:grid-cols-3" : "max-w-3xl"}`}
+        >
+          {items.map((item, index) => (
+            <Reveal
+              key={`${item.name}-${item.quote}`}
+              delay={index * 0.08}
+              className="h-full"
+            >
+              <figure
+                className={`flex h-full flex-col py-8 ${index < items.length - 1 ? "border-b md:border-b-0" : ""} ${items.length > 1 && index > 0 ? "md:border-l md:pl-10" : ""} ${items.length > 1 && index < items.length - 1 ? "md:pr-10" : ""}`}
+                style={{ borderColor: P.pineLine }}
+              >
+                <span
+                  className="text-sm tracking-[0.12em]"
+                  style={{ color: P.lime }}
+                  aria-hidden="true"
+                >
+                  ★★★★★
+                </span>
+                <blockquote className="mt-5 flex-1 text-lg leading-relaxed text-[#eef4ef]">
+                  “{item.quote}”
+                </blockquote>
+                <figcaption className="mt-6">
+                  <span className="font-bold text-[#f4f7f2]">{item.name}</span>
+                  <span
+                    className="mt-1 block text-sm"
+                    style={{ color: P.paperSoft }}
                   >
-                    {Array.from({ length: item.stars }, (_, starIndex) => (
-                      <svg
-                        key={starIndex}
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                        style={{ color: P.pine }}
-                      >
-                        <path
-                          fill="currentColor"
-                          d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-                        />
-                      </svg>
-                    ))}
-                  </div>
-                  <blockquote className="mt-3 text-sm leading-relaxed" style={{ color: P.ink }}>
-                    “{item.quote}”
-                  </blockquote>
-                </div>
-                <figcaption className="mt-4 text-sm font-semibold" style={{ color: P.pine }}>
-                  {item.name} <span style={{ color: P.inkSoft }}>· {item.area}</span>
+                    {item.area}
+                  </span>
                 </figcaption>
               </figure>
             </Reveal>

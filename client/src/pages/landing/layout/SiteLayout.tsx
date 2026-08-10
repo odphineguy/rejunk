@@ -15,7 +15,10 @@ const P = PALETTE;
 export function SiteLayout({ children }: { children: ReactNode }) {
   return (
     <LazyMotion features={domAnimation} strict>
-      <div className="min-h-dvh" style={{ background: P.paperBg, color: P.ink }}>
+      <div
+        className="landing-shell min-h-dvh"
+        style={{ background: P.paperBg, color: P.ink }}
+      >
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:px-4 focus:py-2"

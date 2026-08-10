@@ -6,15 +6,15 @@ const P = PALETTE;
 const STEPS = [
   {
     title: "Tell us what you need",
-    body: "Call, text a photo, or use the estimate form — whatever's easiest.",
+    body: "Use the online quote form and include any details that help us understand the job.",
   },
   {
     title: "Get a fast, firm quote",
-    body: "We quote by call or text, usually within the hour. The price you approve is the price you pay.",
+    body: "We review your request and confirm a clear price. The price you approve is the price you pay.",
   },
   {
     title: "We show up and handle it",
-    body: "On time, in uniform, done carefully — and everything routed to the right facility.",
+    body: "On time, in uniform, and careful with your home. We finish the job before we call it done.",
   },
 ];
 
@@ -22,33 +22,42 @@ const STEPS = [
 export function HowItWorks() {
   return (
     <section className="px-5 py-14 md:px-8 md:py-20">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[0.75fr_1.25fr] lg:gap-20">
         <Reveal>
-          <h2 className="font-display text-3xl font-bold tracking-tight md:text-4xl" style={{ color: P.pine }}>
-            How it works
-          </h2>
+          <div>
+            <h2
+              className="font-display max-w-sm text-4xl font-bold tracking-tight md:text-5xl"
+              style={{ color: P.pine }}
+            >
+              One conversation. One clear plan.
+            </h2>
+          </div>
         </Reveal>
-        <ol className="mt-8 grid gap-6 md:grid-cols-3">
+        <div className="flex flex-col">
           {STEPS.map((step, index) => (
             <Reveal key={step.title} delay={index * 0.08}>
-              <li className="flex h-full flex-col rounded-2xl border p-6" style={{ borderColor: P.line }}>
-                <span
-                  className="font-display flex h-10 w-10 items-center justify-center rounded-full text-lg font-bold"
-                  style={{ background: P.lime, color: P.pine }}
-                  aria-hidden="true"
-                >
-                  {index + 1}
-                </span>
-                <h3 className="font-display mt-4 text-lg font-bold" style={{ color: P.ink }}>
-                  {step.title}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed" style={{ color: P.inkSoft }}>
-                  {step.body}
-                </p>
-              </li>
+              <article
+                className="border-t py-6"
+                style={{ borderColor: P.line }}
+              >
+                <div>
+                  <h3
+                    className="font-display text-xl font-bold"
+                    style={{ color: P.ink }}
+                  >
+                    {step.title}
+                  </h3>
+                  <p
+                    className="mt-2 max-w-lg text-[0.95rem] leading-relaxed"
+                    style={{ color: P.inkSoft }}
+                  >
+                    {step.body}
+                  </p>
+                </div>
+              </article>
             </Reveal>
           ))}
-        </ol>
+        </div>
       </div>
     </section>
   );

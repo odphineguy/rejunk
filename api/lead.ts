@@ -13,7 +13,7 @@
 
 import { Resend } from "resend";
 
-const ALLOWED_SERVICES = ["Junk Removal", "Moving", "Assembly & Handyman"] as const;
+const ALLOWED_SERVICES = ["Junk Removal", "Moving", "Assembly"] as const;
 
 // TODO: set LEAD_TO in the Vercel env — falls back to the owner.
 const DEFAULT_LEAD_TO = "abe@saguarotransport.com";
@@ -30,7 +30,9 @@ const DEFAULT_FROM_ADDRESS = "onboarding@resend.dev";
 function leadFromAddress(): string {
   const configured = process.env.RESEND_FROM ?? "";
   const inAngles = configured.match(/<([^>]+)>/)?.[1];
-  const address = inAngles ?? (configured.includes("@") ? configured.trim() : DEFAULT_FROM_ADDRESS);
+  const address =
+    inAngles ??
+    (configured.includes("@") ? configured.trim() : DEFAULT_FROM_ADDRESS);
   return `${LEAD_FROM_NAME} <${address}>`;
 }
 
@@ -52,26 +54,58 @@ interface LeadPayload {
 
 function validateLeadPayload(body: unknown): LeadPayload | null {
   if (!body || typeof body !== "object") return null;
-  const { services, details, zip, timing, name, phone, email, smsConsent, company, source, aiSummary } =
-    body as Record<string, unknown>;
+  const {
+    services,
+    details,
+    zip,
+    timing,
+    name,
+    phone,
+    email,
+    smsConsent,
+    company,
+    source,
+    aiSummary,
+  } = body as Record<string, unknown>;
 
-  if (!Array.isArray(services) || services.length === 0 || services.length > 3) return null;
+  if (!Array.isArray(services) || services.length === 0 || services.length > 3)
+    return null;
   const cleanServices = services.filter(
-    (s): s is string => typeof s === "string" && (ALLOWED_SERVICES as readonly string[]).includes(s),
+    (s): s is string =>
+      typeof s === "string" &&
+      (ALLOWED_SERVICES as readonly string[]).includes(s)
   );
   if (cleanServices.length !== services.length) return null;
 
-  if (typeof name !== "string" || !name.trim() || name.length > 120) return null;
-  if (typeof phone !== "string" || !/^[\d\s()+.-]{7,20}$/.test(phone.trim())) return null;
-  if (email !== undefined && (typeof email !== "string" || email.length > 200)) return null;
-  if (typeof email === "string" && email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return null;
-  if (zip !== undefined && (typeof zip !== "string" || (zip !== "" && !/^\d{5}$/.test(zip)))) return null;
+  if (typeof name !== "string" || !name.trim() || name.length > 120)
+    return null;
+  if (typeof phone !== "string" || !/^[\d\s()+.-]{7,20}$/.test(phone.trim()))
+    return null;
+  if (email !== undefined && (typeof email !== "string" || email.length > 200))
+    return null;
+  if (
+    typeof email === "string" &&
+    email.trim() &&
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+  )
+    return null;
+  if (
+    zip !== undefined &&
+    (typeof zip !== "string" || (zip !== "" && !/^\d{5}$/.test(zip)))
+  )
+    return null;
   if (typeof timing !== "string" || timing.length > 40) return null;
 
   const cleanDetails: Record<string, string> = {};
   if (details && typeof details === "object") {
-    for (const [key, value] of Object.entries(details as Record<string, unknown>)) {
-      if (cleanServices.includes(key) && typeof value === "string" && value.trim()) {
+    for (const [key, value] of Object.entries(
+      details as Record<string, unknown>
+    )) {
+      if (
+        cleanServices.includes(key) &&
+        typeof value === "string" &&
+        value.trim()
+      ) {
         cleanDetails[key] = value.slice(0, 1000);
       }
     }
@@ -88,7 +122,8 @@ function validateLeadPayload(body: unknown): LeadPayload | null {
     smsConsent: smsConsent === true,
     isBot: typeof company === "string" && company.trim().length > 0,
     source: typeof source === "string" ? source.slice(0, 60).trim() : "",
-    aiSummary: typeof aiSummary === "string" ? aiSummary.slice(0, 4000).trim() : "",
+    aiSummary:
+      typeof aiSummary === "string" ? aiSummary.slice(0, 4000).trim() : "",
   };
 }
 
@@ -103,7 +138,9 @@ function escapeHtml(value: string): string {
 /** Heading/subject label — distinguishes the AI photo estimator from the
  * regular callback form so the owner can tell at a glance which arrived. */
 function leadKindLabel(lead: LeadPayload): string {
-  return lead.source === "AI Estimate" || lead.aiSummary ? "New AI estimate lead" : "New website lead";
+  return lead.source === "AI Estimate" || lead.aiSummary
+    ? "New AI estimate lead"
+    : "New website lead";
 }
 
 function buildLeadEmailHtml(lead: LeadPayload): string {
@@ -161,7 +198,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const body = typeof req.body === "string" ? safeParse(req.body) : req.body;
   const lead = validateLeadPayload(body);
   if (!lead) {
-    res.status(400).json({ error: "A name, phone number, and at least one service are required." });
+    res
+      .status(400)
+      .json({
+        error: "A name, phone number, and at least one service are required.",
+      });
     return;
   }
   // Honeypot hit: pretend success so bots don't learn the field exists.
@@ -171,7 +212,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    res.status(502).json({ error: "RESEND_API_KEY is not configured on the server." });
+    res
+      .status(502)
+      .json({ error: "RESEND_API_KEY is not configured on the server." });
     return;
   }
   try {
@@ -189,7 +232,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     res.status(200).json({ sent: true });
   } catch (error) {
-    res.status(502).json({ error: error instanceof Error ? error.message : String(error) });
+    res
+      .status(502)
+      .json({ error: error instanceof Error ? error.message : String(error) });
   }
 }
 

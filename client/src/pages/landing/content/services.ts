@@ -5,7 +5,6 @@
  */
 
 import type { ImageBriefId } from "./imageBriefs";
-import { PHONE_DISPLAY } from "./site";
 
 export interface QuickAnswer {
   title: string;
@@ -36,7 +35,6 @@ export interface ServiceContent {
   slug: "junk-removal" | "moving" | "assembly-handyman";
   name: string;
   metaKey: "junk" | "moving" | "assembly";
-  heroKicker: string;
   heroTitle: string;
   heroSub: string;
   heroImageId: ImageBriefId;
@@ -52,11 +50,10 @@ export const SERVICES: Record<ServiceContent["slug"], ServiceContent> = {
     slug: "junk-removal",
     name: "Junk Removal",
     metaKey: "junk",
-    heroKicker: "Junk removal & hauling",
-    heroTitle: "Junk out. Space back.",
+    heroTitle: "Clear the clutter. Keep the space.",
     heroSub:
-      "Single items or whole-house cleanouts, hauled across the Phoenix valley — usually the same day you call. We do the lifting, the loading, and the sweep-up.",
-    heroImageId: "junk-hero",
+      "From one heavy sofa to a packed garage, our crew lifts, loads, and sweeps up. You approve the price before anything moves.",
+    heroImageId: "home-svc-junk",
     quickAnswers: [
       {
         title: "How much does it cost?",
@@ -64,7 +61,7 @@ export const SERVICES: Record<ServiceContent["slug"], ServiceContent> = {
       },
       {
         title: "What do you take?",
-        body: "Furniture, appliances, mattresses, yard debris, garage and estate cleanouts, e-waste, hot tubs — if two people can move it, we can probably haul it.",
+        body: "Furniture, appliances, mattresses, yard debris, garage and estate cleanouts, e-waste, and hot tubs. If two people can move it, we can probably haul it.",
       },
       {
         title: "How soon can you come?",
@@ -73,24 +70,45 @@ export const SERVICES: Record<ServiceContent["slug"], ServiceContent> = {
     ],
     subServicesTitle: "Popular junk removal jobs",
     subServices: [
-      { title: "Furniture removal", blurb: "Sofas, sectionals, dressers, desks — gone without a wall scuff." },
-      { title: "Appliance haul-away", blurb: "Fridges, washers, dryers, and water heaters, recycled the right way." },
-      { title: "Mattress disposal", blurb: "Mattresses and box springs picked up from any room in the house." },
-      { title: "Garage cleanouts", blurb: "Years of stacked-up stuff sorted, loaded, and swept out in one visit." },
-      { title: "Estate cleanouts", blurb: "Respectful, thorough whole-home cleanouts on your schedule." },
-      { title: "Yard debris", blurb: "Branches, palm fronds, rock, and storm cleanup — routed to green-waste sites." },
-      { title: "Hot tub removal", blurb: "Cut down, hauled off, and the pad left clean." },
-      { title: "E-waste pickup", blurb: "TVs, monitors, and electronics to certified recyclers, never the landfill." },
+      {
+        title: "Furniture removal",
+        blurb:
+          "Sofas, sectionals, dressers, desks — gone without a wall scuff.",
+      },
+      {
+        title: "Appliance haul-away",
+        blurb:
+          "Fridges, washers, dryers, and water heaters, recycled the right way.",
+      },
+      {
+        title: "Mattress disposal",
+        blurb:
+          "Mattresses and box springs picked up from any room in the house.",
+      },
+      {
+        title: "Garage cleanouts",
+        blurb:
+          "Years of stacked-up stuff sorted, loaded, and swept out in one visit.",
+      },
+      {
+        title: "Estate cleanouts",
+        blurb: "Respectful, thorough whole-home cleanouts on your schedule.",
+      },
+      {
+        title: "Yard debris",
+        blurb:
+          "Branches, palm fronds, rock, and storm cleanup — routed to green-waste sites.",
+      },
+      {
+        title: "Hot tub removal",
+        blurb: "Cut down, hauled off, and the pad left clean.",
+      },
+      {
+        title: "E-waste pickup",
+        blurb:
+          "TVs, monitors, and electronics to certified recyclers, never the landfill.",
+      },
     ],
-    extra: {
-      kicker: "Eco-friendly disposal",
-      title: "Donate first. Recycle second. Landfill last.",
-      paragraphs: [
-        "Most haulers drive straight to the dump because it's easy. We don't — our founder spent 17 years in waste collection at Waste Management and knows every recycling, donation, and disposal facility across the Phoenix metro.",
-        "Usable furniture goes to donation. Metal goes to the scrap yard. Green waste gets composted, electronics go to certified recyclers, and only what's truly waste goes to the landfill.",
-      ],
-      imageId: "junk-eco",
-    },
     faqs: [
       {
         q: "What can't you take?",
@@ -115,10 +133,9 @@ export const SERVICES: Record<ServiceContent["slug"], ServiceContent> = {
     slug: "moving",
     name: "Moving",
     metaKey: "moving",
-    heroKicker: "Local moving & delivery",
-    heroTitle: "Moved like it's ours.",
+    heroTitle: "A careful move, without the runaround.",
     heroSub:
-      "Local moves, in-home furniture shuffles, and single big-item deliveries across the Phoenix valley. Padded, strapped, and placed where you want it.",
+      "Apartments, homes, in-home furniture moves, and single-item deliveries. We pad it, secure it, and place it exactly where you want it.",
     heroImageId: "moving-hero",
     quickAnswers: [
       {
@@ -136,12 +153,30 @@ export const SERVICES: Record<ServiceContent["slug"], ServiceContent> = {
     ],
     subServicesTitle: "Moving services we offer",
     subServices: [
-      { title: "Local moves", blurb: "Apartment and house moves anywhere in the Phoenix metro." },
-      { title: "In-home furniture moves", blurb: "Rearranging rooms, swapping floors, staging for sale." },
-      { title: "Big-item delivery", blurb: "Bought a couch across town? We'll pick it up and place it." },
-      { title: "Loading & unloading", blurb: "Your truck or storage unit, our backs and straps." },
-      { title: "Senior downsizing", blurb: "Patient, unhurried moves into smaller homes or communities." },
-      { title: "Stairs, no problem", blurb: "Apartment walk-ups and split-levels handled carefully." },
+      {
+        title: "Local moves",
+        blurb: "Apartment and house moves anywhere in the Phoenix metro.",
+      },
+      {
+        title: "In-home furniture moves",
+        blurb: "Rearranging rooms, swapping floors, staging for sale.",
+      },
+      {
+        title: "Big-item delivery",
+        blurb: "Bought a couch across town? We'll pick it up and place it.",
+      },
+      {
+        title: "Loading & unloading",
+        blurb: "Your truck or storage unit, our backs and straps.",
+      },
+      {
+        title: "Senior downsizing",
+        blurb: "Patient, unhurried moves into smaller homes or communities.",
+      },
+      {
+        title: "Stairs, no problem",
+        blurb: "Apartment walk-ups and split-levels handled carefully.",
+      },
     ],
     faqs: [
       {
@@ -165,48 +200,71 @@ export const SERVICES: Record<ServiceContent["slug"], ServiceContent> = {
 
   "assembly-handyman": {
     slug: "assembly-handyman",
-    name: "Assembly & Handyman",
+    name: "Assembly",
     metaKey: "assembly",
-    heroKicker: "Assembly & handyman",
-    heroTitle: "Built, mounted, fixed.",
+    heroTitle: "Out of the box. Built to last.",
     heroSub:
-      "Furniture assembly, TV mounting, and the small jobs around the house — done patiently and done right. We specialize in serving Phoenix seniors, and we help everyone.",
+      "Beds, dressers, desks, shelving, outdoor sets, and more — assembled carefully, leveled, and ready to use before we leave.",
     heroImageId: "assembly-hero",
     quickAnswers: [
       {
         title: "What does it cost?",
-        body: "Straightforward flat rates for common jobs like furniture assembly and TV mounting, quoted before we start. No hourly meter running while we work.",
+        body: "Common furniture builds are quoted at a straightforward flat rate before we start. No hourly meter running while we work.",
       },
       {
         title: "Do you work with seniors?",
-        body: "It's our specialty. Patient, unhurried visits, clear communication, and booking by phone — no apps required.",
+        body: "Yes. Expect a patient visit, clear communication, and help moving the finished piece into place. A family member can book online on their behalf.",
       },
       {
         title: "What jobs do you take?",
-        body: "Flat-pack assembly, mounting, grab bars, shelves and pictures, door hardware, and small repairs. If it's a small job done carefully, that's us.",
+        body: "Flat-pack furniture, bed frames, dressers, desks, shelving units, dining sets, patio furniture, and exercise equipment.",
       },
     ],
-    subServicesTitle: "Assembly & handyman services",
+    subServicesTitle: "What we assemble",
     subServices: [
-      { title: "Furniture assembly", blurb: "Flat-pack beds, dressers, desks, and shelving built square and solid." },
-      { title: "TV mounting", blurb: "Mounted level, anchored right, cables tidied." },
-      { title: "Grab bars & safety rails", blurb: "Bathroom and hallway safety installs, anchored into studs." },
-      { title: "Pictures & shelves", blurb: "Hung straight the first time, heavy mirrors included." },
-      { title: "Door & hardware fixes", blurb: "Sticking doors, loose handles, new locksets." },
-      { title: "Small repairs", blurb: "The honey-do list, knocked out in one visit." },
+      {
+        title: "Furniture assembly",
+        blurb:
+          "Flat-pack beds, dressers, desks, and shelving built square and solid.",
+      },
+      {
+        title: "Bedroom furniture",
+        blurb:
+          "Bed frames, nightstands, wardrobes, and storage beds assembled and leveled.",
+      },
+      {
+        title: "Office furniture",
+        blurb:
+          "Desks, chairs, filing cabinets, and workstations ready for the workday.",
+      },
+      {
+        title: "Patio furniture",
+        blurb:
+          "Outdoor dining sets, loungers, benches, and storage boxes built for the Arizona sun.",
+      },
+      {
+        title: "Shelving & storage",
+        blurb:
+          "Bookcases, cube storage, utility racks, and cabinets assembled securely.",
+      },
+      {
+        title: "Exercise equipment",
+        blurb:
+          "Benches, racks, bikes, and home-gym equipment assembled from the manual.",
+      },
     ],
     extra: {
       kicker: "Senior-friendly service",
       title: "Proudly serving Phoenix seniors.",
       paragraphs: [
-        "A lot of our assembly and handyman work is for older adults — and we built the service around that. Our crew takes the time to explain what we're doing, works at your pace, and treats your home with respect.",
-        "Book by phone, not an app. We confirm before we arrive, show up when we say we will, and don't leave until you've seen the finished work and you're happy with it. And of course — we do assembly and handyman work for everyone.",
+        "A lot of our assembly work is for older adults, so patience is part of the service. We explain the plan, work at your pace, and treat your home with respect.",
+        "Book online and we’ll confirm before we arrive. We do not leave until the finished piece is stable, placed correctly, and ready to use.",
       ],
       bullets: [
         "Patient, unhurried visits — no rushing",
         "Plain-language explanations, no jargon",
-        "Phone booking and reminders — no app needed",
-        "Grab bars and safety installs are a specialty",
+        "Online booking and appointment reminders",
+        "Finished furniture placed where you want it",
       ],
       imageId: "assembly-seniors",
       largeType: true,
@@ -214,7 +272,7 @@ export const SERVICES: Record<ServiceContent["slug"], ServiceContent> = {
     faqs: [
       {
         q: "Is there a minimum charge?",
-        a: `Yes — small jobs start at a flat visit minimum so we can send the right person with the right tools. You'll get the exact price when you call ${PHONE_DISPLAY}.`,
+        a: "Yes — small jobs start at a flat visit minimum so we can send the right person with the right tools. You’ll get the exact price before the appointment.",
       },
       {
         q: "Can you help my parents if I'm not there?",
@@ -222,7 +280,7 @@ export const SERVICES: Record<ServiceContent["slug"], ServiceContent> = {
       },
       {
         q: "Do you bring the tools?",
-        a: "Everything. Drills, levels, anchors, hardware — you just point at the boxes.",
+        a: "Yes. We bring the everyday tools needed for assembly. Keep the manufacturer-supplied parts and hardware with the boxes so we can get straight to work.",
       },
       {
         q: "Furniture from any store?",

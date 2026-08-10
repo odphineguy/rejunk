@@ -1,5 +1,5 @@
 /* Rejunk Field Ops theme — warm canvas + deep pine + lime (logo #052a2b / #83e282) */
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=Source+Sans+3:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap");
 
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -7,8 +7,8 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  --font-sans: 'Manrope', system-ui, sans-serif;
-  --font-display: 'Space Grotesk', sans-serif;
+  --font-sans: "Manrope", system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
 }
 
 @theme inline {
@@ -103,8 +103,10 @@
   --pine-text-dim: #54756a;
   --line-strong: #cfcaba;
   --amber: #c98b3c;
-  --shadow-card: 0 1px 2px rgba(27, 31, 23, 0.05), 0 4px 14px -6px rgba(27, 31, 23, 0.08);
-  --shadow-pop: 0 8px 30px -8px rgba(5, 42, 43, 0.35), 0 2px 8px rgba(5, 42, 43, 0.12);
+  --shadow-card:
+    0 1px 2px rgba(27, 31, 23, 0.05), 0 4px 14px -6px rgba(27, 31, 23, 0.08);
+  --shadow-pop:
+    0 8px 30px -8px rgba(5, 42, 43, 0.35), 0 2px 8px rgba(5, 42, 43, 0.12);
 }
 
 .dark {
@@ -140,7 +142,8 @@
   --sidebar-accent-foreground: #ecf6e4;
   --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: #83e282;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px -6px rgba(0, 0, 0, 0.4);
+  --shadow-card:
+    0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px -6px rgba(0, 0, 0, 0.4);
   --line-strong: #2a443f;
 }
 
@@ -155,11 +158,16 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
-    font-family: 'Manrope', system-ui, sans-serif;
+    font-family: "Manrope", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  h1, h2, h3, h4, h5, h6 {
-    font-family: 'Space Grotesk', sans-serif;
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: "Space Grotesk", sans-serif;
     font-weight: 700;
     letter-spacing: -0.02em;
   }
@@ -186,6 +194,18 @@
 }
 
 @layer components {
+  .landing-shell {
+    font-family: "Source Sans 3", sans-serif;
+  }
+
+  .landing-shell h1,
+  .landing-shell h2,
+  .landing-shell h3,
+  .landing-shell h4,
+  .landing-shell .font-display {
+    font-family: "Barlow Condensed", sans-serif;
+  }
+
   /**
    * Custom container utility that centers content and adds responsive padding.
    *
@@ -230,8 +250,16 @@
   /* Dark pine sidebar surface: faint lime glow + vertical pine fade + texture */
   .sidebar-pine {
     background:
-      repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.012) 0 2px, transparent 2px 6px),
-      radial-gradient(420px 260px at -30% -5%, rgba(131, 226, 130, 0.09), transparent 60%),
+      repeating-linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.012) 0 2px,
+        transparent 2px 6px
+      ),
+      radial-gradient(
+        420px 260px at -30% -5%,
+        rgba(131, 226, 130, 0.09),
+        transparent 60%
+      ),
       linear-gradient(180deg, #063133 0%, #03191a 100%);
   }
 
@@ -264,7 +292,9 @@
   }
   .kpi-card:hover {
     transform: translateY(-3px);
-    box-shadow: 0 2px 4px rgba(27, 31, 23, 0.05), 0 14px 28px -10px rgba(27, 31, 23, 0.14);
+    box-shadow:
+      0 2px 4px rgba(27, 31, 23, 0.05),
+      0 14px 28px -10px rgba(27, 31, 23, 0.14);
     border-color: var(--line-strong);
   }
   .kpi-card::after {
@@ -282,7 +312,10 @@
     opacity: 1;
   }
   .kpi-ico {
-    transition: background 0.2s, color 0.2s, border-color 0.2s;
+    transition:
+      background 0.2s,
+      color 0.2s,
+      border-color 0.2s;
   }
   .kpi-card:hover .kpi-ico {
     background: var(--moss-deep);
@@ -305,7 +338,8 @@
     animation: pulse-dot 2.4s infinite;
   }
   @keyframes pulse-dot {
-    0%, 100% {
+    0%,
+    100% {
       opacity: 1;
     }
     50% {
