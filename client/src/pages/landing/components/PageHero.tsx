@@ -87,19 +87,33 @@ export function PageHero({
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Link
-                href={photoEstimate ? "/instant-estimate" : BOOKING_URL}
-                target={photoEstimate ? undefined : "_blank"}
-                rel={photoEstimate ? undefined : "noopener noreferrer"}
-                className="group inline-flex min-h-14 items-stretch overflow-hidden rounded-[0.4rem] bg-[#83e282] font-bold text-[#052a2b] shadow-[0_14px_34px_rgba(0,0,0,.24)] transition-transform duration-300 hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#83e282]"
-              >
-                <span className="flex items-center px-6">
-                  {photoEstimate ? "Get a photo estimate" : "Book your service"}
-                </span>
-                <span className="flex w-14 items-center justify-center border-l border-[#052a2b]/15 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
-                  <ArrowGlyph />
-                </span>
-              </Link>
+              {photoEstimate ? (
+                <Link
+                  href="/instant-estimate"
+                  className="group inline-flex min-h-14 items-stretch overflow-hidden rounded-[0.4rem] bg-[#83e282] font-bold text-[#052a2b] shadow-[0_14px_34px_rgba(0,0,0,.24)] transition-transform duration-300 hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#83e282]"
+                >
+                  <span className="flex items-center px-6">
+                    Get a photo estimate
+                  </span>
+                  <span className="flex w-14 items-center justify-center border-l border-[#052a2b]/15 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
+                    <ArrowGlyph />
+                  </span>
+                </Link>
+              ) : (
+                <a
+                  href={BOOKING_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group inline-flex min-h-14 items-stretch overflow-hidden rounded-[0.4rem] bg-[#83e282] font-bold text-[#052a2b] shadow-[0_14px_34px_rgba(0,0,0,.24)] transition-transform duration-300 hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#83e282]"
+                >
+                  <span className="flex items-center px-6">
+                    Book your service
+                  </span>
+                  <span className="flex w-14 items-center justify-center border-l border-[#052a2b]/15 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
+                    <ArrowGlyph />
+                  </span>
+                </a>
+              )}
               {photoEstimate ? (
                 <a
                   href={BOOKING_URL}

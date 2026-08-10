@@ -56,22 +56,37 @@ export function CtaBanner({
               everything before the crew heads your way.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Link
-                href={photoEstimate ? "/instant-estimate" : BOOKING_URL}
-                target={photoEstimate ? undefined : "_blank"}
-                rel={photoEstimate ? undefined : "noopener noreferrer"}
-                className="group inline-flex min-h-14 items-stretch overflow-hidden rounded-[0.4rem] bg-[#83e282] font-bold text-[#052a2b] shadow-[0_14px_34px_rgba(0,0,0,.24)] transition-transform duration-300 hover:-translate-y-0.5"
-              >
-                <span className="flex items-center px-6">
-                  {photoEstimate ? "Get a photo estimate" : "Book online"}
-                </span>
-                <span
-                  className="flex w-14 items-center justify-center border-l border-[#052a2b]/15 text-lg transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
-                  aria-hidden="true"
+              {photoEstimate ? (
+                <Link
+                  href="/instant-estimate"
+                  className="group inline-flex min-h-14 items-stretch overflow-hidden rounded-[0.4rem] bg-[#83e282] font-bold text-[#052a2b] shadow-[0_14px_34px_rgba(0,0,0,.24)] transition-transform duration-300 hover:-translate-y-0.5"
                 >
-                  ↗
-                </span>
-              </Link>
+                  <span className="flex items-center px-6">
+                    Get a photo estimate
+                  </span>
+                  <span
+                    className="flex w-14 items-center justify-center border-l border-[#052a2b]/15 text-lg transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                    aria-hidden="true"
+                  >
+                    ↗
+                  </span>
+                </Link>
+              ) : (
+                <a
+                  href={BOOKING_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group inline-flex min-h-14 items-stretch overflow-hidden rounded-[0.4rem] bg-[#83e282] font-bold text-[#052a2b] shadow-[0_14px_34px_rgba(0,0,0,.24)] transition-transform duration-300 hover:-translate-y-0.5"
+                >
+                  <span className="flex items-center px-6">Book online</span>
+                  <span
+                    className="flex w-14 items-center justify-center border-l border-[#052a2b]/15 text-lg transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                    aria-hidden="true"
+                  >
+                    ↗
+                  </span>
+                </a>
+              )}
               {photoEstimate ? (
                 <a
                   href={BOOKING_URL}
