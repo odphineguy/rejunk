@@ -2,7 +2,7 @@ import { Link } from "wouter";
 
 import type { ImageBriefId } from "../content/imageBriefs";
 import { IMAGE_BRIEFS } from "../content/imageBriefs";
-import { BOOKING_URL, THUMBTACK_PROOF } from "../content/site";
+import { bookingUrl, THUMBTACK_PROOF } from "../content/site";
 import { Reveal } from "./Reveal";
 
 interface PageHeroProps {
@@ -101,7 +101,7 @@ export function PageHero({
                 </Link>
               ) : (
                 <a
-                  href={BOOKING_URL}
+                  href={bookingUrl("hero")}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="group inline-flex min-h-14 items-stretch overflow-hidden rounded-[0.4rem] bg-[#83e282] font-bold text-[#052a2b] shadow-[0_14px_34px_rgba(0,0,0,.24)] transition-transform duration-300 hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#83e282]"
@@ -116,7 +116,7 @@ export function PageHero({
               )}
               {photoEstimate ? (
                 <a
-                  href={BOOKING_URL}
+                  href={bookingUrl("hero-junk-removal")}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex min-h-14 items-center justify-center rounded-[0.4rem] border border-[#edf5ee]/35 bg-[#052a2b]/30 px-6 font-bold text-[#f4f7f2] transition-colors hover:border-[#edf5ee]/70 hover:bg-[#052a2b]/55"

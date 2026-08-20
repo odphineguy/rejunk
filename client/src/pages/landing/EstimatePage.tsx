@@ -5,7 +5,7 @@ import { saveClient } from "@/lib/clientStorage";
 
 import type { ImageBriefId } from "./content/imageBriefs";
 import {
-  BOOKING_URL,
+  bookingUrl,
   BRAND_NAME,
   PAGE_META,
   PHONE_DISPLAY,
@@ -613,7 +613,7 @@ export default function EstimatePage() {
               )}
               <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
                 <a
-                  href={BOOKING_URL}
+                  href={bookingUrl("estimate-form-thanks")}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="rounded-xl px-8 py-4 text-lg font-bold shadow-lg transition-transform hover:scale-[1.03]"

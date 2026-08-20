@@ -1,7 +1,7 @@
 import { HOME_FAQS } from "./home";
 import { SERVICES, type Faq } from "./services";
 import {
-  BOOKING_URL,
+  bookingUrl,
   BRAND_NAME,
   FACEBOOK_URL,
   GOOGLE_BUSINESS_URL,
@@ -184,7 +184,7 @@ function businessSchema() {
       name: "Book a service",
       target: {
         "@type": "EntryPoint",
-        urlTemplate: BOOKING_URL,
+        urlTemplate: bookingUrl("structured-data"),
       },
     },
   };

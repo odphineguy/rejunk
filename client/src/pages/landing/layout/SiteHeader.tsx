@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 
-import { BOOKING_URL, NAV_ITEMS } from "../content/site";
+import { bookingUrl, NAV_ITEMS } from "../content/site";
 import { PALETTE } from "../palette";
 
 const P = PALETTE;
@@ -56,7 +56,7 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-3">
           <a
-            href={BOOKING_URL}
+            href={bookingUrl("header")}
             target="_blank"
             rel="noopener noreferrer"
             className="group inline-flex min-h-11 items-stretch overflow-hidden rounded-[0.35rem] text-sm font-bold shadow-sm transition-transform hover:-translate-y-0.5"
@@ -126,7 +126,7 @@ export function SiteHeader() {
             ))}
             <li>
               <a
-                href={BOOKING_URL}
+                href={bookingUrl("header-mobile-menu")}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-1 flex items-center justify-between rounded-[0.35rem] px-4 py-3 text-base font-bold"

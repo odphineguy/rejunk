@@ -5,8 +5,26 @@
 
 export const PHONE_DISPLAY = "(480) 351-0291";
 export const PHONE_HREF = "tel:+14803510291";
-export const BOOKING_URL =
+/**
+ * Housecall Pro online-booking link.
+ *
+ * The `utm_*` tags are how we tell OUR website's bookings apart from bookings
+ * that came from Housecall Pro's own emails, Thumbtack, Yelp, etc. Every
+ * booking button on the public site must carry them — use `bookingUrl()` below
+ * so each button also says WHICH button it was.
+ */
+const BOOKING_BASE =
   "https://book.housecallpro.com/book/Progressive-Transportation-Services-LLC/5802285459dc4b5cbf8914e1135d262f?v2=true";
+
+export const BOOKING_URL = `${BOOKING_BASE}&utm_source=website&utm_medium=referral&utm_campaign=book_online`;
+
+/**
+ * Booking link tagged with the specific button it came from, e.g.
+ * `bookingUrl("header")` → …&utm_content=header
+ */
+export function bookingUrl(placement: string): string {
+  return `${BOOKING_URL}&utm_content=${encodeURIComponent(placement)}`;
+}
 
 export const SERVICE_AREA = "Phoenix metro & East Valley";
 

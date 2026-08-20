@@ -11,7 +11,7 @@ import {
 import type { VisionAnalysisResult } from "@/types/vision";
 
 import {
-  BOOKING_URL,
+  bookingUrl,
   BRAND_NAME,
   PAGE_META,
   PHONE_DISPLAY,
@@ -511,7 +511,7 @@ export default function InstantEstimatePage() {
                       : "Download estimate (PDF)"}
                   </button>
                   <a
-                    href={BOOKING_URL}
+                    href={bookingUrl("ai-estimate-result")}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="rounded-xl border-2 px-8 py-4 text-center text-lg font-bold transition-transform hover:scale-[1.03]"
@@ -885,7 +885,7 @@ function Cta({ startOver }: { startOver: () => void }) {
     <>
       <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
         <a
-          href={BOOKING_URL}
+          href={bookingUrl("ai-estimate-cta")}
           target="_blank"
           rel="noopener noreferrer"
           className="rounded-xl px-8 py-4 text-lg font-bold shadow-lg transition-transform hover:scale-[1.03]"

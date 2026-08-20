@@ -5,7 +5,7 @@ import {
   GOOGLE_BUSINESS_URL,
   LEGAL_DISCLOSURE,
   NAV_ITEMS,
-  BOOKING_URL,
+  bookingUrl,
   PHONE_DISPLAY,
   PHONE_HREF,
   SERVICE_AREA,
@@ -82,7 +82,7 @@ export function SiteFooter() {
             ))}
             <li>
               <a
-                href={BOOKING_URL}
+                href={bookingUrl("footer")}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-semibold transition-opacity hover:opacity-70"
