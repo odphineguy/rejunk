@@ -56,7 +56,7 @@ function writeToLogFile(source: LogSource, entries: unknown[]) {
   const logPath = path.join(LOG_DIR, `${source}.log`);
 
   // Format entries with timestamps
-  const lines = entries.map((entry) => {
+  const lines = entries.map(entry => {
     const ts = new Date().toISOString();
     return `[${ts}] ${JSON.stringify(entry)}`;
   });
@@ -132,7 +132,7 @@ function vitePluginManusDebugCollector(): Plugin {
         }
 
         let body = "";
-        req.on("data", (chunk) => {
+        req.on("data", chunk => {
           body += chunk.toString();
         });
 
@@ -162,7 +162,10 @@ function vitePluginStorageProxy(): Plugin {
           return;
         }
 
-        const forgeBaseUrl = (process.env.BUILT_IN_FORGE_API_URL || "").replace(/\/+$/, "");
+        const forgeBaseUrl = (process.env.BUILT_IN_FORGE_API_URL || "").replace(
+          /\/+$/,
+          ""
+        );
         const forgeKey = process.env.BUILT_IN_FORGE_API_KEY;
 
         if (!forgeBaseUrl || !forgeKey) {
@@ -172,7 +175,10 @@ function vitePluginStorageProxy(): Plugin {
         }
 
         try {
-          const forgeUrl = new URL("v1/storage/presign/get", forgeBaseUrl + "/");
+          const forgeUrl = new URL(
+            "v1/storage/presign/get",
+            forgeBaseUrl + "/"
+          );
           forgeUrl.searchParams.set("path", key);
 
           const forgeResp = await fetch(forgeUrl, {
@@ -208,18 +214,29 @@ function vitePluginMapsProxy(): Plugin {
     name: "manus-maps-proxy",
     configureServer(server: ViteDevServer) {
       server.middlewares.use("/maps-proxy", async (req, res) => {
-        const googleMapsKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
+        const googleMapsKey =
+          process.env.GOOGLE_MAPS_API_KEY ||
+          process.env.VITE_GOOGLE_MAPS_API_KEY;
 
         if (!googleMapsKey) {
-          console.warn("[Map] GOOGLE_MAPS_API_KEY missing in dev server env; maps proxy cannot load Google Maps.");
+          console.warn(
+            "[Map] GOOGLE_MAPS_API_KEY missing in dev server env; maps proxy cannot load Google Maps."
+          );
           res.writeHead(500, { "Content-Type": "text/plain" });
-          res.end("Maps proxy not configured. Set GOOGLE_MAPS_API_KEY or VITE_GOOGLE_MAPS_API_KEY.");
+          res.end(
+            "Maps proxy not configured. Set GOOGLE_MAPS_API_KEY or VITE_GOOGLE_MAPS_API_KEY."
+          );
           return;
         }
 
         try {
-          console.info("[Map] GOOGLE_MAPS_API_KEY present in dev server env; proxying Google Maps request.");
-          const upstreamUrl = new URL(req.url || "", "https://maps.googleapis.com");
+          console.info(
+            "[Map] GOOGLE_MAPS_API_KEY present in dev server env; proxying Google Maps request."
+          );
+          const upstreamUrl = new URL(
+            req.url || "",
+            "https://maps.googleapis.com"
+          );
           upstreamUrl.searchParams.set("key", googleMapsKey);
 
           const upstreamResponse = await fetch(upstreamUrl);
@@ -227,7 +244,10 @@ function vitePluginMapsProxy(): Plugin {
           headers.delete("content-encoding");
           headers.delete("content-length");
 
-          res.writeHead(upstreamResponse.status, Object.fromEntries(headers.entries()));
+          res.writeHead(
+            upstreamResponse.status,
+            Object.fromEntries(headers.entries())
+          );
           const body = Buffer.from(await upstreamResponse.arrayBuffer());
           res.end(body);
         } catch (error) {
@@ -254,22 +274,37 @@ function vitePluginDriverApi(): Plugin {
           return;
         }
         let body = "";
-        req.on("data", (chunk) => {
+        req.on("data", chunk => {
           body += chunk.toString();
         });
         req.on("end", () => {
           void (async () => {
             try {
-              const { sendActivationEmail, validateActivationEmailPayload } = await import("./server/driverEmail");
-              const payload = validateActivationEmailPayload(JSON.parse(body || "{}"));
+              const { sendActivationEmail, validateActivationEmailPayload } =
+                await import("./server/driverEmail");
+              const payload = validateActivationEmailPayload(
+                JSON.parse(body || "{}")
+              );
               if (!payload) {
                 res.writeHead(400, { "Content-Type": "application/json" });
-                res.end(JSON.stringify({ error: "A valid email and activation key are required." }));
+                res.end(
+                  JSON.stringify({
+                    error: "A valid email and activation key are required.",
+                  })
+                );
                 return;
               }
               const result = await sendActivationEmail(payload);
-              res.writeHead(result.sent ? 200 : 502, { "Content-Type": "application/json" });
-              res.end(JSON.stringify(result.sent ? { sent: true } : { error: result.error ?? "Email could not be sent." }));
+              res.writeHead(result.sent ? 200 : 502, {
+                "Content-Type": "application/json",
+              });
+              res.end(
+                JSON.stringify(
+                  result.sent
+                    ? { sent: true }
+                    : { error: result.error ?? "Email could not be sent." }
+                )
+              );
             } catch (error) {
               res.writeHead(500, { "Content-Type": "application/json" });
               res.end(JSON.stringify({ error: String(error) }));
@@ -296,15 +331,19 @@ function vitePluginStaffApi(): Plugin {
           return;
         }
         let body = "";
-        req.on("data", (chunk) => {
+        req.on("data", chunk => {
           body += chunk.toString();
         });
         req.on("end", () => {
           void (async () => {
             try {
-              const { handleStaffAction } = await import("./server/staffAccess");
+              const { handleStaffAction } = await import(
+                "./server/staffAccess"
+              );
               const result = await handleStaffAction(JSON.parse(body || "{}"));
-              res.writeHead(result.status, { "Content-Type": "application/json" });
+              res.writeHead(result.status, {
+                "Content-Type": "application/json",
+              });
               res.end(JSON.stringify(result.body));
             } catch (error) {
               res.writeHead(500, { "Content-Type": "application/json" });
@@ -331,27 +370,65 @@ function vitePluginLeadApi(): Plugin {
           return;
         }
         let body = "";
-        req.on("data", (chunk) => {
+        req.on("data", chunk => {
           body += chunk.toString();
         });
         req.on("end", () => {
           void (async () => {
             try {
-              const { sendLeadEmail, validateLeadPayload } = await import("./server/leadEmail");
+              const { leadRateLimited, processLead, validateLeadPayload } =
+                await import("./server/leadEmail");
               const lead = validateLeadPayload(JSON.parse(body || "{}"));
               if (!lead) {
                 res.writeHead(400, { "Content-Type": "application/json" });
-                res.end(JSON.stringify({ error: "A name, phone number, and at least one service are required." }));
+                res.end(
+                  JSON.stringify({
+                    error:
+                      "A name, phone number, and at least one service are required.",
+                  })
+                );
                 return;
               }
               if (lead.isBot) {
                 res.writeHead(200, { "Content-Type": "application/json" });
-                res.end(JSON.stringify({ sent: true }));
+                res.end(JSON.stringify({ sent: true, recorded: true }));
                 return;
               }
-              const result = await sendLeadEmail(lead);
-              res.writeHead(result.sent ? 200 : 502, { "Content-Type": "application/json" });
-              res.end(JSON.stringify(result.sent ? { sent: true } : { error: result.error ?? "The lead email could not be sent." }));
+              const forwarded = req.headers["x-forwarded-for"];
+              const ip =
+                (Array.isArray(forwarded)
+                  ? forwarded[0]
+                  : forwarded?.split(",")[0]
+                )?.trim() ||
+                req.socket.remoteAddress ||
+                "unknown";
+              if (leadRateLimited(ip)) {
+                res.writeHead(429, { "Content-Type": "application/json" });
+                res.end(
+                  JSON.stringify({
+                    error: "Please wait before sending another request.",
+                  })
+                );
+                return;
+              }
+              const result = await processLead(lead);
+              if (result.emailError)
+                console.error("[lead-api] Email failed:", result.emailError);
+              if (result.crmError)
+                console.error("[lead-api] CRM failed:", result.crmError);
+              res.writeHead(result.recorded ? 200 : 502, {
+                "Content-Type": "application/json",
+              });
+              res.end(
+                JSON.stringify(
+                  result.recorded
+                    ? { sent: result.sent, recorded: true }
+                    : {
+                        error:
+                          "The request could not be saved. Please try again.",
+                      }
+                )
+              );
             } catch (error) {
               res.writeHead(500, { "Content-Type": "application/json" });
               res.end(JSON.stringify({ error: String(error) }));
@@ -377,7 +454,7 @@ function vitePluginVisionApi(): Plugin {
           return;
         }
         let body = "";
-        req.on("data", (chunk) => {
+        req.on("data", chunk => {
           body += chunk.toString();
         });
         req.on("end", () => {
@@ -391,13 +468,16 @@ function vitePluginVisionApi(): Plugin {
                 res.writeHead(400, { "Content-Type": "application/json" });
                 res.end(
                   JSON.stringify({
-                    error: "Send 1-10 image data URLs plus the system instructions.",
-                  }),
+                    error:
+                      "Send 1-10 image data URLs plus the system instructions.",
+                  })
                 );
                 return;
               }
               const result = await runVisionAnalysis(payload);
-              res.writeHead(result.status, { "Content-Type": "application/json" });
+              res.writeHead(result.status, {
+                "Content-Type": "application/json",
+              });
               res.end(JSON.stringify(result.body));
             } catch (error) {
               res.writeHead(500, { "Content-Type": "application/json" });
@@ -410,7 +490,19 @@ function vitePluginVisionApi(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy(), vitePluginMapsProxy(), vitePluginDriverApi(), vitePluginStaffApi(), vitePluginLeadApi(), vitePluginVisionApi()];
+const plugins = [
+  react(),
+  tailwindcss(),
+  jsxLocPlugin(),
+  vitePluginManusRuntime(),
+  vitePluginManusDebugCollector(),
+  vitePluginStorageProxy(),
+  vitePluginMapsProxy(),
+  vitePluginDriverApi(),
+  vitePluginStaffApi(),
+  vitePluginLeadApi(),
+  vitePluginVisionApi(),
+];
 
 export default defineConfig(({ mode }) => {
   // Vite only hands VITE_-prefixed values to the browser. The dev maps + storage
@@ -418,7 +510,18 @@ export default defineConfig(({ mode }) => {
   // .env file here and copy the keys in — otherwise the maps proxy can't find the
   // Google key and the map silently falls back to the local placeholder view.
   const env = loadEnv(mode, path.resolve(import.meta.dirname), "");
-  for (const key of ["GOOGLE_MAPS_API_KEY", "VITE_GOOGLE_MAPS_API_KEY", "BUILT_IN_FORGE_API_URL", "BUILT_IN_FORGE_API_KEY", "RESEND_API_KEY", "RESEND_FROM", "LEAD_TO", "SUPABASE_URL", "VITE_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]) {
+  for (const key of [
+    "GOOGLE_MAPS_API_KEY",
+    "VITE_GOOGLE_MAPS_API_KEY",
+    "BUILT_IN_FORGE_API_URL",
+    "BUILT_IN_FORGE_API_KEY",
+    "RESEND_API_KEY",
+    "RESEND_FROM",
+    "LEAD_TO",
+    "SUPABASE_URL",
+    "VITE_SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+  ]) {
     if (!process.env[key] && env[key]) {
       process.env[key] = env[key];
     }

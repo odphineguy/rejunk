@@ -57,8 +57,9 @@ export function SiteFooter() {
           />
           <p className="mt-4 max-w-xs text-sm leading-relaxed">
             Junk removal, local moving, and furniture assembly across the{" "}
-            {SERVICE_AREA}. Straightforward prices, careful crews, and work done
-            all the way through.
+            {SERVICE_AREA}, plus in-state piano moving throughout Arizona.
+            Straightforward prices, careful crews, and work done all the way
+            through.
           </p>
         </div>
 

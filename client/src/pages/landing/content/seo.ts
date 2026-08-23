@@ -36,6 +36,13 @@ export const SEO_ROUTES = [
     priority: "0.8",
   },
   {
+    path: "/piano-moving",
+    meta: PAGE_META.piano,
+    lastModified: "2026-08-23",
+    changeFrequency: "monthly",
+    priority: "0.9",
+  },
+  {
     path: "/assembly-handyman",
     meta: PAGE_META.assembly,
     lastModified: "2026-08-10",
@@ -166,6 +173,7 @@ function businessSchema() {
       "Junk removal",
       "Local moving",
       "Furniture delivery",
+      "Piano moving",
       "Furniture assembly",
       "Garage cleanouts",
       "Estate cleanouts",
@@ -243,7 +251,10 @@ export function buildStructuredData(
       serviceType: service.name,
       description: meta.description,
       provider: { "@id": BUSINESS_ID },
-      areaServed: SERVICE_AREAS,
+      areaServed:
+        service.slug === "piano-moving"
+          ? { "@type": "State", name: "Arizona" }
+          : SERVICE_AREAS,
       hasOfferCatalog: {
         "@type": "OfferCatalog",
         name: service.subServicesTitle,

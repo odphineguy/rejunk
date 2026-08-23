@@ -1,9 +1,10 @@
+import type { ProcessStep } from "../content/services";
 import { PALETTE } from "../palette";
 import { Reveal } from "./Reveal";
 
 const P = PALETTE;
 
-const STEPS = [
+const DEFAULT_STEPS: ProcessStep[] = [
   {
     title: "Tell us what you need",
     body: "Use the online quote form and include any details that help us understand the job.",
@@ -19,7 +20,13 @@ const STEPS = [
 ];
 
 /** Numbered three-step band shared by the service pages. */
-export function HowItWorks() {
+export function HowItWorks({
+  heading = "One conversation. One clear plan.",
+  steps = DEFAULT_STEPS,
+}: {
+  heading?: string;
+  steps?: ProcessStep[];
+}) {
   return (
     <section className="px-5 py-14 md:px-8 md:py-20">
       <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[0.75fr_1.25fr] lg:gap-20">
@@ -29,12 +36,12 @@ export function HowItWorks() {
               className="font-display max-w-sm text-4xl font-bold tracking-tight md:text-5xl"
               style={{ color: P.pine }}
             >
-              One conversation. One clear plan.
+              {heading}
             </h2>
           </div>
         </Reveal>
         <div className="flex flex-col">
-          {STEPS.map((step, index) => (
+          {steps.map((step, index) => (
             <Reveal key={step.title} delay={index * 0.08}>
               <article
                 className="border-t py-6"

@@ -5,7 +5,7 @@ export interface Testimonial {
   name: string;
   area: string;
   stars: number;
-  tags: Array<"home" | "junk" | "moving" | "assembly">;
+  tags: Array<"home" | "junk" | "moving" | "piano" | "assembly">;
 }
 
 export const TESTIMONIALS: Testimonial[] = [
@@ -38,6 +38,13 @@ export const TESTIMONIALS: Testimonial[] = [
     area: "Thumbtack · Local Moving",
     stars: 5,
     tags: ["moving"],
+  },
+  {
+    quote: "Customer service was amazing!",
+    name: "Amy D.",
+    area: "Thumbtack · Piano Moving",
+    stars: 5,
+    tags: ["piano"],
   },
   {
     quote:

@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
-
-import { saveClient } from "@/lib/clientStorage";
+import { Link, useSearch } from "wouter";
 
 import type { ImageBriefId } from "./content/imageBriefs";
 import {
@@ -59,60 +57,25 @@ const SERVICE_OPTIONS: Array<{
     detailPrompt:
       "What needs assembling? (e.g. IKEA dresser, bed frame, patio set)",
   },
+  {
+    key: "Piano Moving",
+    label: "Piano Moving",
+    sub: "uprights, baby grands & grands",
+    imageId: "estimate-piano",
+    detailPrompt: "Anything else we should know about the piano move?",
+  },
 ];
 
 const TIMING_OPTIONS = ["Today", "This week", "Flexible"] as const;
-
-function newId(prefix: string) {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `${prefix}-${Date.now()}`;
-}
-
-/**
- * Mirror the submitted lead into the shared `clients` table as a `kind:"lead"`
- * record so it lands on the office Clients page automatically — not just in the
- * notification email. The clients table RLS allows any authenticated (anonymous)
- * visitor to write, and `saveClient` fire-and-forgets to Supabase, so this works
- * straight from the public browser with no server-side key.
- *
- * Always a fresh random id (never phone-derived): a deterministic id could later
- * overwrite a real client who shares the phone — downgrading them back to a lead
- * and wiping their contact log. A rare duplicate lead row is the safe trade.
- */
-function recordWebsiteLead(form: FormState) {
-  const parts = form.name.trim().split(/\s+/);
-  const firstName = parts.shift() ?? form.name.trim();
-  const lastName = parts.join(" ");
-
-  const detailLines = form.services.map(service =>
-    form.details[service]?.trim()
-      ? `${service}: ${form.details[service].trim()}`
-      : service
-  );
-  const summary = [
-    `Website estimate request — ${form.services.join(" + ") || "no service selected"}.`,
-    `Wants it: ${form.timing}.`,
-    form.zip.trim() ? `ZIP ${form.zip.trim()}.` : "",
-    form.smsConsent ? "Opted in to SMS updates." : "Did NOT opt in to SMS.",
-    detailLines.length ? `Details — ${detailLines.join(" · ")}` : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  saveClient({
-    kind: "lead",
-    firstName,
-    lastName,
-    phone: form.phone.trim(),
-    email: form.email.trim() || undefined,
-    zip: form.zip.trim() || undefined,
-    leadSource: "Website",
-    contactLog: [
-      { id: newId("note"), createdAt: new Date().toISOString(), text: summary },
-    ],
-  });
-}
+const PIANO_TYPES = [
+  "Spinet",
+  "Console",
+  "Standard upright",
+  "Full-size upright",
+  "Baby grand",
+  "Grand",
+] as const;
+const ACCESS_OPTIONS = ["Ground floor", "Stairs", "Elevator"] as const;
 
 type Step = "services" | "details" | "done";
 
@@ -124,6 +87,14 @@ interface FormState {
   name: string;
   phone: string;
   email: string;
+  piano: {
+    type: string;
+    pickup: string;
+    destination: string;
+    pickupAccess: string;
+    destinationAccess: string;
+    notes: string;
+  };
   /** SMS opt-in. Unchecked by default — consent must be affirmative (A2P 10DLC). */
   smsConsent: boolean;
   /** Honeypot — humans never see or fill this. */
@@ -138,6 +109,14 @@ const INITIAL_FORM: FormState = {
   name: "",
   phone: "",
   email: "",
+  piano: {
+    type: "",
+    pickup: "",
+    destination: "",
+    pickupAccess: "Ground floor",
+    destinationAccess: "Ground floor",
+    notes: "",
+  },
   smsConsent: false,
   company: "",
 };
@@ -147,12 +126,25 @@ const inputClass =
 
 export default function EstimatePage() {
   usePageMeta(PAGE_META.estimate);
+  const search = useSearch();
+  const startsWithPiano =
+    new URLSearchParams(search).get("service") === "piano";
 
   const [step, setStep] = useState<Step>("services");
-  const [form, setForm] = useState<FormState>(INITIAL_FORM);
+  const [form, setForm] = useState<FormState>(() => ({
+    ...INITIAL_FORM,
+    services: startsWithPiano ? ["Piano Moving"] : [],
+  }));
   const [submitting, setSubmitting] = useState(false);
   const [sendFailed, setSendFailed] = useState(false);
   const [validationError, setValidationError] = useState("");
+
+  const changeStep = (next: Step) => {
+    setStep(next);
+    requestAnimationFrame(() =>
+      window.scrollTo({ top: 0, behavior: "smooth" })
+    );
+  };
 
   const toggleService = (key: string) => {
     setForm(prev => ({
@@ -168,6 +160,18 @@ export default function EstimatePage() {
   );
 
   const submit = async () => {
+    if (form.services.includes("Piano Moving")) {
+      if (!form.piano.type) {
+        setValidationError("Please choose the piano type.");
+        return;
+      }
+      if (!form.piano.pickup.trim() || !form.piano.destination.trim()) {
+        setValidationError(
+          "Please enter the Arizona pickup and delivery city or ZIP."
+        );
+        return;
+      }
+    }
     if (!form.name.trim()) {
       setValidationError("Please tell us your name.");
       return;
@@ -186,14 +190,16 @@ export default function EstimatePage() {
     setValidationError("");
     setSubmitting(true);
 
-    // Capture the lead into the office CRM first, in its own guard so a CRM
-    // hiccup can never block the notification email or the confirmation screen.
-    if (!form.company.trim()) {
-      try {
-        recordWebsiteLead(form);
-      } catch {
-        // Non-fatal — the email below is still the primary notification path.
-      }
+    const details = { ...form.details };
+    if (form.services.includes("Piano Moving")) {
+      details["Piano Moving"] = [
+        `Type: ${form.piano.type}`,
+        `Pickup: ${form.piano.pickup.trim()} (${form.piano.pickupAccess})`,
+        `Delivery: ${form.piano.destination.trim()} (${form.piano.destinationAccess})`,
+        form.piano.notes.trim() ? `Notes: ${form.piano.notes.trim()}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
     }
 
     try {
@@ -202,7 +208,7 @@ export default function EstimatePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           services: form.services,
-          details: form.details,
+          details,
           zip: form.zip.trim(),
           timing: form.timing,
           name: form.name.trim(),
@@ -210,6 +216,7 @@ export default function EstimatePage() {
           email: form.email.trim(),
           smsConsent: form.smsConsent,
           company: form.company,
+          source: startsWithPiano ? "Piano Moving Page" : "Website Estimate",
         }),
       });
       setSendFailed(!response.ok);
@@ -217,7 +224,7 @@ export default function EstimatePage() {
       setSendFailed(true);
     } finally {
       setSubmitting(false);
-      setStep("done");
+      changeStep("done");
     }
   };
 
@@ -234,9 +241,9 @@ export default function EstimatePage() {
                 How can we help you?
               </h1>
               <p className="mt-3 text-base" style={{ color: P.inkSoft }}>
-                Select all that apply — lots of jobs combine two or all three.
+                Select all that apply — some jobs combine more than one service.
               </p>
-              <div className="mt-8 grid gap-5 md:grid-cols-3">
+              <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
                 {SERVICE_OPTIONS.map(option => {
                   const selected = form.services.includes(option.key);
                   return (
@@ -289,7 +296,7 @@ export default function EstimatePage() {
                 <button
                   type="button"
                   disabled={form.services.length === 0}
-                  onClick={() => setStep("details")}
+                  onClick={() => changeStep("details")}
                   className="rounded-xl px-10 py-4 text-lg font-bold shadow-lg transition-transform enabled:hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-40"
                   style={{ background: P.lime, color: P.pine }}
                 >
@@ -319,39 +326,206 @@ export default function EstimatePage() {
                   void submit();
                 }}
               >
-                {selectedOptions.map(option => (
-                  <label key={option.key} className="flex flex-col gap-1.5">
-                    <span
-                      className="text-sm font-bold"
-                      style={{ color: P.ink }}
+                {selectedOptions.map(option =>
+                  option.key === "Piano Moving" ? (
+                    <fieldset
+                      key={option.key}
+                      className="rounded-2xl border p-5 md:p-6"
+                      style={{ borderColor: P.line, background: P.mist }}
                     >
-                      {option.label}{" "}
-                      <span
-                        className="font-normal"
-                        style={{ color: P.inkSoft }}
+                      <legend
+                        className="px-2 font-display text-xl font-bold"
+                        style={{ color: P.pine }}
                       >
-                        (optional)
+                        Tell us about the piano
+                      </legend>
+                      <p className="mb-5 text-sm" style={{ color: P.inkSoft }}>
+                        Arizona pickup and delivery only. City or ZIP is enough
+                        for the first quote.
+                      </p>
+                      <div className="grid gap-5 md:grid-cols-2">
+                        <label className="flex flex-col gap-1.5 md:col-span-2">
+                          <span
+                            className="text-sm font-bold"
+                            style={{ color: P.ink }}
+                          >
+                            Piano type
+                          </span>
+                          <select
+                            className={inputClass}
+                            style={{
+                              borderColor: P.line,
+                              background: P.paperBg,
+                            }}
+                            value={form.piano.type}
+                            onChange={event =>
+                              setForm(prev => ({
+                                ...prev,
+                                piano: {
+                                  ...prev.piano,
+                                  type: event.target.value,
+                                },
+                              }))
+                            }
+                          >
+                            <option value="">Choose a type</option>
+                            {PIANO_TYPES.map(type => (
+                              <option key={type} value={type}>
+                                {type}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        {(
+                          [
+                            ["pickup", "Pickup city or ZIP", "pickupAccess"],
+                            [
+                              "destination",
+                              "Delivery city or ZIP",
+                              "destinationAccess",
+                            ],
+                          ] as const
+                        ).map(([locationKey, label, accessKey]) => (
+                          <div
+                            key={locationKey}
+                            className="flex flex-col gap-3"
+                          >
+                            <label className="flex flex-col gap-1.5">
+                              <span
+                                className="text-sm font-bold"
+                                style={{ color: P.ink }}
+                              >
+                                {label}
+                              </span>
+                              <input
+                                maxLength={120}
+                                placeholder={
+                                  locationKey === "pickup"
+                                    ? "Phoenix or 85016"
+                                    : "Prescott or 86301"
+                                }
+                                className={inputClass}
+                                style={{
+                                  borderColor: P.line,
+                                  background: P.paperBg,
+                                }}
+                                value={form.piano[locationKey]}
+                                onChange={event =>
+                                  setForm(prev => ({
+                                    ...prev,
+                                    piano: {
+                                      ...prev.piano,
+                                      [locationKey]: event.target.value,
+                                    },
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1.5">
+                              <span
+                                className="text-sm font-bold"
+                                style={{ color: P.ink }}
+                              >
+                                Access
+                              </span>
+                              <select
+                                className={inputClass}
+                                style={{
+                                  borderColor: P.line,
+                                  background: P.paperBg,
+                                }}
+                                value={form.piano[accessKey]}
+                                onChange={event =>
+                                  setForm(prev => ({
+                                    ...prev,
+                                    piano: {
+                                      ...prev.piano,
+                                      [accessKey]: event.target.value,
+                                    },
+                                  }))
+                                }
+                              >
+                                {ACCESS_OPTIONS.map(access => (
+                                  <option key={access} value={access}>
+                                    {access}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                        ))}
+
+                        <label className="flex flex-col gap-1.5 md:col-span-2">
+                          <span
+                            className="text-sm font-bold"
+                            style={{ color: P.ink }}
+                          >
+                            Other details{" "}
+                            <span
+                              className="font-normal"
+                              style={{ color: P.inkSoft }}
+                            >
+                              (optional)
+                            </span>
+                          </span>
+                          <textarea
+                            rows={2}
+                            maxLength={1000}
+                            placeholder="Tight turns, number of steps, timing, or anything else we should plan for"
+                            className={inputClass}
+                            style={{
+                              borderColor: P.line,
+                              background: P.paperBg,
+                            }}
+                            value={form.piano.notes}
+                            onChange={event =>
+                              setForm(prev => ({
+                                ...prev,
+                                piano: {
+                                  ...prev.piano,
+                                  notes: event.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </label>
+                      </div>
+                    </fieldset>
+                  ) : (
+                    <label key={option.key} className="flex flex-col gap-1.5">
+                      <span
+                        className="text-sm font-bold"
+                        style={{ color: P.ink }}
+                      >
+                        {option.label}{" "}
+                        <span
+                          className="font-normal"
+                          style={{ color: P.inkSoft }}
+                        >
+                          (optional)
+                        </span>
                       </span>
-                    </span>
-                    <textarea
-                      rows={2}
-                      maxLength={1000}
-                      placeholder={option.detailPrompt}
-                      className={inputClass}
-                      style={{ borderColor: P.line }}
-                      value={form.details[option.key] ?? ""}
-                      onChange={event =>
-                        setForm(prev => ({
-                          ...prev,
-                          details: {
-                            ...prev.details,
-                            [option.key]: event.target.value,
-                          },
-                        }))
-                      }
-                    />
-                  </label>
-                ))}
+                      <textarea
+                        rows={2}
+                        maxLength={1000}
+                        placeholder={option.detailPrompt}
+                        className={inputClass}
+                        style={{ borderColor: P.line }}
+                        value={form.details[option.key] ?? ""}
+                        onChange={event =>
+                          setForm(prev => ({
+                            ...prev,
+                            details: {
+                              ...prev.details,
+                              [option.key]: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                  )
+                )}
 
                 <div className="grid gap-5 sm:grid-cols-2">
                   <label className="flex flex-col gap-1.5">
@@ -564,7 +738,7 @@ export default function EstimatePage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setStep("services")}
+                    onClick={() => changeStep("services")}
                     className="px-2 py-2 text-sm font-bold"
                     style={{ color: P.inkSoft }}
                   >
@@ -623,7 +797,7 @@ export default function EstimatePage() {
                 </a>
                 <button
                   type="button"
-                  onClick={() => setStep("services")}
+                  onClick={() => changeStep("services")}
                   className="rounded-xl border-2 px-8 py-4 text-lg font-bold transition-transform hover:scale-[1.03]"
                   style={{ borderColor: P.pine, color: P.pine }}
                 >

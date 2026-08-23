@@ -3,11 +3,11 @@ import type { Faq, QuickAnswer } from "./services";
 export const HOME_QUICK_ANSWERS: QuickAnswer[] = [
   {
     title: "How much does it cost?",
-    body: "Junk is priced by truck space, moving by crew and hours, assembly by flat rates. Every job gets a firm number before we start.",
+    body: "Every job gets a clear number before we start. Piano moves receive one all-in quote with no mileage line item.",
   },
   {
     title: "What do you handle?",
-    body: "Junk removal, local moving and delivery, and furniture assembly — one crew can handle the whole list.",
+    body: "Junk removal, local moving and delivery, in-state Arizona piano moving, and furniture assembly — one crew can handle the whole list.",
   },
   {
     title: "How soon can you come?",

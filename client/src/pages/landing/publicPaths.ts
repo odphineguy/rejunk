@@ -8,6 +8,7 @@ export const PUBLIC_PATHS = [
   "/",
   "/junk-removal",
   "/moving",
+  "/piano-moving",
   "/assembly-handyman",
   "/estimate",
   "/instant-estimate",

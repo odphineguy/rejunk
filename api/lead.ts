@@ -11,9 +11,19 @@
  * changes need a redeploy.
  */
 
+import { randomUUID } from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 
-const ALLOWED_SERVICES = ["Junk Removal", "Moving", "Assembly"] as const;
+const ALLOWED_SERVICES = [
+  "Junk Removal",
+  "Moving",
+  "Assembly",
+  "Piano Moving",
+] as const;
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const MAX_LEADS_PER_WINDOW = 5;
+const leadAttempts = new Map<string, { count: number; resetAt: number }>();
 
 // TODO: set LEAD_TO in the Vercel env — falls back to the owner.
 const DEFAULT_LEAD_TO = "abe@saguarotransport.com";
@@ -68,7 +78,7 @@ function validateLeadPayload(body: unknown): LeadPayload | null {
     aiSummary,
   } = body as Record<string, unknown>;
 
-  if (!Array.isArray(services) || services.length === 0 || services.length > 3)
+  if (!Array.isArray(services) || services.length === 0 || services.length > 4)
     return null;
   const cleanServices = services.filter(
     (s): s is string =>
@@ -184,7 +194,118 @@ function buildLeadEmailHtml(lead: LeadPayload): string {
 </html>`;
 }
 
-type VercelRequest = { method?: string; body?: unknown };
+function leadRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = leadAttempts.get(ip);
+  if (!entry || entry.resetAt <= now) {
+    leadAttempts.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > MAX_LEADS_PER_WINDOW;
+}
+
+async function sendLeadEmail(lead: LeadPayload) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return { sent: false, error: "Email is not configured." };
+  try {
+    const resend = new Resend(apiKey);
+    const subject = `${leadKindLabel(lead)} — ${lead.services.join(" + ")}${lead.zip ? ` — ${lead.zip}` : ""}`;
+    const { error } = await resend.emails.send({
+      from: leadFromAddress(),
+      to: process.env.LEAD_TO || DEFAULT_LEAD_TO,
+      subject,
+      html: buildLeadEmailHtml(lead),
+    });
+    return error
+      ? { sent: false, error: error.message }
+      : { sent: true, error: undefined };
+  } catch (error) {
+    return {
+      sent: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function recordLeadInCrm(lead: LeadPayload) {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key)
+    return { recorded: false, error: "CRM connection is not configured." };
+
+  const parts = lead.name.trim().split(/\s+/);
+  const firstName = parts.shift() || lead.name;
+  const lastName = parts.join(" ");
+  const now = new Date().toISOString();
+  const id = `website-lead-${randomUUID()}`;
+  const detailLines = lead.services.map(service =>
+    lead.details[service] ? `${service}: ${lead.details[service]}` : service
+  );
+  const summary = [
+    `${lead.source || "Website"} request — ${lead.services.join(" + ")}.`,
+    `Wants it: ${lead.timing}.`,
+    lead.zip ? `ZIP ${lead.zip}.` : "",
+    lead.smsConsent ? "Opted in to SMS updates." : "Did NOT opt in to SMS.",
+    detailLines.length ? `Details — ${detailLines.join(" · ")}` : "",
+    lead.aiSummary ? `AI estimate — ${lead.aiSummary}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const data = {
+    id,
+    kind: "lead",
+    firstName,
+    lastName,
+    phone: lead.phone,
+    ...(lead.email ? { email: lead.email } : {}),
+    ...(lead.zip ? { zip: lead.zip } : {}),
+    smsSetting: lead.smsConsent ? "receive" : "do_not_receive",
+    leadSource: lead.source === "AI Estimate" ? "AI Estimate" : "Website",
+    tags: ["Website", ...lead.services],
+    contactLog: [
+      {
+        id: randomUUID(),
+        createdAt: now,
+        author: "Website",
+        text: summary,
+      },
+    ],
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  try {
+    const supabase = createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { error } = await supabase.from("clients").insert({
+      id,
+      created_by: null,
+      kind: "lead",
+      first_name: firstName,
+      last_name: lastName,
+      company: null,
+      email: lead.email || null,
+      phone: lead.phone,
+      data,
+    });
+    return error
+      ? { recorded: false, error: error.message }
+      : { recorded: true, error: undefined };
+  } catch (error) {
+    return {
+      recorded: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+type VercelRequest = {
+  method?: string;
+  body?: unknown;
+  headers?: Record<string, string | string[] | undefined>;
+};
 type VercelResponse = {
   status: (code: number) => VercelResponse;
   json: (body: unknown) => void;
@@ -198,44 +319,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const body = typeof req.body === "string" ? safeParse(req.body) : req.body;
   const lead = validateLeadPayload(body);
   if (!lead) {
-    res
-      .status(400)
-      .json({
-        error: "A name, phone number, and at least one service are required.",
-      });
+    res.status(400).json({
+      error: "A name, phone number, and at least one service are required.",
+    });
     return;
   }
   // Honeypot hit: pretend success so bots don't learn the field exists.
   if (lead.isBot) {
-    res.status(200).json({ sent: true });
+    res.status(200).json({ sent: true, recorded: true });
     return;
   }
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
+  const forwarded = req.headers?.["x-forwarded-for"];
+  const ip =
+    (Array.isArray(forwarded)
+      ? forwarded[0]
+      : forwarded?.split(",")[0]
+    )?.trim() || "unknown";
+  if (leadRateLimited(ip)) {
     res
-      .status(502)
-      .json({ error: "RESEND_API_KEY is not configured on the server." });
+      .status(429)
+      .json({ error: "Please wait before sending another request." });
     return;
   }
-  try {
-    const resend = new Resend(apiKey);
-    const subject = `${leadKindLabel(lead)} — ${lead.services.join(" + ")}${lead.zip ? ` — ${lead.zip}` : ""}`;
-    const { error } = await resend.emails.send({
-      from: leadFromAddress(),
-      to: process.env.LEAD_TO || DEFAULT_LEAD_TO,
-      subject,
-      html: buildLeadEmailHtml(lead),
-    });
-    if (error) {
-      res.status(502).json({ error: error.message });
-      return;
-    }
-    res.status(200).json({ sent: true });
-  } catch (error) {
+  const [email, crm] = await Promise.all([
+    sendLeadEmail(lead),
+    recordLeadInCrm(lead),
+  ]);
+  if (email.error) console.error("[lead-api] Email failed:", email.error);
+  if (crm.error) console.error("[lead-api] CRM failed:", crm.error);
+  if (!crm.recorded) {
     res
       .status(502)
-      .json({ error: error instanceof Error ? error.message : String(error) });
+      .json({ error: "The request could not be saved. Please try again." });
+    return;
   }
+  res.status(200).json({ sent: email.sent, recorded: true });
 }
 
 function safeParse(value: string): unknown {

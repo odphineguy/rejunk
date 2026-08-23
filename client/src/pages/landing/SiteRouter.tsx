@@ -22,9 +22,16 @@ export default function SiteRouter() {
   return (
     <Switch>
       <Route path="/" component={HomePage} />
-      <Route path="/junk-removal">{() => <ServicePage slug="junk-removal" />}</Route>
+      <Route path="/junk-removal">
+        {() => <ServicePage slug="junk-removal" />}
+      </Route>
       <Route path="/moving">{() => <ServicePage slug="moving" />}</Route>
-      <Route path="/assembly-handyman">{() => <ServicePage slug="assembly-handyman" />}</Route>
+      <Route path="/piano-moving">
+        {() => <ServicePage slug="piano-moving" />}
+      </Route>
+      <Route path="/assembly-handyman">
+        {() => <ServicePage slug="assembly-handyman" />}
+      </Route>
       <Route path="/estimate" component={EstimatePage} />
       <Route path="/instant-estimate">
         {() => (

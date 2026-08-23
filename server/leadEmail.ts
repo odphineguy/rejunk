@@ -6,9 +6,19 @@
  * runtime) — keep the three in sync, same convention as driverEmail.ts.
  */
 
+import { randomUUID } from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 
-const ALLOWED_SERVICES = ["Junk Removal", "Moving", "Assembly"] as const;
+const ALLOWED_SERVICES = [
+  "Junk Removal",
+  "Moving",
+  "Assembly",
+  "Piano Moving",
+] as const;
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const MAX_LEADS_PER_WINDOW = 5;
+const leadAttempts = new Map<string, { count: number; resetAt: number }>();
 
 // TODO: set LEAD_TO in the env (local .env + Vercel) — falls back to the owner.
 const DEFAULT_LEAD_TO = "abe@saguarotransport.com";
@@ -65,7 +75,7 @@ export function validateLeadPayload(body: unknown): LeadPayload | null {
     aiSummary,
   } = body as Record<string, unknown>;
 
-  if (!Array.isArray(services) || services.length === 0 || services.length > 3)
+  if (!Array.isArray(services) || services.length === 0 || services.length > 4)
     return null;
   const cleanServices = services.filter(
     (s): s is string =>
@@ -207,4 +217,109 @@ export async function sendLeadEmail(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+export function leadRateLimited(ip: string): boolean {
+  const key = ip || "unknown";
+  const now = Date.now();
+  const entry = leadAttempts.get(key);
+  if (!entry || entry.resetAt <= now) {
+    leadAttempts.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > MAX_LEADS_PER_WINDOW;
+}
+
+export async function recordLeadInCrm(
+  lead: LeadPayload
+): Promise<{ recorded: boolean; error?: string }> {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    return { recorded: false, error: "CRM connection is not configured." };
+  }
+
+  const parts = lead.name.trim().split(/\s+/);
+  const firstName = parts.shift() || lead.name;
+  const lastName = parts.join(" ");
+  const now = new Date().toISOString();
+  const id = `website-lead-${randomUUID()}`;
+  const details = lead.services.map(service =>
+    lead.details[service] ? `${service}: ${lead.details[service]}` : service
+  );
+  const summary = [
+    `${lead.source || "Website"} request — ${lead.services.join(" + ")}.`,
+    `Wants it: ${lead.timing}.`,
+    lead.zip ? `ZIP ${lead.zip}.` : "",
+    lead.smsConsent ? "Opted in to SMS updates." : "Did NOT opt in to SMS.",
+    details.length ? `Details — ${details.join(" · ")}` : "",
+    lead.aiSummary ? `AI estimate — ${lead.aiSummary}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const data = {
+    id,
+    kind: "lead",
+    firstName,
+    lastName,
+    phone: lead.phone,
+    ...(lead.email ? { email: lead.email } : {}),
+    ...(lead.zip ? { zip: lead.zip } : {}),
+    smsSetting: lead.smsConsent ? "receive" : "do_not_receive",
+    leadSource: lead.source === "AI Estimate" ? "AI Estimate" : "Website",
+    tags: ["Website", ...lead.services],
+    contactLog: [
+      {
+        id: randomUUID(),
+        createdAt: now,
+        author: "Website",
+        text: summary,
+      },
+    ],
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  try {
+    const supabase = createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { error } = await supabase.from("clients").insert({
+      id,
+      created_by: null,
+      kind: "lead",
+      first_name: firstName,
+      last_name: lastName,
+      company: null,
+      email: lead.email || null,
+      phone: lead.phone,
+      data,
+    });
+    if (error) return { recorded: false, error: error.message };
+    return { recorded: true };
+  } catch (error) {
+    return {
+      recorded: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+export async function processLead(lead: LeadPayload): Promise<{
+  sent: boolean;
+  recorded: boolean;
+  emailError?: string;
+  crmError?: string;
+}> {
+  const [email, crm] = await Promise.all([
+    sendLeadEmail(lead),
+    recordLeadInCrm(lead),
+  ]);
+  return {
+    sent: email.sent,
+    recorded: crm.recorded,
+    ...(email.error ? { emailError: email.error } : {}),
+    ...(crm.error ? { crmError: crm.error } : {}),
+  };
 }

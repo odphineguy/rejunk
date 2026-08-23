@@ -21,7 +21,7 @@ export default function HomePage() {
     <SiteLayout>
       <PageHero
         title="The heavy lifting, handled."
-        body="Clear a garage, move across town, or get the furniture built. One local crew, straightforward pricing, and work that feels finished when we leave."
+        body="Clear a garage, move across town, transport a piano, or get the furniture built. One careful crew, straightforward pricing, and work that feels finished when we leave."
         imageId="home-hero"
       />
 

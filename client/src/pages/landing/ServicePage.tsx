@@ -32,10 +32,14 @@ export default function ServicePage({
         imageId={service.heroImageId}
         flipImage={slug === "assembly-handyman"}
         photoEstimate={slug === "junk-removal"}
+        pianoQuote={slug === "piano-moving"}
       />
 
       <QuickAnswerCards items={service.quickAnswers} />
-      <HowItWorks />
+      <HowItWorks
+        heading={service.process?.heading}
+        steps={service.process?.steps}
+      />
       <SubServicesGrid
         title={service.subServicesTitle}
         items={service.subServices}
@@ -100,11 +104,14 @@ export default function ServicePage({
             ? "Ready to clear it out?"
             : slug === "moving"
               ? "Ready for a smoother move?"
-              : "Ready to skip the instruction manual?"
+              : slug === "piano-moving"
+                ? "Tell us about your piano."
+                : "Ready to skip the instruction manual?"
         }
         imageId={service.heroImageId}
         flipImage={slug === "assembly-handyman"}
         photoEstimate={slug === "junk-removal"}
+        pianoQuote={slug === "piano-moving"}
       />
     </SiteLayout>
   );

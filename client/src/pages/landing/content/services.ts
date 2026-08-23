@@ -1,5 +1,5 @@
 /**
- * Per-line-of-business content for the three service pages. The page layout
+ * Per-line-of-business content for the service pages. The page layout
  * lives in ServicePage.tsx; everything page-specific (copy, quick answers,
  * sub-services, FAQs, the extra story section) lives here.
  */
@@ -21,6 +21,11 @@ export interface Faq {
   a: string;
 }
 
+export interface ProcessStep {
+  title: string;
+  body: string;
+}
+
 export interface ExtraSection {
   kicker: string;
   title: string;
@@ -32,15 +37,19 @@ export interface ExtraSection {
 }
 
 export interface ServiceContent {
-  slug: "junk-removal" | "moving" | "assembly-handyman";
+  slug: "junk-removal" | "moving" | "piano-moving" | "assembly-handyman";
   name: string;
-  metaKey: "junk" | "moving" | "assembly";
+  metaKey: "junk" | "moving" | "piano" | "assembly";
   heroTitle: string;
   heroSub: string;
   heroImageId: ImageBriefId;
   quickAnswers: QuickAnswer[];
   subServicesTitle: string;
   subServices: SubService[];
+  process?: {
+    heading: string;
+    steps: ProcessStep[];
+  };
   extra?: ExtraSection;
   faqs: Faq[];
 }
@@ -140,7 +149,7 @@ export const SERVICES: Record<ServiceContent["slug"], ServiceContent> = {
     quickAnswers: [
       {
         title: "What will my move cost?",
-        body: "Local moves are priced by crew and hours with a clear minimum, plus mileage when it applies. You'll know the number before moving day.",
+        body: "We give you a clear quote before moving day. The crew, truck, standard pads, straps, and travel are included — no separate mileage line item.",
       },
       {
         title: "What moves do you do?",
@@ -194,6 +203,121 @@ export const SERVICES: Record<ServiceContent["slug"], ServiceContent> = {
       {
         q: "Do you do long-distance moves?",
         a: "We focus on the Phoenix metro and East Valley. For moves beyond the valley, call us — depending on the distance we can often still help.",
+      },
+    ],
+  },
+
+  "piano-moving": {
+    slug: "piano-moving",
+    name: "Piano Moving",
+    metaKey: "piano",
+    heroTitle: "Your piano, moved with a plan.",
+    heroSub:
+      "Licensed and insured piano moving anywhere within Arizona. We protect the instrument, plan the access at both homes, and give you one clear quote before moving day.",
+    heroImageId: "piano-hero",
+    quickAnswers: [
+      {
+        title: "Where do you go?",
+        body: "We handle in-state moves only. Pickup and delivery must both be in Arizona, whether the piano is moving across town or across the state.",
+      },
+      {
+        title: "Which pianos do you move?",
+        body: "Spinets, consoles, standard and full-size uprights, baby grands, and grands. We ask for the type and access details before confirming the job.",
+      },
+      {
+        title: "How is the quote set?",
+        body: "The piano type, pickup and delivery access, stairs, and route shape the quote. You receive one clear total — no mileage line item or hourly meter.",
+      },
+    ],
+    process: {
+      heading: "A controlled move from first photo to final placement.",
+      steps: [
+        {
+          title: "Share the piano and both locations",
+          body: "Tell us the piano type, pickup and delivery cities, stairs, tight turns, and any elevator or long-carry details. Photos help us plan accurately.",
+        },
+        {
+          title: "We plan the handling and confirm one quote",
+          body: "We review access, choose the crew and equipment, and confirm the move plan and all-in price before the appointment.",
+        },
+        {
+          title: "Protect, prepare, and load",
+          body: "The crew protects the instrument with moving pads and secure strapping. Grand components are prepared for transport when the move requires it.",
+        },
+        {
+          title: "Transport and place it where it belongs",
+          body: "We secure the piano in the truck, transport it within Arizona, and complete final placement at the delivery address before we leave.",
+        },
+      ],
+    },
+    subServicesTitle: "Pianos we handle",
+    subServices: [
+      {
+        title: "Spinet pianos",
+        blurb:
+          "Compact uprights handled with the same padding, strapping, and access planning as larger instruments.",
+      },
+      {
+        title: "Console pianos",
+        blurb:
+          "Residential console pianos protected through doorways, hallways, and final room placement.",
+      },
+      {
+        title: "Standard uprights",
+        blurb:
+          "The most common home piano move, planned around weight, turns, flooring, and both entrances.",
+      },
+      {
+        title: "Full-size uprights",
+        blurb:
+          "Taller, heavier uprights assigned the crew and equipment needed for controlled handling.",
+      },
+      {
+        title: "Baby grands",
+        blurb:
+          "Prepared for transport, padded, secured, and placed carefully at the destination.",
+      },
+      {
+        title: "Grand pianos",
+        blurb:
+          "Grand pianos moved with a route and handling plan built around their size and access needs.",
+      },
+    ],
+    extra: {
+      kicker: "Arizona moves only",
+      title: "One responsible crew from pickup through placement.",
+      paragraphs: [
+        "Progressive Transportation Services is licensed and insured for transportation work. Your piano stays with our move plan from the first address to the second — no open marketplace or unknown handoff.",
+        "We confirm the scope before moving day, including stairs, tight turns, long carries, and the destination room. If the scope stays the same, the quote stays the same.",
+      ],
+      bullets: [
+        "In-state Arizona pickup and delivery",
+        "Licensed and insured — USDOT 4421119 · MC-1763629",
+        "One all-in quote with no mileage line item",
+        "Pads, straps, secure transport, and final placement",
+      ],
+      imageId: "piano-route",
+    },
+    faqs: [
+      {
+        q: "Do you move pianos outside Arizona?",
+        a: "No. We currently accept piano moves only when both pickup and delivery are within Arizona.",
+      },
+      {
+        q: "Do you charge mileage?",
+        a: "No separate mileage charge appears on the bill. We review the complete route and scope, then provide one clear quote before the move.",
+      },
+      {
+        q: "Can you handle stairs or an elevator?",
+        a: "Often, yes. Include stairs, elevator size, tight turns, and long carries in your request so we can confirm the right crew and plan before booking.",
+      },
+      {
+        q: "Are you licensed and insured?",
+        a: "Yes. Progressive Transportation Services LLC is licensed and insured, with USDOT 4421119 and MC-1763629.",
+      },
+      {
+        q: "Will the piano need tuning afterward?",
+        a: "A move can affect tuning. Let the piano settle in its new environment, then follow the timing recommended by your piano technician.",
       },
     ],
   },

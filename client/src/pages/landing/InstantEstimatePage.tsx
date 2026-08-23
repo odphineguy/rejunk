@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 
-import { saveClient } from "@/lib/clientStorage";
 import { hydrateSettings } from "@/lib/settingsStorage";
 import { analyzePhotos, loadVisionSettings } from "@/lib/visionStorage";
 import {
@@ -243,30 +242,10 @@ export default function InstantEstimatePage() {
     setPhotos(prev => prev.filter(p => p.id !== id));
 
   /**
-   * Mirror the request into the shared `clients` table as a `kind:"lead"` so it
-   * lands on the office Clients/Leads page automatically — same pattern as the
-   * regular estimate form (EstimatePage.recordWebsiteLead), but tagged with the
-   * "AI Estimate" lead source and carrying the AI summary in the contact log.
-   * Fresh random id (never phone-derived) so it can't overwrite a real client.
+   * The server records the lead in the CRM with a service-role credential and
+   * sends the owner notification. The public browser never receives CRM write
+   * access.
    */
-  const recordAiLead = (summary: string) => {
-    const parts = form.name.trim().split(/\s+/);
-    const firstName = parts.shift() ?? form.name.trim();
-    const lastName = parts.join(" ");
-    saveClient({
-      kind: "lead",
-      firstName,
-      lastName,
-      phone: form.phone.trim(),
-      email: form.email.trim() || undefined,
-      zip: form.zip.trim() || undefined,
-      leadSource: "AI Estimate",
-      contactLog: [
-        { id: makeId(), createdAt: new Date().toISOString(), text: summary },
-      ],
-    });
-  };
-
   const notifyOwner = (summary: string) => {
     return fetch("/api/lead", {
       method: "POST",
@@ -349,11 +328,6 @@ export default function InstantEstimatePage() {
     // never lose us the lead.
     const priced = analysis ? buildEstimate(analysis) : null;
     const summary = buildLeadSummary(analysis, priced, form.details);
-    try {
-      recordAiLead(summary);
-    } catch {
-      // Non-fatal — the owner email below is the backup notification path.
-    }
     await notifyOwner(summary);
 
     setResult(analysis);
@@ -492,9 +466,9 @@ export default function InstantEstimatePage() {
                     ))}
                   </ul>
                   <p className="mt-4 text-xs" style={{ color: P.inkSoft }}>
-                    Don’t see everything? We’ll confirm the full list before
-                    the job. Heavy or hidden items such as safes, concrete, or
-                    dirt can change the price.
+                    Don’t see everything? We’ll confirm the full list before the
+                    job. Heavy or hidden items such as safes, concrete, or dirt
+                    can change the price.
                   </p>
                 </div>
 

@@ -28,6 +28,13 @@ const OVERVIEW: Array<{
     imageId: "home-tile-moving",
   },
   {
+    title: "Piano Moving",
+    blurb:
+      "Spinets, uprights, baby grands, and grands moved anywhere within Arizona by a licensed and insured crew.",
+    href: "/piano-moving",
+    imageId: "home-tile-piano",
+  },
+  {
     title: "Assembly",
     blurb:
       "Furniture, shelving, bed frames, patio sets, and more — built carefully and ready to use.",
@@ -36,7 +43,7 @@ const OVERVIEW: Array<{
   },
 ];
 
-/** Homepage three-card services grid linking to the dedicated service pages. */
+/** Homepage service grid linking to the dedicated service pages. */
 export function ServiceOverviewGrid() {
   return (
     <section className="px-5 py-14 md:px-8 md:py-20">
@@ -49,12 +56,12 @@ export function ServiceOverviewGrid() {
             One local crew for the jobs that take muscle and patience.
           </h2>
         </Reveal>
-        <div className="mt-10 grid gap-3 md:grid-cols-3">
+        <div className="mt-10 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {OVERVIEW.map((service, index) => (
             <Reveal key={service.href} delay={index * 0.08} className="h-full">
               <Link
                 href={service.href}
-                className="group relative flex h-full min-h-[440px] overflow-hidden rounded-[0.65rem]"
+                className="group relative flex h-full min-h-[420px] overflow-hidden rounded-[0.65rem]"
               >
                 <ImagePlaceholder
                   id={service.imageId}

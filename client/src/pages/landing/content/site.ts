@@ -44,6 +44,7 @@ export const LEGAL_DISCLOSURE = `${BRAND_NAME} is a service brand operated by ${
 export const NAV_ITEMS = [
   { label: "Junk Removal", href: "/junk-removal" },
   { label: "Moving", href: "/moving" },
+  { label: "Piano Moving", href: "/piano-moving" },
   { label: "Assembly", href: "/assembly-handyman" },
 ] as const;
 
@@ -73,6 +74,11 @@ export const PAGE_META = {
     description:
       "Local moves, in-home furniture moves, and big-item delivery across the Phoenix valley. Careful crews, upfront pricing.",
   },
+  piano: {
+    title: "Piano Movers in Arizona | Progressive Transportation Services",
+    description:
+      "Licensed and insured in-state Arizona piano moving for spinets, consoles, uprights, baby grands, and grands. One clear quote with no mileage line item.",
+  },
   assembly: {
     title:
       "Furniture Assembly in Phoenix — Senior-Friendly | Progressive Transportation Services",
@@ -82,7 +88,7 @@ export const PAGE_META = {
   estimate: {
     title: "Get a Free Estimate | Progressive Transportation Services Phoenix",
     description:
-      "Tell us what you need hauled, moved, or built and we'll text or call you back with a quote — usually within the hour.",
+      "Tell us what you need hauled, moved, assembled, or transported—including pianos—and we'll text or call you back with a clear quote.",
   },
   instantEstimate: {
     title:

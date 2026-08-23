@@ -35,7 +35,7 @@ export function SiteHeader() {
           />
         </Link>
 
-        <nav className="hidden items-center gap-6 md:flex" aria-label="Main">
+        <nav className="hidden items-center gap-5 lg:flex" aria-label="Main">
           {NAV_ITEMS.map(item => (
             <Link
               key={item.href}
@@ -72,7 +72,7 @@ export function SiteHeader() {
           </a>
           <button
             type="button"
-            className="rounded-lg border p-2 md:hidden"
+            className="rounded-lg border p-2 lg:hidden"
             style={{ borderColor: P.line, color: P.ink }}
             aria-expanded={open}
             aria-label={open ? "Close menu" : "Open menu"}
@@ -107,7 +107,7 @@ export function SiteHeader() {
 
       {open && (
         <nav
-          className="border-t px-5 py-4 md:hidden"
+          className="border-t px-5 py-4 lg:hidden"
           style={{ background: P.paperBg, borderColor: P.line }}
           aria-label="Main mobile"
         >

@@ -11,11 +11,13 @@ export function CtaBanner({
   imageId,
   flipImage = false,
   photoEstimate = false,
+  pianoQuote = false,
 }: {
   heading?: string;
   imageId: ImageBriefId;
   flipImage?: boolean;
   photoEstimate?: boolean;
+  pianoQuote?: boolean;
 }) {
   const image = IMAGE_BRIEFS[imageId];
 
@@ -71,6 +73,21 @@ export function CtaBanner({
                     ↗
                   </span>
                 </Link>
+              ) : pianoQuote ? (
+                <Link
+                  href="/estimate?service=piano"
+                  className="group inline-flex min-h-14 items-stretch overflow-hidden rounded-[0.4rem] bg-[#83e282] font-bold text-[#052a2b] shadow-[0_14px_34px_rgba(0,0,0,.24)] transition-transform duration-300 hover:-translate-y-0.5"
+                >
+                  <span className="flex items-center px-6">
+                    Request a piano quote
+                  </span>
+                  <span
+                    className="flex w-14 items-center justify-center border-l border-[#052a2b]/15 text-lg transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                    aria-hidden="true"
+                  >
+                    ↗
+                  </span>
+                </Link>
               ) : (
                 <a
                   href={bookingUrl("cta-banner")}
@@ -95,6 +112,15 @@ export function CtaBanner({
                   className="inline-flex min-h-14 items-center justify-center rounded-[0.4rem] border border-[#edf5ee]/35 bg-[#052a2b]/35 px-6 font-bold text-[#f4f7f2] transition-colors hover:border-[#edf5ee]/70"
                 >
                   Book junk removal
+                </a>
+              ) : pianoQuote ? (
+                <a
+                  href={bookingUrl("cta-banner-piano")}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-14 items-center justify-center rounded-[0.4rem] border border-[#edf5ee]/35 bg-[#052a2b]/35 px-6 font-bold text-[#f4f7f2] transition-colors hover:border-[#edf5ee]/70"
+                >
+                  Book online
                 </a>
               ) : (
                 <Link

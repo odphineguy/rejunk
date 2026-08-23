@@ -11,6 +11,7 @@ interface PageHeroProps {
   imageId: ImageBriefId;
   flipImage?: boolean;
   photoEstimate?: boolean;
+  pianoQuote?: boolean;
 }
 
 function ArrowGlyph() {
@@ -40,6 +41,7 @@ export function PageHero({
   imageId,
   flipImage = false,
   photoEstimate = false,
+  pianoQuote = false,
 }: PageHeroProps) {
   const image = IMAGE_BRIEFS[imageId];
 
@@ -99,6 +101,18 @@ export function PageHero({
                     <ArrowGlyph />
                   </span>
                 </Link>
+              ) : pianoQuote ? (
+                <Link
+                  href="/estimate?service=piano"
+                  className="group inline-flex min-h-14 items-stretch overflow-hidden rounded-[0.4rem] bg-[#83e282] font-bold text-[#052a2b] shadow-[0_14px_34px_rgba(0,0,0,.24)] transition-transform duration-300 hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#83e282]"
+                >
+                  <span className="flex items-center px-6">
+                    Request a piano quote
+                  </span>
+                  <span className="flex w-14 items-center justify-center border-l border-[#052a2b]/15 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
+                    <ArrowGlyph />
+                  </span>
+                </Link>
               ) : (
                 <a
                   href={bookingUrl("hero")}
@@ -122,6 +136,15 @@ export function PageHero({
                   className="inline-flex min-h-14 items-center justify-center rounded-[0.4rem] border border-[#edf5ee]/35 bg-[#052a2b]/30 px-6 font-bold text-[#f4f7f2] transition-colors hover:border-[#edf5ee]/70 hover:bg-[#052a2b]/55"
                 >
                   Book junk removal
+                </a>
+              ) : pianoQuote ? (
+                <a
+                  href={bookingUrl("hero-piano")}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-14 items-center justify-center rounded-[0.4rem] border border-[#edf5ee]/35 bg-[#052a2b]/30 px-6 font-bold text-[#f4f7f2] transition-colors hover:border-[#edf5ee]/70 hover:bg-[#052a2b]/55"
+                >
+                  Book online
                 </a>
               ) : (
                 <Link

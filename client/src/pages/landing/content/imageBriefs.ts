@@ -57,6 +57,12 @@ export const IMAGE_BRIEFS = {
     aspect: "4 / 5",
     src: `${UPLOAD_CDN}/6feb7b95-adcb-4dae-ae0f-1dbbb7970595.png`,
   },
+  "home-tile-piano": {
+    brief:
+      "Two uniformed movers padding and securing an upright piano inside an Arizona home.",
+    aspect: "4 / 5",
+    src: `${CDN}/hf_20260612_223432_3f5a5e54-8aa0-4a91-9756-6e03d6583c3d_min.webp`,
+  },
   "home-tile-assembly": {
     brief:
       "Uniformed furniture assembler tightening the final fastener on a modern wood bed frame.",
@@ -92,6 +98,18 @@ export const IMAGE_BRIEFS = {
     aspect: "4 / 3",
     src: `${CDN}/hf_20260612_223505_6af404f6-1eeb-403c-aabe-302c42464890_min.webp`,
   },
+  "piano-hero": {
+    brief:
+      "Two uniformed movers wrapping and strapping an upright piano before transport.",
+    aspect: "4 / 3",
+    src: `${CDN}/hf_20260612_223432_3f5a5e54-8aa0-4a91-9756-6e03d6583c3d_min.webp`,
+  },
+  "piano-route": {
+    brief:
+      "Uniformed movers securing a padded load inside a moving truck in an Arizona neighborhood.",
+    aspect: "3 / 2",
+    src: `${CDN}/hf_20260612_223505_6af404f6-1eeb-403c-aabe-302c42464890_min.webp`,
+  },
   "assembly-hero": {
     brief:
       "Professional furniture assembler building a shelving unit in a bright living room.",
@@ -113,6 +131,12 @@ export const IMAGE_BRIEFS = {
     brief: "Hand truck with stacked moving boxes.",
     aspect: "3 / 2",
     src: `${CDN}/hf_20260612_223649_7af2fbc8-1f71-4db4-8b01-918b93010e31_min.webp`,
+  },
+  "estimate-piano": {
+    brief:
+      "A padded upright piano being secured by a professional moving crew.",
+    aspect: "3 / 2",
+    src: `${CDN}/hf_20260612_223432_3f5a5e54-8aa0-4a91-9756-6e03d6583c3d_min.webp`,
   },
   "estimate-assembly": {
     brief: "Drill and hex keys laid out on flat-pack furniture parts.",
