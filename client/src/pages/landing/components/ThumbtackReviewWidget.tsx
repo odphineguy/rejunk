@@ -69,7 +69,7 @@ function widgetDocument(type: WidgetType): string {
   <a target="_blank" rel="noopener noreferrer" href="${THUMBTACK_PROFILE_URL}">
     <div>Progressive Transportation Services</div>
   </a>
-  <div id="tt-dynamic">${stars()}&nbsp;<span>19 reviews</span></div>
+  <div id="tt-dynamic">${stars()}&nbsp;<span>27 reviews</span></div>
 </div>`
       : `<div class="widget" id="tt-review-widget-one">
   <img src="${THUMBTACK_ASSET_ROOT}/logos/thumbtack/wordmark.svg" alt="Thumbtack">
@@ -79,7 +79,7 @@ function widgetDocument(type: WidgetType): string {
     </div>
     <div class="tt-right">
       <div class="tt-name">Jacky J.</div>
-      <div class="tt-stars">${stars()}&nbsp;<span>19 reviews</span> <span>1d ago</span></div>
+      <div class="tt-stars">${stars()}&nbsp;<span>27 reviews</span> <span>1d ago</span></div>
       <p>the 2 workers were polite and helpful</p>
       <a target="_blank" rel="noopener noreferrer" href="${THUMBTACK_PROFILE_URL}">See all reviews</a>
     </div>

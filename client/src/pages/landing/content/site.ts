@@ -50,7 +50,7 @@ export const NAV_ITEMS = [
 
 export const THUMBTACK_PROOF = {
   rating: "5.0",
-  reviews: "19 reviews",
+  reviews: "27 reviews",
   hires: "55 hires",
   badge: "Top Pro",
 } as const;
