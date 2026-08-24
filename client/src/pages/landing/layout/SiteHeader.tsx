@@ -17,7 +17,7 @@ export function SiteHeader() {
 
   return (
     <header
-      className="sticky top-0 z-40 border-b bg-[#f8faf7]/95 backdrop-blur"
+      className="sticky top-0 z-40 border-b bg-white"
       style={{ borderColor: P.line }}
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3 md:px-8">

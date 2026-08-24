@@ -26,7 +26,7 @@ export const IMAGE_BRIEFS = {
     brief:
       "Two uniformed crew members carrying a sofa beside a white moving truck in a Phoenix neighborhood.",
     aspect: "16 / 9",
-    src: `${UPLOAD_CDN}/5e1c2c4b-6f5f-4dd5-9ac9-322b98942165.png`,
+    src: "/images/home-hero.webp",
   },
   "home-svc-junk": {
     brief:
@@ -102,13 +102,13 @@ export const IMAGE_BRIEFS = {
     brief:
       "Two uniformed movers wrapping and strapping an upright piano before transport.",
     aspect: "4 / 3",
-    src: `${CDN}/hf_20260612_223432_3f5a5e54-8aa0-4a91-9756-6e03d6583c3d_min.webp`,
+    src: "/images/piano-hero.webp",
   },
   "piano-route": {
     brief:
-      "Uniformed movers securing a padded load inside a moving truck in an Arizona neighborhood.",
+      "Two uniformed movers guiding a fully protected upright piano through a home's front door.",
     aspect: "3 / 2",
-    src: `${CDN}/hf_20260612_223505_6af404f6-1eeb-403c-aabe-302c42464890_min.webp`,
+    src: "/images/piano-move.webp",
   },
   "assembly-hero": {
     brief:
