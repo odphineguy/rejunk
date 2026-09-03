@@ -36,6 +36,13 @@ export const SEO_ROUTES = [
     priority: "0.8",
   },
   {
+    path: "/pallet-delivery",
+    meta: PAGE_META.delivery,
+    lastModified: "2026-09-03",
+    changeFrequency: "monthly",
+    priority: "0.9",
+  },
+  {
     path: "/piano-moving",
     meta: PAGE_META.piano,
     lastModified: "2026-08-23",
@@ -173,6 +180,8 @@ function businessSchema() {
       "Junk removal",
       "Local moving",
       "Furniture delivery",
+      "Pallet delivery",
+      "Liftgate delivery",
       "Piano moving",
       "Furniture assembly",
       "Garage cleanouts",

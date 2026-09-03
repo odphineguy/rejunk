@@ -12,6 +12,7 @@ interface PageHeroProps {
   flipImage?: boolean;
   photoEstimate?: boolean;
   pianoQuote?: boolean;
+  quoteHref?: string;
 }
 
 function ArrowGlyph() {
@@ -42,6 +43,7 @@ export function PageHero({
   flipImage = false,
   photoEstimate = false,
   pianoQuote = false,
+  quoteHref = "/estimate",
 }: PageHeroProps) {
   const image = IMAGE_BRIEFS[imageId];
 
@@ -148,7 +150,7 @@ export function PageHero({
                 </a>
               ) : (
                 <Link
-                  href="/estimate"
+                  href={quoteHref}
                   className="inline-flex min-h-14 items-center justify-center rounded-[0.4rem] border border-[#edf5ee]/35 bg-[#052a2b]/30 px-6 font-bold text-[#f4f7f2] transition-colors hover:border-[#edf5ee]/70 hover:bg-[#052a2b]/55"
                 >
                   Request a quote

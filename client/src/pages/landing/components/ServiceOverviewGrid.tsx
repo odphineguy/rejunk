@@ -28,6 +28,13 @@ const OVERVIEW: Array<{
     imageId: "home-tile-moving",
   },
   {
+    title: "Pallet Delivery",
+    blurb:
+      "Tile, flooring, building materials, and oversized purchases picked up by box truck and unloaded by liftgate.",
+    href: "/pallet-delivery",
+    imageId: "pallet-delivery-hero",
+  },
+  {
     title: "Piano Moving",
     blurb:
       "Spinets, uprights, baby grands, and grands moved anywhere within Arizona by a licensed and insured crew.",
@@ -56,7 +63,7 @@ export function ServiceOverviewGrid() {
             One local crew for the jobs that take muscle and patience.
           </h2>
         </Reveal>
-        <div className="mt-10 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-10 grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {OVERVIEW.map((service, index) => (
             <Reveal key={service.href} delay={index * 0.08} className="h-full">
               <Link

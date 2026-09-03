@@ -44,6 +44,7 @@ export const LEGAL_DISCLOSURE = `${BRAND_NAME} is a service brand operated by ${
 export const NAV_ITEMS = [
   { label: "Junk Removal", href: "/junk-removal" },
   { label: "Moving", href: "/moving" },
+  { label: "Pallet Delivery", href: "/pallet-delivery" },
   { label: "Piano Moving", href: "/piano-moving" },
   { label: "Assembly", href: "/assembly-handyman" },
 ] as const;
@@ -73,6 +74,11 @@ export const PAGE_META = {
       "Local Moving & Delivery in Phoenix, AZ | Progressive Transportation Services",
     description:
       "Local moves, in-home furniture moves, and big-item delivery across the Phoenix valley. Careful crews, upfront pricing.",
+  },
+  delivery: {
+    title: "Pallet Delivery in Phoenix, AZ | Liftgate Delivery Service",
+    description:
+      "Palletized tile, flooring, building materials, oversized purchases, and warehouse pickups delivered by 26-foot box truck with liftgate and pallet jack.",
   },
   piano: {
     title: "Piano Movers in Arizona | Progressive Transportation Services",

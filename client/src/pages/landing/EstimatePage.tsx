@@ -50,6 +50,14 @@ const SERVICE_OPTIONS: Array<{
       "What's the move? (e.g. 1-bedroom apartment, one couch across town)",
   },
   {
+    key: "Pallet & Large Delivery",
+    label: "Pallet Delivery",
+    sub: "pallets, materials & oversized loads",
+    imageId: "estimate-delivery",
+    detailPrompt:
+      "What are we picking up and delivering? Include the pallet count, weight, pickup, and drop-off access.",
+  },
+  {
     key: "Assembly",
     label: "Assembly",
     sub: "furniture, shelving & outdoor sets",
@@ -129,11 +137,17 @@ export default function EstimatePage() {
   const search = useSearch();
   const startsWithPiano =
     new URLSearchParams(search).get("service") === "piano";
+  const startsWithDelivery =
+    new URLSearchParams(search).get("service") === "delivery";
 
   const [step, setStep] = useState<Step>("services");
   const [form, setForm] = useState<FormState>(() => ({
     ...INITIAL_FORM,
-    services: startsWithPiano ? ["Piano Moving"] : [],
+    services: startsWithPiano
+      ? ["Piano Moving"]
+      : startsWithDelivery
+        ? ["Pallet & Large Delivery"]
+        : [],
   }));
   const [submitting, setSubmitting] = useState(false);
   const [sendFailed, setSendFailed] = useState(false);
@@ -216,7 +230,11 @@ export default function EstimatePage() {
           email: form.email.trim(),
           smsConsent: form.smsConsent,
           company: form.company,
-          source: startsWithPiano ? "Piano Moving Page" : "Website Estimate",
+          source: startsWithPiano
+            ? "Piano Moving Page"
+            : startsWithDelivery
+              ? "Pallet Delivery Page"
+              : "Website Estimate",
         }),
       });
       setSendFailed(!response.ok);
@@ -243,7 +261,7 @@ export default function EstimatePage() {
               <p className="mt-3 text-base" style={{ color: P.inkSoft }}>
                 Select all that apply — some jobs combine more than one service.
               </p>
-              <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 {SERVICE_OPTIONS.map(option => {
                   const selected = form.services.includes(option.key);
                   return (

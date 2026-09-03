@@ -33,6 +33,9 @@ export default function ServicePage({
         flipImage={slug === "assembly-handyman"}
         photoEstimate={slug === "junk-removal"}
         pianoQuote={slug === "piano-moving"}
+        quoteHref={
+          slug === "pallet-delivery" ? "/estimate?service=delivery" : undefined
+        }
       />
 
       <QuickAnswerCards items={service.quickAnswers} />
@@ -104,14 +107,19 @@ export default function ServicePage({
             ? "Ready to clear it out?"
             : slug === "moving"
               ? "Ready for a smoother move?"
-              : slug === "piano-moving"
-                ? "Tell us about your piano."
-                : "Ready to skip the instruction manual?"
+              : slug === "pallet-delivery"
+                ? "Need a big load picked up?"
+                : slug === "piano-moving"
+                  ? "Tell us about your piano."
+                  : "Ready to skip the instruction manual?"
         }
         imageId={service.heroImageId}
         flipImage={slug === "assembly-handyman"}
         photoEstimate={slug === "junk-removal"}
         pianoQuote={slug === "piano-moving"}
+        quoteHref={
+          slug === "pallet-delivery" ? "/estimate?service=delivery" : undefined
+        }
       />
     </SiteLayout>
   );

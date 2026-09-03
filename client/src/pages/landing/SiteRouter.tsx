@@ -26,6 +26,9 @@ export default function SiteRouter() {
         {() => <ServicePage slug="junk-removal" />}
       </Route>
       <Route path="/moving">{() => <ServicePage slug="moving" />}</Route>
+      <Route path="/pallet-delivery">
+        {() => <ServicePage slug="pallet-delivery" />}
+      </Route>
       <Route path="/piano-moving">
         {() => <ServicePage slug="piano-moving" />}
       </Route>

@@ -37,9 +37,14 @@ export interface ExtraSection {
 }
 
 export interface ServiceContent {
-  slug: "junk-removal" | "moving" | "piano-moving" | "assembly-handyman";
+  slug:
+    | "junk-removal"
+    | "moving"
+    | "pallet-delivery"
+    | "piano-moving"
+    | "assembly-handyman";
   name: string;
-  metaKey: "junk" | "moving" | "piano" | "assembly";
+  metaKey: "junk" | "moving" | "delivery" | "piano" | "assembly";
   heroTitle: string;
   heroSub: string;
   heroImageId: ImageBriefId;
@@ -203,6 +208,121 @@ export const SERVICES: Record<ServiceContent["slug"], ServiceContent> = {
       {
         q: "Do you do long-distance moves?",
         a: "We focus on the Phoenix metro and East Valley. For moves beyond the valley, call us — depending on the distance we can often still help.",
+      },
+    ],
+  },
+
+  "pallet-delivery": {
+    slug: "pallet-delivery",
+    name: "Pallet & Large Delivery",
+    metaKey: "delivery",
+    heroTitle: "Big loads. Delivered with the right equipment.",
+    heroSub:
+      "Pallets of tile, flooring, building materials, and oversized purchases — picked up in our 26-foot box truck and unloaded with a liftgate and pallet jack.",
+    heroImageId: "pallet-delivery-hero",
+    quickAnswers: [
+      {
+        title: "How is delivery priced?",
+        body: "We quote the complete job based on the route, pallet count, dimensions, weight, and access at delivery. You approve one clear price before pickup.",
+      },
+      {
+        title: "What can you pick up?",
+        body: "Palletized tile and flooring, building materials, cabinets, business equipment, oversized furniture, and other store or warehouse purchases that fit safely in the truck.",
+      },
+      {
+        title: "What do you need from me?",
+        body: "Send the order details, pallet count and weight, pickup contact, delivery address, and a photo or description of the unloading area.",
+      },
+    ],
+    process: {
+      heading: "A planned pickup. A controlled delivery.",
+      steps: [
+        {
+          title: "Share the order and both locations",
+          body: "Tell us what is being picked up, how many pallets there are, the total weight, and who we should contact at the store or warehouse.",
+        },
+        {
+          title: "We confirm the truck, access, and quote",
+          body: "We review the route and unloading surface, make sure the load fits our equipment, and confirm one price before dispatch.",
+        },
+        {
+          title: "The supplier loads and we secure it",
+          body: "The pickup location typically forklift-loads the truck. We check the load, secure it for transport, and head to the delivery address.",
+        },
+        {
+          title: "Liftgate down, pallet jack out",
+          body: "We lower the load to ground level and move it to the agreed paved drop-off point, then confirm the delivery is complete.",
+        },
+      ],
+    },
+    subServicesTitle: "Loads we pick up and deliver",
+    subServices: [
+      {
+        title: "Tile & flooring pallets",
+        blurb:
+          "Heavy tile, flooring, and installation materials collected from local suppliers and delivered to the jobsite.",
+      },
+      {
+        title: "Building materials",
+        blurb:
+          "Cabinets, boxed fixtures, and palletized materials moved from the store or warehouse to your property.",
+      },
+      {
+        title: "Store & warehouse pickup",
+        blurb:
+          "We coordinate with the pickup counter or dock so your order gets collected without tying up your day.",
+      },
+      {
+        title: "Oversized purchases",
+        blurb:
+          "Large furniture, appliances, equipment, and other purchases that will not fit in a pickup truck.",
+      },
+      {
+        title: "Business equipment",
+        blurb:
+          "Fixtures, boxed equipment, and supplies delivered to offices, shops, and commercial locations.",
+      },
+      {
+        title: "Multi-pallet delivery",
+        blurb:
+          "Several pallets moved together when the combined dimensions and weight fit the truck safely.",
+      },
+    ],
+    extra: {
+      kicker: "Liftgate delivery",
+      title: "From the loading dock to ground level.",
+      paragraphs: [
+        "Flooring and building-material orders are often too large for a pickup and too heavy to unload by hand. Our box truck, liftgate, and pallet jack keep the load together and the handoff controlled.",
+        "Before pickup, we confirm the weight and the final drop point. A loaded pallet jack needs a firm, reasonably level surface, so access details matter just as much as the drive itself.",
+      ],
+      bullets: [
+        "26-foot enclosed box truck",
+        "Hydraulic liftgate and pallet jack",
+        "Load securement for transport",
+        "Ground-level delivery to an agreed paved area",
+      ],
+      imageId: "pallet-delivery-equipment",
+    },
+    faqs: [
+      {
+        q: "Will you load the pallets at pickup?",
+        a: "Most stores and warehouses load palletized orders into the truck with a forklift. We confirm their loading procedure before pickup. If an order needs to be loaded by hand, tell us so we can quote the labor and crew correctly.",
+      },
+      {
+        q: "Where can you place the pallets at delivery?",
+        a: "Standard delivery is to an agreed ground-level area that the liftgate and loaded pallet jack can safely reach. Concrete and smooth asphalt are ideal. Gravel, deep cracks, steep slopes, sand, and soft landscaping usually are not pallet-jack accessible.",
+      },
+      {
+        q: "Do you need the pallet weight?",
+        a: "Yes. Please provide the supplier's pallet count, dimensions, and weight before we confirm the job. Tile and stone are especially heavy, so we verify the load against the truck and liftgate limits before dispatch.",
+      },
+      {
+        q: "Can you bring the material inside or unpack it?",
+        a: "Standard pallet delivery ends at the agreed outdoor or ground-level drop point. Inside placement, hand unloading, unpacking, or assembly can often be added, but it needs to be included in the quote before pickup.",
+      },
+      {
+        q: "How far do you deliver?",
+        a: "Most jobs are within Phoenix and the East Valley. For longer Arizona routes, send us the pickup and delivery addresses and we will confirm availability and pricing.",
       },
     ],
   },

@@ -12,12 +12,14 @@ export function CtaBanner({
   flipImage = false,
   photoEstimate = false,
   pianoQuote = false,
+  quoteHref = "/estimate",
 }: {
   heading?: string;
   imageId: ImageBriefId;
   flipImage?: boolean;
   photoEstimate?: boolean;
   pianoQuote?: boolean;
+  quoteHref?: string;
 }) {
   const image = IMAGE_BRIEFS[imageId];
 
@@ -124,7 +126,7 @@ export function CtaBanner({
                 </a>
               ) : (
                 <Link
-                  href="/estimate"
+                  href={quoteHref}
                   className="inline-flex min-h-14 items-center justify-center rounded-[0.4rem] border border-[#edf5ee]/35 bg-[#052a2b]/35 px-6 font-bold text-[#f4f7f2] transition-colors hover:border-[#edf5ee]/70"
                 >
                   Request a quote
