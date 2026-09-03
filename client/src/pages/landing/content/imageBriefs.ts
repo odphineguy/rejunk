@@ -102,15 +102,13 @@ export const IMAGE_BRIEFS = {
     brief:
       "Progressive Transportation box truck being forklift-loaded with wrapped pallets at a local building-material supplier.",
     aspect: "4 / 3",
-    // Temporary moving image until a real pallet-delivery job photo is selected.
-    src: `${CDN}/hf_20260612_223505_6af404f6-1eeb-403c-aabe-302c42464890_min.webp`,
+    src: "/images/truck-pallet.webp",
   },
   "pallet-delivery-equipment": {
     brief:
       "Wrapped building-material pallet on the lowered liftgate of a 26-foot box truck, with the pallet jack visible.",
     aspect: "3 / 2",
-    // Temporary moving image until a real liftgate/pallet-jack photo is selected.
-    src: `${CDN}/hf_20260612_223505_6af404f6-1eeb-403c-aabe-302c42464890_min.webp`,
+    src: "/images/big-pallet.webp",
   },
   "piano-hero": {
     brief:
@@ -149,8 +147,7 @@ export const IMAGE_BRIEFS = {
   "estimate-delivery": {
     brief: "Wrapped pallet ready for box-truck liftgate delivery.",
     aspect: "3 / 2",
-    // Temporary moving image until a real pallet-delivery job photo is selected.
-    src: `${CDN}/hf_20260612_223649_7af2fbc8-1f71-4db4-8b01-918b93010e31_min.webp`,
+    src: "/images/big-pallet.webp",
   },
   "estimate-piano": {
     brief:
