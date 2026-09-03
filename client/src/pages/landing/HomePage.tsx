@@ -83,7 +83,7 @@ export default function HomePage() {
       <FaqAccordion items={HOME_FAQS} />
       <CtaBanner
         heading="Ready to get it off your list?"
-        imageId="home-values"
+        imageId="pallet-delivery-hero"
       />
     </SiteLayout>
   );
