@@ -85,7 +85,8 @@ Two distinct persistence patterns coexist:
    leads from the `app_leads_v` view (one row per negotiation; `kind` = lead until booked, then client;
    status new/quoted/escalated/booked/lost; repeat count per phone; relay-number flag) and loads a
    negotiation's `thumbtack_messages` thread for the read-only conversation sheet on **Clients & Leads**.
-   Event `thumbtack-leads-updated`. The app never writes those tables (SELECT-only RLS) and never sends a
+   Direct (non-Thumbtack) HCP customers appear as Client rows too (`source` direct / found_by_me, hand-set via
+   the app-owned `app_client_meta` table; migration `202609040002`). Event `thumbtack-leads-updated`. The app never writes the pipeline tables (SELECT-only RLS) and never sends a
    Thumbtack reply or clears an escalation. **Dashboard** reads one RPC, `dashboard_metrics_series(tenant,
    date, days)` → `dashboard_metrics(tenant, date)` per Phoenix day: revenue / collected / jobs completed
    (from `hcp_appointments.total_amount` / `paid_amount`, captured by the webhook), leads, repeats, booking

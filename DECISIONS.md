@@ -10,6 +10,29 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
 
 ---
 
+## 2026-09-04 — Direct customers (booked by hand / found by Sam) get Client rows and a Source
+
+**Decision**
+Customers who never came through Thumbtack — Juan Molano (calls direct, 9 jobs) and Wes Hopkins
+(found by Sam, 2 jobs) — only existed in the HCP ledger and were invisible on Clients & Leads.
+`app_leads_v` now UNIONs one Client row per HCP customer phone that no Thumbtack negotiation ever
+used, with `source` = `direct` by default or `found_by_me` when set by hand (new app-owned table
+`app_client_meta`, keyed by phone — the data can't tell the two apart). Every row also carries
+`hcp_job_count` / `last_job_date`, the repeat badge means "more than one HCP job on this phone",
+and the Dashboard's Repeat Customers tile counts by earlier HCP jobs instead of repeated leads.
+Clients & Leads got a Source column + filter (Thumbtack / Direct / Found by me / Manual).
+
+**Rejected**
+- Creating manual `clients` rows for them — a copy that HCP would never update.
+- Matching Thumbtack leads to HCP customers by phone — lead phones are relays; the link goes
+  through `negotiation_job_map` job ids, and any phone on a linked job is excluded from "direct".
+
+**Constraints / Open risks**
+- Direct rows are keyed by phone; an HCP customer with no phone never appears.
+- Booking rate / close rate remain Thumbtack-only on purpose (they measure the lead funnel).
+
+---
+
 ## 2026-09-04 — DASHBOARD_LEADS_SPEC v1: one Supabase project, real numbers, Thumbtack leads in the app
 
 **Decision**

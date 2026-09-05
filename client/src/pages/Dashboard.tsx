@@ -332,7 +332,7 @@ const cardDefs: Array<{
     icon: Repeat2,
     get: m => m.repeatCustomers,
     fmt: m => String(m.repeatCustomers),
-    hint: () => "Leads from a phone seen before",
+    hint: () => "Customers with an earlier HCP job",
   },
   {
     label: "Booking Rate",

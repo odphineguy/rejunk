@@ -20,6 +20,19 @@ export const LEADS_WINDOW_DAYS = 60;
 
 export type ThumbtackLeadStatus = "new" | "quoted" | "escalated" | "booked" | "lost";
 
+/**
+ * Where the customer came from. `thumbtack` rows are negotiations; `direct`
+ * and `found_by_me` rows are HCP customers no Thumbtack lead ever matched —
+ * the two are told apart by hand (`setClientSource`).
+ */
+export type LeadSourceKind = "thumbtack" | "direct" | "found_by_me";
+
+export const leadSourceLabel: Record<LeadSourceKind, string> = {
+  thumbtack: "Thumbtack",
+  direct: "Direct",
+  found_by_me: "Found by me",
+};
+
 export interface ThumbtackLead {
   negotiationId: string;
   leadId: string;
@@ -48,6 +61,10 @@ export interface ThumbtackLead {
   /** Negotiations sharing this phone number (1 = first-time). */
   leadCountForPhone: number;
   firstResponseLatencyMs: number | null;
+  source: LeadSourceKind;
+  /** Non-canceled HCP jobs on this phone number (repeat = more than one). */
+  hcpJobCount: number;
+  lastJobDate: string | null;
 }
 
 export interface ThumbtackMessage {
@@ -114,7 +131,38 @@ function leadFromRow(row: Record<string, unknown>): ThumbtackLead {
       row.first_response_latency_ms == null
         ? null
         : Number(row.first_response_latency_ms),
+    source:
+      row.source === "direct" || row.source === "found_by_me" ? row.source : "thumbtack",
+    hcpJobCount: Number(row.hcp_job_count ?? 0) || 0,
+    lastJobDate: (row.last_job_date as string | null) ?? null,
   };
+}
+
+/** True when this customer has had more than one HCP job (any source). */
+export function isRepeatCustomer(lead: ThumbtackLead): boolean {
+  return lead.hcpJobCount > 1 || lead.leadCountForPhone > 1;
+}
+
+/**
+ * Hand-sets Direct vs Found-by-me for a non-Thumbtack customer (keyed by
+ * phone). Updates the cache immediately, then the `app_client_meta` table.
+ */
+export async function setClientSource(
+  phone: string,
+  source: Exclude<LeadSourceKind, "thumbtack">
+): Promise<void> {
+  cachedLeads = cachedLeads.map(lead =>
+    lead.phone === phone && lead.source !== "thumbtack" ? { ...lead, source } : lead
+  );
+  writeJson(LEADS_KEY, cachedLeads);
+  notify();
+  if (!isSupabaseConfigured || !supabase) return;
+  if (!(await ensureSession())) return;
+  const { error } = await supabase.from("app_client_meta").upsert(
+    { tenant_id: APP_TENANT_ID, phone, source, updated_at: new Date().toISOString() },
+    { onConflict: "tenant_id,phone" }
+  );
+  if (error) throw new Error(error.message);
 }
 
 /**
@@ -128,11 +176,13 @@ export async function hydrateThumbtackLeads(
   if (!(await ensureSession())) return;
 
   const since = new Date(Date.now() - days * 86400000).toISOString();
+  // Thumbtack rows: trailing window. Direct customers: always (their
+  // received_at is the first job, which can be much older).
   const { data, error } = await supabase
     .from("app_leads_v")
     .select("*")
     .eq("tenant_id", APP_TENANT_ID)
-    .gte("received_at", since)
+    .or(`received_at.gte.${since},source.neq.thumbtack`)
     .order("received_at", { ascending: false });
   if (error) {
     console.error("[leadsStorage] Thumbtack leads load failed; cache kept.", error.message);
@@ -193,6 +243,7 @@ function csvEscape(value: unknown): string {
 export function thumbtackLeadsToCsv(leads: ThumbtackLead[]): string {
   const header = [
     "Type",
+    "Source",
     "Name",
     "Phone",
     "Phone is relay",
@@ -210,11 +261,14 @@ export function thumbtackLeadsToCsv(leads: ThumbtackLead[]): string {
     "Quote (last outbound)",
     "Lead cost",
     "Repeat count",
+    "HCP jobs",
+    "Last job",
     "TV install referral",
     "Negotiation ID",
   ];
   const rows = leads.map(lead => [
     lead.kind === "client" ? "Client" : "Lead",
+    leadSourceLabel[lead.source],
     lead.name,
     lead.phone,
     lead.phoneIsRelay ? "yes" : "no",
@@ -232,6 +286,8 @@ export function thumbtackLeadsToCsv(leads: ThumbtackLead[]): string {
     lead.quotedText,
     lead.leadPrice,
     lead.leadCountForPhone,
+    lead.hcpJobCount,
+    lead.lastJobDate,
     lead.tvInstallReferral ? "yes" : "no",
     lead.negotiationId,
   ]);

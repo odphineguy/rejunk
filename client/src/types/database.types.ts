@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_client_meta: {
+        Row: {
+          tenant_id: string
+          phone: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          tenant_id?: string
+          phone: string
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          tenant_id?: string
+          phone?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       app_settings: {
         Row: {
           id: string
@@ -1543,6 +1564,9 @@ export type Database = {
           last_message_at: string | null
           lead_count_for_phone: number
           first_response_latency_ms: number | null
+          source: string
+          hcp_job_count: number
+          last_job_date: string | null
         }
         Relationships: []
       }

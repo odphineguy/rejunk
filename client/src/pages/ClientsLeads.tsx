@@ -69,7 +69,11 @@ import {
 import {
   downloadThumbtackLeadsCsv,
   getThumbtackLeads,
+  isRepeatCustomer,
+  leadSourceLabel,
   loadConversation,
+  setClientSource,
+  type LeadSourceKind,
   type ThumbtackLead,
   type ThumbtackMessage,
 } from "@/lib/leadsStorage";
@@ -198,8 +202,15 @@ function rowCreatedAt(row: ListRow) {
   return row.source === "thumbtack" ? row.lead.receivedAt : row.client.createdAt;
 }
 function rowTags(row: ListRow) {
-  return row.source === "thumbtack" ? ["Thumbtack"] : (row.client.tags ?? []);
+  return row.source === "thumbtack" ? [leadSourceLabel[row.lead.source]] : (row.client.tags ?? []);
 }
+/** Source label for the column + filter. Manual clients use their Lead Source field. */
+function rowSource(row: ListRow) {
+  return row.source === "thumbtack"
+    ? leadSourceLabel[row.lead.source]
+    : row.client.leadSource ?? "Manual";
+}
+const sourceFilters = ["All sources", "Thumbtack", "Direct", "Found by me", "Manual"];
 
 function formatPhone(value: string) {
   const digits = value.replace(/\D/g, "");
@@ -222,6 +233,7 @@ function ClientsList() {
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | ClientKind>("all");
   const [tagFilter, setTagFilter] = useState("Tags");
+  const [sourceFilter, setSourceFilter] = useState("All sources");
   const [sortField, setSortField] = useState<
     "Name" | "Company" | "Date Created"
   >("Date Created");
@@ -249,7 +261,7 @@ function ClientsList() {
   // Any filter/sort change drops the user back to the first page.
   useEffect(() => {
     setPage(1);
-  }, [activeTab, query, tagFilter, sortField, sortDir, pageSize]);
+  }, [activeTab, query, tagFilter, sourceFilter, sortField, sortDir, pageSize]);
 
   const rows = useMemo<ListRow[]>(
     () => [
@@ -307,12 +319,16 @@ function ClientsList() {
     const result = rows.filter(row => {
       const matchesTab = activeTab === "all" || rowKind(row) === activeTab;
       const matchesTag = tagFilter === "Tags" || rowTags(row).includes(tagFilter);
+      const matchesSource =
+        sourceFilter === "All sources" ||
+        (sourceFilter === "Manual" ? row.source === "manual" : rowSource(row) === sourceFilter);
       const searchable = [
         rowName(row),
         rowCompany(row),
         rowEmail(row),
         rowPhone(row),
         rowKind(row),
+        rowSource(row),
         row.source === "thumbtack" ? row.lead.city : "",
         row.source === "thumbtack" ? statusLabel[row.lead.status] : "",
       ]
@@ -322,6 +338,7 @@ function ClientsList() {
       return (
         matchesTab &&
         matchesTag &&
+        matchesSource &&
         (!normalizedQuery || searchable.includes(normalizedQuery))
       );
     });
@@ -339,7 +356,7 @@ function ClientsList() {
       return cmp * dir;
     });
     return result;
-  }, [activeTab, rows, query, tagFilter, sortField, sortDir]);
+  }, [activeTab, rows, query, tagFilter, sourceFilter, sortField, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -402,11 +419,22 @@ function ClientsList() {
   };
 
   const openRow = (row: ListRow) => {
-    if (row.source === "thumbtack") setOpenLead(row.lead);
-    else navigate(`/clients/${row.id}`);
+    if (row.source === "thumbtack") {
+      if (row.lead.source === "thumbtack") setOpenLead(row.lead);
+    } else navigate(`/clients/${row.id}`);
   };
 
-  const columnCount = activeTab === "lead" ? 7 : 9;
+  const changeSource = async (lead: ThumbtackLead, source: LeadSourceKind) => {
+    if (!lead.phone || source === "thumbtack") return;
+    try {
+      await setClientSource(lead.phone, source);
+      toast.success(`${lead.name} marked ${leadSourceLabel[source]}`);
+    } catch {
+      toast.error("Couldn't save that. Try again.");
+    }
+  };
+
+  const columnCount = activeTab === "lead" ? 8 : 10;
 
   return (
     <>
@@ -471,6 +499,11 @@ function ClientsList() {
               )}
             </div>
             <div className="flex flex-wrap gap-3">
+              <FilterSelect
+                value={sourceFilter}
+                onChange={setSourceFilter}
+                options={sourceFilters}
+              />
               <FilterSelect
                 value={tagFilter}
                 onChange={setTagFilter}
@@ -563,6 +596,7 @@ function ClientsList() {
                   {activeTab !== "lead" && <TableHead>Email</TableHead>}
                   <TableHead>Phone</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Source</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Date Created</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -597,12 +631,12 @@ function ClientsList() {
                             Escalated
                           </Badge>
                         )}
-                        {row.source === "thumbtack" && row.lead.leadCountForPhone > 1 && (
+                        {row.source === "thumbtack" && isRepeatCustomer(row.lead) && (
                           <Badge
                             variant="secondary"
                             className="rounded-full bg-muted px-2 font-normal text-foreground"
                           >
-                            repeat ({row.lead.leadCountForPhone})
+                            repeat ({Math.max(row.lead.hcpJobCount, row.lead.leadCountForPhone)})
                           </Badge>
                         )}
                         {row.source === "thumbtack" && row.lead.tvInstallReferral && (
@@ -645,9 +679,34 @@ function ClientsList() {
                         {rowKind(row)}
                       </Badge>
                     </TableCell>
+                    <TableCell onClick={event => event.stopPropagation()}>
+                      {row.source === "thumbtack" && row.lead.source !== "thumbtack" && row.lead.phone ? (
+                        <Select
+                          value={row.lead.source}
+                          onValueChange={value => changeSource(row.lead, value as LeadSourceKind)}
+                        >
+                          <SelectTrigger className="h-8 w-[140px] rounded-lg bg-card text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="direct">Direct</SelectItem>
+                            <SelectItem value="found_by_me">Found by me</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className="text-sm">{rowSource(row)}</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {row.source === "thumbtack" ? (
-                        <span className="text-sm">{statusLabel[row.lead.status]}</span>
+                        <span className="text-sm">
+                          {statusLabel[row.lead.status]}
+                          {row.lead.hcpJobCount > 0 && (
+                            <span className="ml-1 text-xs text-muted-foreground">
+                              · {row.lead.hcpJobCount} job{row.lead.hcpJobCount === 1 ? "" : "s"}
+                            </span>
+                          )}
+                        </span>
                       ) : (
                         <span className="text-sm text-muted-foreground">Manual</span>
                       )}
@@ -658,15 +717,21 @@ function ClientsList() {
                       onClick={event => event.stopPropagation()}
                     >
                       {row.source === "thumbtack" ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-[#155e3f] hover:text-[#0c4a30]"
-                          onClick={() => setOpenLead(row.lead)}
-                        >
-                          <MessageSquareText className="size-4" />
-                          Open conversation
-                        </Button>
+                        row.lead.source === "thumbtack" ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-[#155e3f] hover:text-[#0c4a30]"
+                            onClick={() => setOpenLead(row.lead)}
+                          >
+                            <MessageSquareText className="size-4" />
+                            Open conversation
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            Last job {row.lead.lastJobDate ?? "—"}
+                          </span>
+                        )
                       ) : (
                         <>
                           <Button

@@ -1,0 +1,11 @@
+-- Direct (non-Thumbtack) HCP customers in Clients & Leads (2026-09-04, applied to rejunk-prod
+-- via the Supabase MCP as `direct_clients_v1`). Additive:
+--   * app_client_meta (tenant_id, phone, source direct|found_by_me) — app-writable, hand-set source.
+--   * app_leads_v rebuilt as a UNION: Thumbtack negotiations (unchanged columns, lead_id now text)
+--     PLUS one 'client' row per HCP customer phone that no Thumbtack lead ever used (source =
+--     app_client_meta.source or 'direct'). Three new columns on every row: source,
+--     hcp_job_count (non-canceled HCP jobs on the phone), last_job_date.
+--   * dashboard_metrics.repeat_customers = customers with a job that day whose phone had an
+--     earlier HCP job (was: repeated Thumbtack leads). Booking/close rates stay Thumbtack-only.
+-- The authoritative SQL is the MCP migration `direct_clients_v1` in the rejunk-prod history; this
+-- file is the on-disk record so the migrations folder stays complete.
