@@ -146,15 +146,104 @@ function dayFromJson(raw: Record<string, unknown>): DayMetrics {
   };
 }
 
-const SERIES_DAYS = 8;
+const SPARK_DAYS = 8;
 
-async function loadSeries(endDate: Date): Promise<DayMetrics[]> {
+/** Inclusive date range; a single day has from === to. */
+interface DateRange {
+  from: Date;
+  to: Date;
+}
+
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function rangeLength(range: DateRange) {
+  return (
+    Math.round(
+      (startOfDay(range.to).getTime() - startOfDay(range.from).getTime()) / 86400000
+    ) + 1
+  );
+}
+
+function isSingleDay(range: DateRange) {
+  return rangeLength(range) === 1;
+}
+
+function formatRange(range: DateRange) {
+  if (isSingleDay(range)) return formatLongDate(range.to);
+  const sameYear = range.from.getFullYear() === range.to.getFullYear();
+  const from = range.from.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+  const to = range.to.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  return `${from} – ${to} · ${rangeLength(range)} days`;
+}
+
+/**
+ * Adds up a run of days into one tile set. Counts and dollars sum; averages
+ * and rates are recomputed from the sums; the close rate (already rolling
+ * 30 days) and capacity come from the last day; the first-reply figure is
+ * the median of the daily medians. Empty input → null (no data).
+ */
+function aggregate(days: DayMetrics[]): DayMetrics | null {
+  if (days.length === 0) return null;
+  if (days.length === 1) return days[0];
+  const last = days[days.length - 1];
+  const sum = (pick: (d: DayMetrics) => number) => days.reduce((acc, d) => acc + pick(d), 0);
+  const sumNullable = (pick: (d: DayMetrics) => number | null) => {
+    const values = days.map(pick).filter((v): v is number => v != null);
+    return values.length ? values.reduce((acc, v) => acc + v, 0) : null;
+  };
+  const revenue = sumNullable(d => d.revenue);
+  const jobsWithAmount = sum(d => d.jobsWithAmount);
+  const newLeads = sum(d => d.newLeads);
+  const leadsBooked = sum(d => d.leadsBooked);
+  const medians = days
+    .map(d => d.firstReplyMedianSec)
+    .filter((v): v is number => v != null)
+    .sort((a, b) => a - b);
+  const median =
+    medians.length === 0
+      ? null
+      : medians.length % 2
+        ? medians[(medians.length - 1) / 2]
+        : (medians[medians.length / 2 - 1] + medians[medians.length / 2]) / 2;
+  return {
+    date: last.date,
+    revenue,
+    collected: sumNullable(d => d.collected),
+    jobsCompleted: sum(d => d.jobsCompleted),
+    jobsWithAmount,
+    avgJobSize: revenue != null && jobsWithAmount > 0 ? revenue / jobsWithAmount : null,
+    newLeads,
+    repeatCustomers: sum(d => d.repeatCustomers),
+    leadsBooked,
+    bookingRate: newLeads > 0 ? leadsBooked / newLeads : null,
+    closeRate30d: last.closeRate30d,
+    closeBooked30d: last.closeBooked30d,
+    closeReceived30d: last.closeReceived30d,
+    firstReplyMedianSec: median,
+    reviewsReceived: sum(d => d.reviewsReceived),
+    voiceCalls: sum(d => d.voiceCalls),
+    voiceCallsBooked: sum(d => d.voiceCallsBooked),
+    capacity: last.capacity,
+  };
+}
+
+async function loadSeries(endDate: Date, days: number): Promise<DayMetrics[]> {
   if (!isSupabaseConfigured || !supabase) return [];
   if (!(await ensureSession())) return [];
   const { data, error } = await supabase.rpc("dashboard_metrics_series", {
     p_tenant: APP_TENANT_ID,
     p_date: isoDate(endDate),
-    p_days: SERIES_DAYS,
+    p_days: days,
   });
   if (error) throw new Error(error.message);
   return Array.isArray(data)
@@ -319,10 +408,12 @@ function DeltaPill({
   today,
   prev,
   invert = false,
+  periodLabel = "prior day",
 }: {
   today: number | null;
   prev: number | null;
   invert?: boolean;
+  periodLabel?: string;
 }) {
   if (today == null || prev == null) {
     return (
@@ -330,7 +421,7 @@ function DeltaPill({
         <Minus className="size-3" />
         {NO_DATA}{" "}
         <span className="font-sans font-medium opacity-70">
-          {today == null ? "no data" : "no prior day"}
+          {today == null ? "no data" : `no ${periodLabel}`}
         </span>
       </span>
     );
@@ -353,21 +444,30 @@ function DeltaPill({
       <Arrow className="size-3" />
       {pct > 0 ? "+" : ""}
       {Math.round(pct)}%{" "}
-      <span className="font-sans font-medium opacity-70">vs prior day</span>
+      <span className="font-sans font-medium opacity-70">vs {periodLabel}</span>
     </span>
   );
 }
 
 export default function Dashboard() {
-  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  const [range, setRange] = useState<DateRange>(() => {
+    const today = startOfDay(new Date());
+    return { from: today, to: today };
+  });
   const { isOwner } = useStaffSession();
   const [series, setSeries] = useState<DayMetrics[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const length = rangeLength(range);
+  const single = length === 1;
+  // Fetch the range plus the same length before it (for "vs prior period");
+  // a single day also needs a trailing window for its sparklines.
+  const fetchDays = single ? SPARK_DAYS : length * 2;
+
   useEffect(() => {
     let cancelled = false;
     setError(null);
-    loadSeries(selectedDate)
+    loadSeries(range.to, fetchDays)
       .then(rows => {
         if (!cancelled) setSeries(rows);
       })
@@ -379,17 +479,23 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [selectedDate]);
+  }, [range, fetchDays]);
 
-  // The last entry is the selected day (drives the big numbers); the one
-  // before is "prior day"; the whole window feeds the sparklines.
-  const metrics = series && series.length > 0 ? series[series.length - 1] : null;
-  const prevMetrics = series && series.length > 1 ? series[series.length - 2] : null;
   const loading = series === null;
+  const rows = series ?? [];
+  // Last `length` days = the selected range; the `length` before = prior period.
+  const rangeDays = rows.slice(Math.max(0, rows.length - length));
+  const priorDays = single
+    ? rows.slice(Math.max(0, rows.length - 2), Math.max(0, rows.length - 1))
+    : rows.slice(Math.max(0, rows.length - length * 2), Math.max(0, rows.length - length));
+  const metrics = aggregate(rangeDays);
+  const prevMetrics = aggregate(priorDays);
+  const sparkDays = single ? rows : rangeDays;
+  const periodLabel = single ? "prior day" : `prior ${length} days`;
 
   const tiles = useMemo(
-    () => cards(metrics, prevMetrics, series ?? [], isOwner),
-    [metrics, prevMetrics, series, isOwner]
+    () => cards(metrics, prevMetrics, sparkDays, isOwner),
+    [metrics, prevMetrics, sparkDays, isOwner]
   );
 
   return (
@@ -412,13 +518,10 @@ export default function Dashboard() {
             Dashboard
           </h1>
           <div className="mt-1 text-sm font-semibold text-muted-foreground">
-            Operational snapshot · {formatLongDate(selectedDate)}
+            Operational snapshot · {formatRange(range)}
           </div>
         </div>
-        <DashboardDatePicker
-          selectedDate={selectedDate}
-          onSelectDate={setSelectedDate}
-        />
+        <DashboardDatePicker range={range} onSelectRange={setRange} />
       </div>
 
       {!isSupabaseConfigured && (
@@ -465,7 +568,12 @@ export default function Dashboard() {
               )}
               {!card.static && (
                 <div className="mt-4 flex items-end justify-between gap-2.5">
-                  <DeltaPill today={card.today} prev={card.prev} invert={card.invert} />
+                  <DeltaPill
+                    today={card.today}
+                    prev={card.prev}
+                    invert={card.invert}
+                    periodLabel={periodLabel}
+                  />
                   <Sparkline data={card.spark} />
                 </div>
               )}
@@ -484,9 +592,10 @@ export default function Dashboard() {
           icon={Star}
           label="Reviews Received"
           value={metrics ? String(metrics.reviewsReceived) : NO_DATA}
-          hint="Thumbtack reviews that day"
+          hint={single ? "Thumbtack reviews that day" : "Thumbtack reviews in the period"}
           today={metrics?.reviewsReceived ?? null}
           prev={prevMetrics?.reviewsReceived ?? null}
+          periodLabel={periodLabel}
         />
         <SmallTile
           icon={PhoneCall}
@@ -499,8 +608,9 @@ export default function Dashboard() {
           }
           today={metrics?.voiceCalls ?? null}
           prev={prevMetrics?.voiceCalls ?? null}
+          periodLabel={periodLabel}
         />
-        <CapacityStrip rows={metrics?.capacity ?? null} date={selectedDate} />
+        <CapacityStrip rows={metrics?.capacity ?? null} date={range.to} />
       </div>
     </div>
   );
@@ -513,6 +623,7 @@ function SmallTile({
   hint,
   today,
   prev,
+  periodLabel,
 }: {
   icon: LucideIcon;
   label: string;
@@ -520,6 +631,7 @@ function SmallTile({
   hint?: string;
   today: number | null;
   prev: number | null;
+  periodLabel: string;
 }) {
   return (
     <section className="kpi-card rounded-[var(--radius)] border border-border bg-card px-5 pb-4 pt-4">
@@ -540,7 +652,7 @@ function SmallTile({
             <div className="mt-1 text-xs font-medium text-muted-foreground">{hint}</div>
           )}
         </div>
-        <DeltaPill today={today} prev={prev} />
+        <DeltaPill today={today} prev={prev} periodLabel={periodLabel} />
       </div>
     </section>
   );
@@ -620,31 +732,50 @@ function startOfWeek(date: Date) {
   return addDays(date, day === 0 ? -6 : 1 - day);
 }
 
-function quickRangeDate(range: (typeof quickRanges)[number]) {
-  const now = new Date();
+function quickRange(range: (typeof quickRanges)[number]): DateRange {
+  const today = startOfDay(new Date());
   switch (range) {
     case "Today":
-      return now;
-    case "Yesterday":
-      return addDays(now, -1);
+      return { from: today, to: today };
+    case "Yesterday": {
+      const d = addDays(today, -1);
+      return { from: d, to: d };
+    }
     case "This Week":
-      return startOfWeek(now);
-    case "Last Week":
-      return addDays(startOfWeek(now), -7);
+      return { from: startOfWeek(today), to: today };
+    case "Last Week": {
+      const from = addDays(startOfWeek(today), -7);
+      return { from, to: addDays(from, 6) };
+    }
     case "This Month":
-      return new Date(now.getFullYear(), now.getMonth(), 1);
+      return { from: new Date(today.getFullYear(), today.getMonth(), 1), to: today };
     case "Last Month":
-      return new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      return {
+        from: new Date(today.getFullYear(), today.getMonth() - 1, 1),
+        to: new Date(today.getFullYear(), today.getMonth(), 0),
+      };
   }
 }
 
 function DashboardDatePicker({
-  selectedDate,
-  onSelectDate,
+  range,
+  onSelectRange,
 }: {
-  selectedDate: Date;
-  onSelectDate: (date: Date) => void;
+  range: DateRange;
+  onSelectRange: (range: DateRange) => void;
 }) {
+  const selectedDate = range.to;
+  const single = isSingleDay(range);
+  const step = rangeLength(range);
+  const shift = (direction: 1 | -1) =>
+    onSelectRange({
+      from: addDays(range.from, step * direction),
+      to: addDays(range.to, step * direction),
+    });
+  const pickDay = (date: Date) => {
+    const d = startOfDay(date);
+    onSelectRange({ from: d, to: d });
+  };
   return (
     <div className="flex h-11 items-center gap-1 rounded-[11px] border border-border bg-card pl-1 pr-1 shadow-[var(--shadow-card)]">
       <Popover>
@@ -654,11 +785,13 @@ function DashboardDatePicker({
             className="h-9 gap-2.5 rounded-lg px-3 font-display text-sm font-semibold hover:bg-muted"
           >
             <CalendarIcon className="size-4 text-[var(--moss-deep)]" />
-            {selectedDate.toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })}
+            {single
+              ? selectedDate.toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })
+              : `${range.from.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${range.to.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
           </Button>
         </PopoverTrigger>
         <PopoverContent
@@ -672,7 +805,7 @@ function DashboardDatePicker({
                   key={range}
                   type="button"
                   className="block w-full rounded-md px-2 py-1.5 text-left text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-[var(--moss-deep)]"
-                  onClick={() => onSelectDate(quickRangeDate(range))}
+                  onClick={() => onSelectRange(quickRange(range))}
                 >
                   {range}
                 </button>
@@ -682,7 +815,7 @@ function DashboardDatePicker({
               <Calendar
                 mode="single"
                 selected={selectedDate}
-                onSelect={date => date && onSelectDate(date)}
+                onSelect={date => date && pickDay(date)}
                 month={selectedDate}
                 className="mx-auto"
                 classNames={{
@@ -712,17 +845,17 @@ function DashboardDatePicker({
       <div className="flex gap-0.5 border-l border-border pl-1">
         <button
           type="button"
-          aria-label="Previous day"
+          aria-label={single ? "Previous day" : "Previous period"}
           className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          onClick={() => onSelectDate(addDays(selectedDate, -1))}
+          onClick={() => shift(-1)}
         >
           <ChevronLeft className="size-4" />
         </button>
         <button
           type="button"
-          aria-label="Next day"
+          aria-label={single ? "Next day" : "Next period"}
           className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          onClick={() => onSelectDate(addDays(selectedDate, 1))}
+          onClick={() => shift(1)}
         >
           <ChevronRight className="size-4" />
         </button>
