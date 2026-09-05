@@ -10,6 +10,61 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
 
 ---
 
+## 2026-09-04 — DASHBOARD_LEADS_SPEC v1: one Supabase project, real numbers, Thumbtack leads in the app
+
+**Decision**
+The app now runs against **rejunk-prod only** (live already did via the Vercel env; local `.env` was the
+last thing pointing at the retired `get-junk-quote` test project). The Dashboard and Clients & Leads read
+the webhook pipeline's tables instead of the empty app-side `jobs`/`clients`: a Postgres view
+`app_leads_v` (one row per Thumbtack negotiation, Lead → Client once booked, repeat count per phone,
+relay-number flag, escalation badge, last outbound = the quote) feeds the Clients & Leads list with a
+read-only conversation sheet over `thumbtack_messages`; a security-definer function
+`dashboard_metrics(tenant, date)` (wrapped by `dashboard_metrics_series` so the page makes ONE call for
+the 8-day window) feeds every tile. Job dollars come from `hcp_appointments.total_amount` / `paid_amount`
+/ `completed_at`, captured by the HCP webhook (`jobBits`/`upsertAppointment`) and backfilled once by
+`scripts/backfill-job-totals.ts` in the webhook repo. Tiles render "—" for no-data (never a fake 0);
+Gross Margin says "n/a" until the pricing overhaul; "Estimates Won Ratio" became "First Reply (median)".
+Shared tables are tenant-scoped in the app via `APP_TENANT_ID = "progressive"`.
+
+**Deviations from the spec (reality wins)**
+1. **Phase A was mostly already true.** All 14 app migrations were applied to rejunk-prod on 2026-06-13
+   and Vercel's `VITE_SUPABASE_URL` already pointed there — only local `.env` changed. Nothing to diff or
+   rename for `pricebook_items` / `app_settings`: same tables, same columns, already shared. The real
+   collision was *tenant scoping*: `pricebook_items.tenant_id` defaults to `'wellsentry'` and the app read
+   all 255 rows (138 WellSentry + 117 Progressive) — fixed by filtering/stamping the tenant.
+2. **`employee_profiles` does not exist** on rejunk-prod (it lives in the unapplied driver phase-1
+   migration); employees are still localStorage-only in the app. Crew seeding was skipped rather than
+   inventing a table nobody reads. Vehicles were seeded (insert-only) from the Fleet CSV; sedans skipped.
+3. **"Booked" truth.** `thumbtack_leads.booked_at` is NULL on all 340 leads (only voice/chat bookings set
+   it; none yet). The only real booking signal is `negotiation_job_map` → HCP job (HCP's native Thumbtack
+   import, 26 rows). The view treats either as booked; `booked_via` reads `'hcp'` for those.
+4. **Status mapping** from the pipeline's `needs_response`/`responded`/`escalated`: `responded` → quoted,
+   `escalated_at` set → escalated, `outcome='lost'` or `disposition='declined'` → lost, else new. Booked
+   wins over everything.
+5. **No customer email exists anywhere in the pipeline** → `customer_email` is NULL in the view.
+6. **Relay detection** = the pipeline's `RELAY_PREFIXES` (669315, 669669) plus the `9787xx` block Thumbtack
+   has issued since July (observed on ~70 leads). `602555…` numbers are test data, not relay.
+7. **thumbtack_leads / thumbtack_messages had an ALL policy for `authenticated`** — the anonymous browser
+   session could write them. Replaced with SELECT-only (the spec asked for read-only; no function uses the
+   anon key to write). The rest of the read list got new SELECT policies; nothing else changed.
+8. **Capacity strip** counts `hcp_appointments` rows per resource per day (voice bookings also create a
+   ledger row, so counting `bookings` too would double-count). Half-day resources = 2 parts × units.
+
+**Rejected**
+- Copying Thumbtack leads into the app's `clients` table — a second source of truth the pipeline would
+  never update. The view IS the source; manual clients stay separate and remain importable.
+- A per-tile query from the page — one RPC keeps the page fast and the math in one place.
+- Applying the spec's "rename to `rejunk_app_settings`" — the tables were already shared correctly.
+
+**Constraints / Open risks**
+- `pnpm dev` now writes to production data. There is no test DB.
+- Revenue for a day is NULL until at least one completed job that day has a captured `total_amount`
+  (webhook events after deploy, or the backfill). Paid = total − outstanding, clamped to [0, total].
+- HCP's `work_status` "complete unrated"/"complete rated" both count as completed (substring match).
+- The view runs as its owner (`security_invoker = false`); `authenticated` can only SELECT it.
+
+---
+
 ## 2026-06-09 — Driver app simplified: five buttons, no micro-step tracking
 
 **Decision**

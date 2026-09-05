@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Banknote,
   CalendarIcon,
@@ -9,10 +9,13 @@ import {
   MoveDownRight,
   MoveUpRight,
   Percent,
+  PhoneCall,
   Repeat2,
+  Star,
   Target,
+  Timer,
   TrendingUp,
-  Trophy,
+  Truck,
   UserRoundPlus,
   UsersRound,
   WalletCards,
@@ -28,14 +31,16 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { useStaffSession } from "@/hooks/useStaffSession";
-import { getJobs } from "@/lib/jobStorage";
-import { loadSavedEstimates } from "@/utils/pricingStorage";
-import type { Job } from "@/types/jobs";
+import { ensureSession, isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { APP_TENANT_ID } from "@/lib/tenant";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
 });
+
+/** Rendered wherever the truth is "no data" — never a fake 0. */
+const NO_DATA = "—";
 
 const quickRanges = [
   "Today",
@@ -61,94 +66,147 @@ function addDays(date: Date, days: number) {
   return next;
 }
 
-function sameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
+/** Local calendar date as YYYY-MM-DD (the DB function works in Phoenix time). */
+function isoDate(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
-function uniqueCustomers(jobs: Job[]) {
-  return new Set(
-    jobs.map(job => job.customerName.trim().toLowerCase()).filter(Boolean)
-  );
+// ---------- data (DASHBOARD_LEADS_SPEC §3: one call → every tile) ----------
+
+interface CapacityRow {
+  slug: string;
+  label: string;
+  granularity: "halfday" | "day";
+  units: number;
+  booked: number;
+  open: number;
 }
 
-type Estimates = ReturnType<typeof loadSavedEstimates>;
+/** One day from `dashboard_metrics`. `null` = no data for that tile. */
+interface DayMetrics {
+  date: string;
+  revenue: number | null;
+  collected: number | null;
+  jobsCompleted: number;
+  jobsWithAmount: number;
+  avgJobSize: number | null;
+  newLeads: number;
+  repeatCustomers: number;
+  leadsBooked: number;
+  bookingRate: number | null;
+  closeRate30d: number | null;
+  closeBooked30d: number;
+  closeReceived30d: number;
+  firstReplyMedianSec: number | null;
+  reviewsReceived: number;
+  voiceCalls: number;
+  voiceCallsBooked: number;
+  capacity: CapacityRow[];
+}
 
-function metricsForDate(jobs: Job[], estimates: Estimates, date: Date) {
-  const selectedJobs = jobs.filter(job => {
-    const candidate = job.scheduledStart ?? job.createdAt;
-    return sameDay(new Date(candidate), date);
-  });
-  const completedJobs = selectedJobs.filter(job => job.status === "completed");
-  const paidJobs = selectedJobs.filter(
-    job => job.paymentStatus === "paid" || job.actuals?.chargedAmount
-  );
-  const collected = paidJobs.reduce(
-    (sum, job) => sum + (job.actuals?.chargedAmount ?? job.quotedAmount),
-    0
-  );
-  const totalQuoted = selectedJobs.reduce(
-    (sum, job) => sum + job.quotedAmount,
-    0
-  );
-  const customers = uniqueCustomers(selectedJobs);
-  const repeatCustomers = Array.from(customers).filter(
-    customer =>
-      jobs.filter(job => job.customerName.trim().toLowerCase() === customer)
-        .length > 1
-  ).length;
-  const wonEstimates = estimates.filter(estimate =>
-    jobs.some(job => job.sourceEstimateId === estimate.id)
-  ).length;
+const num = (value: unknown): number | null =>
+  value == null || value === "" || Number.isNaN(Number(value))
+    ? null
+    : Number(value);
+const int = (value: unknown): number => num(value) ?? 0;
 
+function dayFromJson(raw: Record<string, unknown>): DayMetrics {
+  const capacity = Array.isArray(raw.capacity)
+    ? (raw.capacity as Record<string, unknown>[]).map(row => ({
+        slug: String(row.slug ?? ""),
+        label: String(row.label ?? row.slug ?? ""),
+        granularity: row.granularity === "day" ? ("day" as const) : ("halfday" as const),
+        units: int(row.units),
+        booked: int(row.booked),
+        open: int(row.open),
+      }))
+    : [];
   return {
-    totalRevenue: totalQuoted,
-    collected,
-    jobsCompleted: completedJobs.length,
-    grossMargin: totalQuoted
-      ? Math.round(
-          (selectedJobs.reduce(
-            (sum, job) => sum + (job.estimatedProfit ?? 0),
-            0
-          ) /
-            totalQuoted) *
-            100
-        )
-      : 0,
-    averageJobSize: selectedJobs.length ? totalQuoted / selectedJobs.length : 0,
-    newClients: customers.size,
-    repeatCustomers,
-    bookingRate: estimates.length ? selectedJobs.length / estimates.length : 0,
-    closeRate: estimates.length ? wonEstimates / estimates.length : 0,
-    wonEstimates,
-    lostEstimates: Math.max(estimates.length - wonEstimates, 0),
+    date: String(raw.date ?? ""),
+    revenue: num(raw.revenue),
+    collected: num(raw.collected),
+    jobsCompleted: int(raw.jobs_completed),
+    jobsWithAmount: int(raw.jobs_with_amount),
+    avgJobSize: num(raw.avg_job_size),
+    newLeads: int(raw.new_leads),
+    repeatCustomers: int(raw.repeat_customers),
+    leadsBooked: int(raw.leads_booked),
+    bookingRate: num(raw.booking_rate),
+    closeRate30d: num(raw.close_rate_30d),
+    closeBooked30d: int(raw.close_booked_30d),
+    closeReceived30d: int(raw.close_received_30d),
+    firstReplyMedianSec: num(raw.first_reply_median_sec),
+    reviewsReceived: int(raw.reviews_received),
+    voiceCalls: int(raw.voice_calls),
+    voiceCallsBooked: int(raw.voice_calls_booked),
+    capacity,
   };
 }
 
-type DayMetrics = ReturnType<typeof metricsForDate>;
+const SERIES_DAYS = 8;
+
+async function loadSeries(endDate: Date): Promise<DayMetrics[]> {
+  if (!isSupabaseConfigured || !supabase) return [];
+  if (!(await ensureSession())) return [];
+  const { data, error } = await supabase.rpc("dashboard_metrics_series", {
+    p_tenant: APP_TENANT_ID,
+    p_date: isoDate(endDate),
+    p_days: SERIES_DAYS,
+  });
+  if (error) throw new Error(error.message);
+  return Array.isArray(data)
+    ? (data as Record<string, unknown>[]).map(dayFromJson)
+    : [];
+}
+
+// ---------- tiles ----------
+
+function formatPct(value: number | null) {
+  return value == null ? NO_DATA : `${(value * 100).toFixed(1)}%`;
+}
+
+function formatSeconds(value: number | null) {
+  if (value == null) return NO_DATA;
+  if (value < 60) return `${Math.round(value)}s`;
+  const minutes = Math.floor(value / 60);
+  const seconds = Math.round(value % 60);
+  if (minutes < 60) return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
+}
 
 const cardDefs: Array<{
   label: string;
   icon: LucideIcon;
-  get: (m: DayMetrics) => number;
+  /** null = no data → "—" and no delta */
+  get: (m: DayMetrics) => number | null;
   fmt: (m: DayMetrics) => string;
+  hint?: (m: DayMetrics) => string | undefined;
   ownerOnly?: boolean;
+  /** Static tile (no delta / sparkline) — e.g. margin until the pricing overhaul. */
+  static?: boolean;
+  /** Lower is better (first-reply time). */
+  invert?: boolean;
 }> = [
   {
     label: "Total Revenue",
     icon: WalletCards,
-    get: m => m.totalRevenue,
-    fmt: m => currency.format(m.totalRevenue),
+    get: m => m.revenue,
+    fmt: m => (m.revenue == null ? NO_DATA : currency.format(m.revenue)),
+    hint: m =>
+      m.jobsCompleted > 0 && m.jobsWithAmount < m.jobsCompleted
+        ? `${m.jobsWithAmount} of ${m.jobsCompleted} jobs have totals`
+        : undefined,
     ownerOnly: true,
   },
   {
     label: "Collected Payments",
     icon: Banknote,
     get: m => m.collected,
-    fmt: m => currency.format(m.collected),
+    fmt: m => (m.collected == null ? NO_DATA : currency.format(m.collected)),
     ownerOnly: true,
   },
   {
@@ -160,46 +218,58 @@ const cardDefs: Array<{
   {
     label: "Gross Margin",
     icon: Percent,
-    get: m => m.grossMargin,
-    fmt: m => `${m.grossMargin}%`,
+    get: () => null,
+    fmt: () => "n/a",
+    hint: () => "Until the pricing overhaul",
     ownerOnly: true,
+    static: true,
   },
   {
     label: "Average Job Size",
     icon: TrendingUp,
-    get: m => m.averageJobSize,
-    fmt: m => currency.format(m.averageJobSize),
+    get: m => m.avgJobSize,
+    fmt: m => (m.avgJobSize == null ? NO_DATA : currency.format(m.avgJobSize)),
     ownerOnly: true,
   },
   {
     label: "New Clients",
     icon: UsersRound,
-    get: m => m.newClients,
-    fmt: m => String(m.newClients),
+    get: m => m.newLeads,
+    fmt: m => String(m.newLeads),
+    hint: () => "Thumbtack leads received",
   },
   {
     label: "Repeat Customers",
     icon: Repeat2,
     get: m => m.repeatCustomers,
     fmt: m => String(m.repeatCustomers),
+    hint: () => "Leads from a phone seen before",
   },
   {
     label: "Booking Rate",
     icon: UserRoundPlus,
     get: m => m.bookingRate,
-    fmt: m => `${(m.bookingRate * 100).toFixed(2)}%`,
+    fmt: m => formatPct(m.bookingRate),
+    hint: m =>
+      m.newLeads > 0 ? `${m.leadsBooked} booked of ${m.newLeads} received` : undefined,
   },
   {
     label: "Close Rate",
     icon: Target,
-    get: m => m.closeRate,
-    fmt: m => `${(m.closeRate * 100).toFixed(2)}%`,
+    get: m => m.closeRate30d,
+    fmt: m => formatPct(m.closeRate30d),
+    hint: m =>
+      m.closeReceived30d > 0
+        ? `${m.closeBooked30d} of ${m.closeReceived30d} leads, rolling 30 days`
+        : undefined,
   },
   {
-    label: "Estimates Won Ratio",
-    icon: Trophy,
-    get: m => m.wonEstimates,
-    fmt: m => `${m.wonEstimates}:${m.lostEstimates}`,
+    label: "First Reply (median)",
+    icon: Timer,
+    get: m => m.firstReplyMedianSec,
+    fmt: m => formatSeconds(m.firstReplyMedianSec),
+    hint: () => "Lead received → first response",
+    invert: true,
   },
 ];
 
@@ -208,7 +278,7 @@ function sparkPath(data: number[], w: number, h: number, close: boolean) {
   const min = Math.min(...data);
   const pad = 3;
   const points = data.map((value, index) => [
-    (index / (data.length - 1)) * (w - 2) + 1,
+    (index / Math.max(data.length - 1, 1)) * (w - 2) + 1,
     max === min
       ? h / 2
       : h - pad - ((value - min) / (max - min)) * (h - pad * 2),
@@ -219,7 +289,12 @@ function sparkPath(data: number[], w: number, h: number, close: boolean) {
   return d;
 }
 
-function Sparkline({ data }: { data: number[] }) {
+function Sparkline({ data }: { data: Array<number | null> }) {
+  // Days with no data draw as gaps at the baseline; an all-empty series is blank.
+  if (data.every(value => value == null)) {
+    return <span className="h-[30px] w-[110px] flex-none" aria-hidden />;
+  }
+  const filled = data.map(value => value ?? 0);
   return (
     <svg
       className="h-[30px] w-[110px] flex-none opacity-85"
@@ -227,9 +302,9 @@ function Sparkline({ data }: { data: number[] }) {
       preserveAspectRatio="none"
       aria-hidden
     >
-      <path d={sparkPath(data, 110, 30, true)} fill="url(#kpi-sparkfill)" />
+      <path d={sparkPath(filled, 110, 30, true)} fill="url(#kpi-sparkfill)" />
       <path
-        d={sparkPath(data, 110, 30, false)}
+        d={sparkPath(filled, 110, 30, false)}
         fill="none"
         stroke="var(--moss-deep)"
         strokeWidth={1.6}
@@ -240,18 +315,39 @@ function Sparkline({ data }: { data: number[] }) {
   );
 }
 
-function DeltaPill({ today, prev }: { today: number; prev: number }) {
+function DeltaPill({
+  today,
+  prev,
+  invert = false,
+}: {
+  today: number | null;
+  prev: number | null;
+  invert?: boolean;
+}) {
+  if (today == null || prev == null) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-[#dedbc9] bg-[#eceade] px-2.5 py-0.5 font-display text-xs font-semibold text-[#71755f]">
+        <Minus className="size-3" />
+        {NO_DATA}{" "}
+        <span className="font-sans font-medium opacity-70">
+          {today == null ? "no data" : "no prior day"}
+        </span>
+      </span>
+    );
+  }
   const pct =
     prev === 0 ? (today > 0 ? 100 : 0) : ((today - prev) / prev) * 100;
-  const trend = pct > 0 ? "up" : pct < 0 ? "down" : "flat";
-  const Arrow = trend === "up" ? MoveUpRight : trend === "down" ? MoveDownRight : Minus;
+  const direction = pct > 0 ? "up" : pct < 0 ? "down" : "flat";
+  // "Good" is green: up for most tiles, down for time-to-reply.
+  const good = direction === "flat" ? "flat" : (direction === "up") !== invert ? "good" : "bad";
+  const Arrow = direction === "up" ? MoveUpRight : direction === "down" ? MoveDownRight : Minus;
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-display text-xs font-semibold",
-        trend === "up" && "border-[#c6e7bd] bg-[#e2f4dc] text-[#1f6b3c]",
-        trend === "down" && "border-[#ead4ae] bg-[#f4e7d2] text-[#a06b22]",
-        trend === "flat" && "border-[#dedbc9] bg-[#eceade] text-[#71755f]"
+        good === "good" && "border-[#c6e7bd] bg-[#e2f4dc] text-[#1f6b3c]",
+        good === "bad" && "border-[#ead4ae] bg-[#f4e7d2] text-[#a06b22]",
+        good === "flat" && "border-[#dedbc9] bg-[#eceade] text-[#71755f]"
       )}
     >
       <Arrow className="size-3" />
@@ -265,20 +361,36 @@ function DeltaPill({ today, prev }: { today: number; prev: number }) {
 export default function Dashboard() {
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const { isOwner } = useStaffSession();
-  const jobs = getJobs();
-  const estimates = loadSavedEstimates();
+  const [series, setSeries] = useState<DayMetrics[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // One metrics snapshot per day for the trailing 8 days — the last entry is
-  // the selected day (drives the big numbers), the rest feed the sparklines.
-  const series = useMemo(
-    () =>
-      Array.from({ length: 8 }, (_, index) =>
-        metricsForDate(jobs, estimates, addDays(selectedDate, index - 7))
-      ),
-    [estimates, jobs, selectedDate]
+  useEffect(() => {
+    let cancelled = false;
+    setError(null);
+    loadSeries(selectedDate)
+      .then(rows => {
+        if (!cancelled) setSeries(rows);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setSeries([]);
+        setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDate]);
+
+  // The last entry is the selected day (drives the big numbers); the one
+  // before is "prior day"; the whole window feeds the sparklines.
+  const metrics = series && series.length > 0 ? series[series.length - 1] : null;
+  const prevMetrics = series && series.length > 1 ? series[series.length - 2] : null;
+  const loading = series === null;
+
+  const tiles = useMemo(
+    () => cards(metrics, prevMetrics, series ?? [], isOwner),
+    [metrics, prevMetrics, series, isOwner]
   );
-  const metrics = series[7];
-  const prevMetrics = series[6];
 
   return (
     <div className="mx-auto w-full max-w-[1480px] px-4 py-6 md:px-7 md:pb-12">
@@ -309,8 +421,25 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="grid gap-[18px] [grid-template-columns:repeat(auto-fill,minmax(290px,1fr))]">
-        {cards(metrics, prevMetrics, series, isOwner).map((card, index) => {
+      {!isSupabaseConfigured && (
+        <p className="mb-4 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+          Live numbers need the database connection. Running in local-only mode.
+        </p>
+      )}
+      {error && (
+        <p className="mb-4 rounded-lg border border-[#ead4ae] bg-[#f4e7d2] px-4 py-3 text-sm text-[#a06b22]">
+          Couldn't load the dashboard numbers: {error}
+        </p>
+      )}
+
+      <div
+        className={cn(
+          "grid gap-[18px] [grid-template-columns:repeat(auto-fill,minmax(290px,1fr))]",
+          loading && "opacity-60"
+        )}
+        aria-busy={loading}
+      >
+        {tiles.map((card, index) => {
           const Icon = card.icon;
           return (
             <section
@@ -329,34 +458,161 @@ export default function Dashboard() {
               <div className="font-display text-[2.05rem] font-bold leading-[1.05] tracking-tight">
                 {card.value}
               </div>
-              <div className="mt-4 flex items-end justify-between gap-2.5">
-                <DeltaPill today={card.today} prev={card.prev} />
-                <Sparkline data={card.spark} />
-              </div>
+              {card.hint && (
+                <div className="mt-1 text-xs font-medium text-muted-foreground">
+                  {card.hint}
+                </div>
+              )}
+              {!card.static && (
+                <div className="mt-4 flex items-end justify-between gap-2.5">
+                  <DeltaPill today={card.today} prev={card.prev} invert={card.invert} />
+                  <Sparkline data={card.spark} />
+                </div>
+              )}
             </section>
           );
         })}
+      </div>
+
+      <div
+        className={cn(
+          "mt-[18px] grid gap-[18px] [grid-template-columns:repeat(auto-fill,minmax(290px,1fr))]",
+          loading && "opacity-60"
+        )}
+      >
+        <SmallTile
+          icon={Star}
+          label="Reviews Received"
+          value={metrics ? String(metrics.reviewsReceived) : NO_DATA}
+          hint="Thumbtack reviews that day"
+          today={metrics?.reviewsReceived ?? null}
+          prev={prevMetrics?.reviewsReceived ?? null}
+        />
+        <SmallTile
+          icon={PhoneCall}
+          label="Voice Calls"
+          value={metrics ? String(metrics.voiceCalls) : NO_DATA}
+          hint={
+            metrics
+              ? `${metrics.voiceCallsBooked} booked on the call`
+              : "Answered by the voice agent"
+          }
+          today={metrics?.voiceCalls ?? null}
+          prev={prevMetrics?.voiceCalls ?? null}
+        />
+        <CapacityStrip rows={metrics?.capacity ?? null} date={selectedDate} />
       </div>
     </div>
   );
 }
 
+function SmallTile({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  today,
+  prev,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  hint?: string;
+  today: number | null;
+  prev: number | null;
+}) {
+  return (
+    <section className="kpi-card rounded-[var(--radius)] border border-border bg-card px-5 pb-4 pt-4">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          {label}
+        </span>
+        <span className="kpi-ico flex size-8 items-center justify-center rounded-[10px] border border-border bg-[#edebde] text-[var(--moss-deep)]">
+          <Icon className="size-4" />
+        </span>
+      </div>
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <div className="font-display text-[1.6rem] font-bold leading-[1.05] tracking-tight">
+            {value}
+          </div>
+          {hint && (
+            <div className="mt-1 text-xs font-medium text-muted-foreground">{hint}</div>
+          )}
+        </div>
+        <DeltaPill today={today} prev={prev} />
+      </div>
+    </section>
+  );
+}
+
+function CapacityStrip({
+  rows,
+  date,
+}: {
+  rows: CapacityRow[] | null;
+  date: Date;
+}) {
+  return (
+    <section className="kpi-card rounded-[var(--radius)] border border-border bg-card px-5 pb-4 pt-4">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Capacity ·{" "}
+          {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+        </span>
+        <span className="kpi-ico flex size-8 items-center justify-center rounded-[10px] border border-border bg-[#edebde] text-[var(--moss-deep)]">
+          <Truck className="size-4" />
+        </span>
+      </div>
+      {!rows || rows.length === 0 ? (
+        <div className="font-display text-[1.6rem] font-bold leading-[1.05]">{NO_DATA}</div>
+      ) : (
+        <ul className="space-y-1.5">
+          {rows.map(row => {
+            const total = (row.granularity === "halfday" ? 2 : 1) * row.units;
+            const full = row.open === 0;
+            return (
+              <li key={row.slug} className="flex items-center justify-between gap-3 text-sm">
+                <span className="font-semibold capitalize">{row.slug}</span>
+                <span
+                  className={cn(
+                    "font-display text-xs font-semibold",
+                    full ? "text-[#a06b22]" : "text-[#1f6b3c]"
+                  )}
+                >
+                  {row.open} open · {row.booked} booked
+                  <span className="ml-1 font-sans font-medium text-muted-foreground">
+                    of {total} {row.granularity === "halfday" ? "half-days" : "day"}
+                  </span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function cards(
-  metrics: DayMetrics,
-  prevMetrics: DayMetrics,
+  metrics: DayMetrics | null,
+  prevMetrics: DayMetrics | null,
   series: DayMetrics[],
   isOwner: boolean
 ) {
   return cardDefs
     .filter(def => isOwner || !def.ownerOnly)
     .map(def => ({
-    label: def.label,
-    icon: def.icon,
-    value: def.fmt(metrics),
-    today: def.get(metrics),
-    prev: def.get(prevMetrics),
-    spark: series.map(def.get),
-  }));
+      label: def.label,
+      icon: def.icon,
+      value: metrics ? def.fmt(metrics) : NO_DATA,
+      hint: metrics ? def.hint?.(metrics) : undefined,
+      today: metrics ? def.get(metrics) : null,
+      prev: prevMetrics ? def.get(prevMetrics) : null,
+      spark: series.map(def.get),
+      static: def.static ?? false,
+      invert: def.invert ?? false,
+    }));
 }
 
 function startOfWeek(date: Date) {

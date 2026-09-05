@@ -55,12 +55,16 @@ The Estimate Builder switches on `EstimateMode = "junk" | "service"` (`client/sr
 distance logic that feed the builder.
 
 ### Persistence: Supabase-backed, localStorage as warm cache  ← the big change
-This is **NOT** a localStorage-only app anymore. Backend is **Supabase** (Postgres + Auth + RLS) with a
-**prod/test split since 2026-06-12**: the live site uses **`rejunk-prod`** (ref `iozmgsopcyezkntnqbgj`,
-via Vercel env), while local dev / `.env` uses the original **`get-junk-quote`** project (ref
-`nglmgglrexxumjndhyzo`) — now the test DB, full of fake data. Schema changes must be applied to BOTH
-(test first, then prod). There is **no Express/REST API** — the browser talks to the DB directly,
-guarded by row-level security. Two distinct persistence patterns coexist:
+This is **NOT** a localStorage-only app anymore. Backend is **Supabase** (Postgres + Auth + RLS).
+**One project since 2026-09-04 (DASHBOARD_LEADS_SPEC): `rejunk-prod`** (ref `iozmgsopcyezkntnqbgj`) for
+BOTH the live site (Vercel env) and local dev (`.env`). It is shared with the **`rejunk-webhook-services`**
+pipeline (Thumbtack leads, HCP appointments, voice calls, bookings…) — so `localhost:3000` is no longer a
+throwaway playground: writes hit the real business's tables. The old `get-junk-quote` test project
+(`nglmgglrexxumjndhyzo`) is retired. Shared tables carry a `tenant_id`; the app always filters/stamps
+`APP_TENANT_ID = "progressive"` (`lib/tenant.ts`) — `pricebook_items` defaults to `'wellsentry'`
+otherwise, and `app_settings` also holds the pipeline's `thumbtack_*` rows (the app never loads them).
+There is **no Express/REST API** — the browser talks to the DB directly, guarded by row-level security.
+Two distinct persistence patterns coexist:
 
 1. **Supabase-backed modules** (the important data): `utils/pricingStorage.ts`, `lib/jobStorage.ts`,
    `lib/pricebookStorage.ts`, `lib/clientStorage.ts`, `lib/dispatchOperations.ts`, `lib/driverStorage.ts`,
@@ -77,6 +81,16 @@ guarded by row-level security. Two distinct persistence patterns coexist:
 2. **localStorage-only modules** (newer ops features, not yet on Supabase):
    `employeeStorage.ts`, `eventStorage.ts`, `invoiceStorage.ts`, `paymentStorage.ts`.
    Same `*-updated` window-event convention, but no remote sync.
+   **Read-only pipeline views** (2026-09-04): `lib/leadsStorage.ts` hydrates the last 60 days of Thumbtack
+   leads from the `app_leads_v` view (one row per negotiation; `kind` = lead until booked, then client;
+   status new/quoted/escalated/booked/lost; repeat count per phone; relay-number flag) and loads a
+   negotiation's `thumbtack_messages` thread for the read-only conversation sheet on **Clients & Leads**.
+   Event `thumbtack-leads-updated`. The app never writes those tables (SELECT-only RLS) and never sends a
+   Thumbtack reply or clears an escalation. **Dashboard** reads one RPC, `dashboard_metrics_series(tenant,
+   date, days)` → `dashboard_metrics(tenant, date)` per Phoenix day: revenue / collected / jobs completed
+   (from `hcp_appointments.total_amount` / `paid_amount`, captured by the webhook), leads, repeats, booking
+   rate, rolling-30-day close rate, first-reply median, reviews, voice calls, per-resource capacity.
+   `null` = no data → the tile shows "—", never a fake 0; Gross Margin is "n/a" until the pricing overhaul.
 3. **Supabase-first with offline outbox**: `lib/dispatchMessageStorage.ts` (driver ↔ dispatch messaging,
    keys `rejunk_dispatch_*_v1`) — cache-first writes, an outbox retries sends made while offline, and
    **Supabase Realtime** pushes live inserts. Event: `dispatch-messages-updated`.
@@ -237,6 +251,16 @@ the `staff`/`staff_sessions` tables server-only — see **Auth** above. Deployin
 `SUPABASE_SERVICE_ROLE_KEY` + `SUPABASE_URL` added to the **Vercel** env (the office-login Vercel function
 `api/staff.ts` reads them), and a one-time re-login for everyone (old sessions carry no token).
 
+`202609040001_dashboard_leads.sql` (DASHBOARD_LEADS_SPEC v1) is the first migration written for the
+**shared** rejunk-prod DB: adds `total_amount` / `paid_amount` / `completed_at` to the pipeline's
+`hcp_appointments`, SELECT-only `authenticated` policies on the pipeline tables the app reads
+(`thumbtack_leads`, `thumbtack_messages`, `bookings`, `hcp_appointments`, `voice_calls`,
+`reviews_received`, `review_requests_sent`, `capacity_resources` — the first two previously had an ALL
+policy for authenticated, now tightened), the `app_leads_v` view, the `dashboard_metrics*` functions
+(security definer, execute granted to `authenticated`), and an insert-only fleet seed into `vehicles`
+(SPR-01…06, BOX-01). Applied through the Supabase MCP / SQL editor, not the CLI. Never expose
+`thumbtack_tokens`, `businesses`, `proxy_numbers`, or `hcp_links` to the browser.
+
 ## Deployment
 
 Production is a **static SPA on Vercel** (`vercel.json`: build `vite build`, output `dist/public`, SPA
@@ -246,9 +270,8 @@ serves `dist/public` + the maps proxy, but the live site does not use it. After 
 must be added to the Google key's referrer allowlist. Live URL: **https://rejunk.vercel.app**.
 
 > Working convention: **commit locally, push only on explicit request** — `main` auto-deploys to the live
-> site. Since 2026-06-12 live (`rejunk-prod`) and local (`get-junk-quote`, the test DB) are **separate
-> Supabase projects** — local experiments can't touch production data, and schema changes must be applied
-> to both.
+> site. Since 2026-09-04 live and local share the **same** Supabase project (`rejunk-prod`) — there is no
+> test DB any more, so treat local writes as production writes.
 
 ## Conventions
 

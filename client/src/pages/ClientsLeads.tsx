@@ -14,12 +14,14 @@ import {
   Info,
   Mail,
   MapPin,
+  MessageSquareText,
   MoreHorizontal,
   Paperclip,
   Phone,
   Plus,
   Save,
   Search,
+  ShieldAlert,
   Tag,
   Trash2,
   Upload,
@@ -64,11 +66,22 @@ import {
   getClients,
   saveClient,
 } from "@/lib/clientStorage";
+import {
+  downloadThumbtackLeadsCsv,
+  getThumbtackLeads,
+  loadConversation,
+  type ThumbtackLead,
+  type ThumbtackMessage,
+} from "@/lib/leadsStorage";
 import { cn } from "@/lib/utils";
 import {
-  downloadClientsCsv,
-  importClientsFromCsv,
-} from "@/utils/clientCsv";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { importClientsFromCsv } from "@/utils/clientCsv";
 import type {
   ClientKind,
   ClientRecord,
@@ -157,27 +170,80 @@ function PageHeader({
   );
 }
 
+/**
+ * One row of the list: a Thumbtack negotiation (read-only, from the
+ * `app_leads_v` view) or a manually created client/lead (editable, from
+ * clientStorage). DASHBOARD_LEADS_SPEC §2.
+ */
+type ListRow =
+  | { source: "thumbtack"; id: string; lead: ThumbtackLead }
+  | { source: "manual"; id: string; client: ClientRecord };
+
+function rowName(row: ListRow) {
+  return row.source === "thumbtack" ? row.lead.name : clientName(row.client);
+}
+function rowCompany(row: ListRow) {
+  return row.source === "thumbtack" ? row.lead.category ?? "" : row.client.company ?? "";
+}
+function rowEmail(row: ListRow) {
+  return row.source === "thumbtack" ? row.lead.email ?? "" : row.client.email ?? "";
+}
+function rowPhone(row: ListRow) {
+  return row.source === "thumbtack" ? row.lead.phone ?? "" : row.client.phone ?? "";
+}
+function rowKind(row: ListRow): ClientKind {
+  return row.source === "thumbtack" ? row.lead.kind : row.client.kind;
+}
+function rowCreatedAt(row: ListRow) {
+  return row.source === "thumbtack" ? row.lead.receivedAt : row.client.createdAt;
+}
+function rowTags(row: ListRow) {
+  return row.source === "thumbtack" ? ["Thumbtack"] : (row.client.tags ?? []);
+}
+
+function formatPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 10)
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return value;
+}
+
+const statusLabel: Record<ThumbtackLead["status"], string> = {
+  new: "New",
+  quoted: "Quoted",
+  escalated: "Escalated",
+  booked: "Booked",
+  lost: "Lost",
+};
+
 function ClientsList() {
   const [clients, setClients] = useState<ClientRecord[]>(() => getClients());
+  const [leads, setLeads] = useState<ThumbtackLead[]>(() => getThumbtackLeads());
   const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"all" | ClientKind>("client");
+  const [activeTab, setActiveTab] = useState<"all" | ClientKind>("all");
   const [tagFilter, setTagFilter] = useState("Tags");
   const [sortField, setSortField] = useState<
     "Name" | "Company" | "Date Created"
-  >("Name");
+  >("Date Created");
   const [sortDir, setSortDir] = useState<"Ascending" | "Descending">(
-    "Ascending"
+    "Descending"
   );
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [openLead, setOpenLead] = useState<ThumbtackLead | null>(null);
   const [, navigate] = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const refresh = () => setClients(getClients());
+    const refreshLeads = () => setLeads(getThumbtackLeads());
     window.addEventListener("clients-updated", refresh);
-    return () => window.removeEventListener("clients-updated", refresh);
+    window.addEventListener("thumbtack-leads-updated", refreshLeads);
+    return () => {
+      window.removeEventListener("clients-updated", refresh);
+      window.removeEventListener("thumbtack-leads-updated", refreshLeads);
+    };
   }, []);
 
   // Any filter/sort change drops the user back to the first page.
@@ -185,22 +251,37 @@ function ClientsList() {
     setPage(1);
   }, [activeTab, query, tagFilter, sortField, sortDir, pageSize]);
 
+  const rows = useMemo<ListRow[]>(
+    () => [
+      ...leads.map(lead => ({
+        source: "thumbtack" as const,
+        id: `tt:${lead.negotiationId}`,
+        lead,
+      })),
+      ...clients.map(client => ({
+        source: "manual" as const,
+        id: client.id,
+        client,
+      })),
+    ],
+    [clients, leads]
+  );
+
   const allTags = useMemo(() => {
     const set = new Set<string>();
-    clients.forEach(client =>
-      (client.tags ?? []).forEach(tag => set.add(tag))
-    );
+    rows.forEach(row => rowTags(row).forEach(tag => set.add(tag)));
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [clients]);
+  }, [rows]);
 
-  const exportClients = () => {
-    const all = getClients();
+  // Export = CSV of the Thumbtack view (spec §2). Manual clients stay on Import.
+  const exportLeads = () => {
+    const all = getThumbtackLeads();
     if (all.length === 0) {
-      toast.info("No clients to export yet.");
+      toast.info("No Thumbtack leads to export yet.");
       return;
     }
-    downloadClientsCsv(all);
-    toast.success(`Exported ${all.length} client${all.length === 1 ? "" : "s"}.`);
+    downloadThumbtackLeadsCsv(all);
+    toast.success(`Exported ${all.length} lead${all.length === 1 ? "" : "s"}.`);
   };
 
   const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -221,18 +302,19 @@ function ClientsList() {
     }
   };
 
-  const filteredClients = useMemo(() => {
+  const filteredRows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    const result = clients.filter(client => {
-      const matchesTab = activeTab === "all" || client.kind === activeTab;
-      const matchesTag =
-        tagFilter === "Tags" || (client.tags ?? []).includes(tagFilter);
+    const result = rows.filter(row => {
+      const matchesTab = activeTab === "all" || rowKind(row) === activeTab;
+      const matchesTag = tagFilter === "Tags" || rowTags(row).includes(tagFilter);
       const searchable = [
-        clientName(client),
-        client.company,
-        client.email,
-        client.phone,
-        client.kind,
+        rowName(row),
+        rowCompany(row),
+        rowEmail(row),
+        rowPhone(row),
+        rowKind(row),
+        row.source === "thumbtack" ? row.lead.city : "",
+        row.source === "thumbtack" ? statusLabel[row.lead.status] : "",
       ]
         .filter(Boolean)
         .join(" ")
@@ -247,21 +329,22 @@ function ClientsList() {
     result.sort((a, b) => {
       let cmp = 0;
       if (sortField === "Name") {
-        cmp = clientName(a).localeCompare(clientName(b));
+        cmp = rowName(a).localeCompare(rowName(b));
       } else if (sortField === "Company") {
-        cmp = (a.company ?? "").localeCompare(b.company ?? "");
+        cmp = rowCompany(a).localeCompare(rowCompany(b));
       } else {
-        cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        cmp =
+          new Date(rowCreatedAt(a)).getTime() - new Date(rowCreatedAt(b)).getTime();
       }
       return cmp * dir;
     });
     return result;
-  }, [activeTab, clients, query, tagFilter, sortField, sortDir]);
+  }, [activeTab, rows, query, tagFilter, sortField, sortDir]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredClients.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * pageSize;
-  const pagedClients = filteredClients.slice(pageStart, pageStart + pageSize);
+  const pagedRows = filteredRows.slice(pageStart, pageStart + pageSize);
 
   const removeClient = (event: React.MouseEvent, clientId: string) => {
     event.stopPropagation();
@@ -274,7 +357,10 @@ function ClientsList() {
     toast.success("Client deleted");
   };
 
-  const visibleIds = pagedClients.map(client => client.id);
+  // Only manual rows can be selected/deleted — Thumbtack rows are read-only.
+  const visibleIds = pagedRows
+    .filter(row => row.source === "manual")
+    .map(row => row.id);
   const allVisibleSelected =
     visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id));
   const someVisibleSelected = visibleIds.some(id => selectedIds.has(id));
@@ -315,6 +401,13 @@ function ClientsList() {
     toast.success(`${count} ${count === 1 ? "entry" : "entries"} deleted`);
   };
 
+  const openRow = (row: ListRow) => {
+    if (row.source === "thumbtack") setOpenLead(row.lead);
+    else navigate(`/clients/${row.id}`);
+  };
+
+  const columnCount = activeTab === "lead" ? 7 : 9;
+
   return (
     <>
       <PageHeader
@@ -337,11 +430,11 @@ function ClientsList() {
             </Button>
             <Button
               variant="outline"
-              onClick={exportClients}
+              onClick={exportLeads}
               className="rounded-lg border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]"
             >
               <Upload className="size-4" />
-              Export Clients
+              Export Leads
             </Button>
             <Button
               asChild
@@ -363,7 +456,7 @@ function ClientsList() {
               <Input
                 value={query}
                 onChange={event => setQuery(event.target.value)}
-                placeholder="Search..."
+                placeholder="Search name, phone, city, status..."
                 className="h-12 rounded-lg pl-10 pr-10"
               />
               {query && (
@@ -466,95 +559,158 @@ function ClientsList() {
                     />
                   </TableHead>
                   <TableHead>Name</TableHead>
-                  {activeTab !== "lead" && <TableHead>Company</TableHead>}
+                  {activeTab !== "lead" && <TableHead>Company / Service</TableHead>}
                   {activeTab !== "lead" && <TableHead>Email</TableHead>}
                   <TableHead>Phone</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Date Created</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pagedClients.map(client => (
+                {pagedRows.map(row => (
                   <TableRow
-                    key={client.id}
+                    key={row.id}
                     className="cursor-pointer"
-                    onClick={() => navigate(`/clients/${client.id}`)}
+                    onClick={() => openRow(row)}
                   >
                     <TableCell
                       className="px-8"
                       onClick={event => event.stopPropagation()}
                     >
                       <Checkbox
-                        aria-label={`Select ${clientName(client)}`}
-                        checked={selectedIds.has(client.id)}
+                        aria-label={`Select ${rowName(row)}`}
+                        disabled={row.source === "thumbtack"}
+                        checked={selectedIds.has(row.id)}
                         onCheckedChange={checked =>
-                          toggleOne(client.id, checked === true)
+                          toggleOne(row.id, checked === true)
                         }
                       />
                     </TableCell>
                     <TableCell className="font-medium">
-                      {clientName(client)}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span>{rowName(row)}</span>
+                        {row.source === "thumbtack" && row.lead.escalatedAt && (
+                          <Badge className="rounded-full border-[#ead4ae] bg-[#f4e7d2] px-2 font-semibold text-[#a06b22] hover:bg-[#f4e7d2]">
+                            <ShieldAlert className="size-3" />
+                            Escalated
+                          </Badge>
+                        )}
+                        {row.source === "thumbtack" && row.lead.leadCountForPhone > 1 && (
+                          <Badge
+                            variant="secondary"
+                            className="rounded-full bg-muted px-2 font-normal text-foreground"
+                          >
+                            repeat ({row.lead.leadCountForPhone})
+                          </Badge>
+                        )}
+                        {row.source === "thumbtack" && row.lead.tvInstallReferral && (
+                          <Badge
+                            variant="secondary"
+                            className="rounded-full bg-muted px-2 font-normal text-foreground"
+                          >
+                            TV referral
+                          </Badge>
+                        )}
+                      </div>
+                      {row.source === "thumbtack" && row.lead.city && (
+                        <div className="text-xs font-normal text-muted-foreground">
+                          {row.lead.city}
+                        </div>
+                      )}
                     </TableCell>
                     {activeTab !== "lead" && (
-                      <TableCell>{client.company || ""}</TableCell>
+                      <TableCell>{rowCompany(row)}</TableCell>
                     )}
                     {activeTab !== "lead" && (
-                      <TableCell>{client.email || ""}</TableCell>
+                      <TableCell>{rowEmail(row)}</TableCell>
                     )}
-                    <TableCell>{client.phone || ""}</TableCell>
+                    <TableCell>
+                      {rowPhone(row) ? formatPhone(rowPhone(row)) : ""}
+                      {row.source === "thumbtack" && row.lead.phone && row.lead.phoneIsRelay && (
+                        <span
+                          className="ml-1.5 text-xs text-muted-foreground"
+                          title="Thumbtack relay number — not the customer's real line"
+                        >
+                          relay
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant="secondary"
                         className="rounded-full bg-muted px-3 font-normal text-foreground"
                       >
-                        {client.kind}
+                        {rowKind(row)}
                       </Badge>
                     </TableCell>
-                    <TableCell>{formatCreatedAt(client.createdAt)}</TableCell>
+                    <TableCell>
+                      {row.source === "thumbtack" ? (
+                        <span className="text-sm">{statusLabel[row.lead.status]}</span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">Manual</span>
+                      )}
+                    </TableCell>
+                    <TableCell>{formatCreatedAt(rowCreatedAt(row))}</TableCell>
                     <TableCell
                       className="text-right"
                       onClick={event => event.stopPropagation()}
                     >
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={event => removeClient(event, client.id)}
-                        aria-label={`Delete ${clientName(client)}`}
-                      >
-                        <Trash2 className="size-4 text-destructive" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        asChild
-                        aria-label={`Edit ${clientName(client)}`}
-                      >
-                        <Link href={`/clients/${client.id}`}>
-                          <Edit3 className="size-4 text-[#8a9180]" />
-                        </Link>
-                      </Button>
+                      {row.source === "thumbtack" ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-[#155e3f] hover:text-[#0c4a30]"
+                          onClick={() => setOpenLead(row.lead)}
+                        >
+                          <MessageSquareText className="size-4" />
+                          Open conversation
+                        </Button>
+                      ) : (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={event => removeClient(event, row.id)}
+                            aria-label={`Delete ${rowName(row)}`}
+                          >
+                            <Trash2 className="size-4 text-destructive" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            asChild
+                            aria-label={`Edit ${rowName(row)}`}
+                          >
+                            <Link href={`/clients/${row.id}`}>
+                              <Edit3 className="size-4 text-[#8a9180]" />
+                            </Link>
+                          </Button>
+                        </>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
-                {filteredClients.length === 0 && (
+                {filteredRows.length === 0 && (
                   <TableRow>
-                    <TableCell
-                      colSpan={activeTab === "lead" ? 6 : 8}
-                      className="h-72 text-center"
-                    >
+                    <TableCell colSpan={columnCount} className="h-72 text-center">
                       <div className="flex flex-col items-center justify-center gap-6 text-base">
                         <div className="flex items-center gap-2">
                           <FolderOpen className="size-5 text-[#155e3f]" />
-                          There are no leads found. Please add some!
+                          {rows.length === 0
+                            ? "No leads yet. Thumbtack leads appear here automatically."
+                            : "Nothing matches that filter."}
                         </div>
-                        <Button
-                          onClick={() => fileInputRef.current?.click()}
-                          className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]"
-                        >
-                          <Download className="size-4" />
-                          Import Clients
-                        </Button>
+                        {rows.length === 0 && (
+                          <Button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]"
+                          >
+                            <Download className="size-4" />
+                            Import Clients
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -565,8 +721,8 @@ function ClientsList() {
         </section>
         <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5 text-sm md:flex-row md:items-center md:justify-between">
           <span>
-            {filteredClients.length
-              ? `Showing ${pageStart + 1}-${pageStart + pagedClients.length} of ${filteredClients.length} results`
+            {filteredRows.length
+              ? `Showing ${pageStart + 1}-${pageStart + pagedRows.length} of ${filteredRows.length} results`
               : "No results."}
           </span>
           <div className="flex items-center justify-center gap-4">
@@ -596,7 +752,132 @@ function ClientsList() {
           </div>
         </section>
       </div>
+      <ConversationSheet lead={openLead} onClose={() => setOpenLead(null)} />
     </>
+  );
+}
+
+function formatMessageTime(value: string | null) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+/**
+ * Read-only Thumbtack thread for one negotiation, newest last. No composer:
+ * replies stay in the responder pipeline (spec §2), and nothing here can
+ * clear an escalation.
+ */
+function ConversationSheet({
+  lead,
+  onClose,
+}: {
+  lead: ThumbtackLead | null;
+  onClose: () => void;
+}) {
+  const [messages, setMessages] = useState<ThumbtackMessage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!lead) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setMessages([]);
+    loadConversation(lead.negotiationId)
+      .then(rows => {
+        if (!cancelled) setMessages(rows);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lead]);
+
+  return (
+    <Sheet open={Boolean(lead)} onOpenChange={open => !open && onClose()}>
+      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
+        <SheetHeader className="border-b border-border p-5">
+          <SheetTitle className="flex flex-wrap items-center gap-2 font-display text-xl">
+            {lead?.name}
+            {lead?.escalatedAt && (
+              <Badge className="rounded-full border-[#ead4ae] bg-[#f4e7d2] px-2 font-semibold text-[#a06b22] hover:bg-[#f4e7d2]">
+                <ShieldAlert className="size-3" />
+                Escalated
+              </Badge>
+            )}
+            {lead && (
+              <Badge
+                variant="secondary"
+                className="rounded-full bg-muted px-2 font-normal text-foreground"
+              >
+                {statusLabel[lead.status]}
+              </Badge>
+            )}
+          </SheetTitle>
+          <SheetDescription className="text-sm">
+            {[
+              lead?.category,
+              lead?.city,
+              lead?.phone
+                ? `${formatPhone(lead.phone)}${lead.phoneIsRelay ? " (relay)" : ""}`
+                : null,
+              lead?.leadPrice ? `Lead cost ${lead.leadPrice}` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </SheetDescription>
+        </SheetHeader>
+        <div className="flex-1 space-y-3 overflow-y-auto bg-muted/20 p-5">
+          {loading && (
+            <p className="text-sm text-muted-foreground">Loading conversation…</p>
+          )}
+          {error && (
+            <p className="text-sm text-[#a06b22]">Couldn't load the thread: {error}</p>
+          )}
+          {!loading && !error && messages.length === 0 && (
+            <p className="text-sm text-muted-foreground">No messages on this lead yet.</p>
+          )}
+          {messages.map(message => (
+            <div
+              key={message.id}
+              className={cn(
+                "flex flex-col gap-1",
+                message.direction === "outbound" ? "items-end" : "items-start"
+              )}
+            >
+              <div
+                className={cn(
+                  "max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm shadow-sm",
+                  message.direction === "outbound"
+                    ? "rounded-br-md bg-[#155e3f] text-white"
+                    : "rounded-bl-md border border-border bg-card text-foreground"
+                )}
+              >
+                {message.text}
+              </div>
+              <span className="px-1 text-[11px] text-muted-foreground">
+                {message.direction === "outbound" ? "Us" : lead?.name ?? "Customer"} ·{" "}
+                {formatMessageTime(message.sentAt)}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="border-t border-border bg-card px-5 py-3 text-xs text-muted-foreground">
+          Read-only. Replies go out through the Thumbtack responder, not from here.
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 

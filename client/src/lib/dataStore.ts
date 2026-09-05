@@ -1,4 +1,5 @@
 import { supabase, ensureSession } from "@/lib/supabase";
+import { APP_TENANT_ID } from "@/lib/tenant";
 import type { Database } from "@/types/database.types";
 import type {
   Facility,
@@ -713,6 +714,7 @@ function pricebookItemToRow(
     photo_required: it.photoRequired ?? false,
     add_to_online_booking: it.addToOnlineBooking,
     taxable: it.taxable,
+    tenant_id: APP_TENANT_ID,
   };
 }
 
@@ -726,7 +728,8 @@ export async function loadPricebookRemote(): Promise<{
 
   const [categories, items] = await Promise.all([
     supabase.from("pricebook_categories").select("*").order("sort_order"),
-    supabase.from("pricebook_items").select("*"),
+    // Shared with the webhook pipeline (multi-tenant) — only this business's rows.
+    supabase.from("pricebook_items").select("*").eq("tenant_id", APP_TENANT_ID),
   ]);
   if (categories.error || items.error) {
     console.error(

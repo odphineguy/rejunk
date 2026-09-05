@@ -12,6 +12,7 @@
 
 import { hydrateClients } from "@/lib/clientStorage";
 import { hydrateJobs } from "@/lib/jobStorage";
+import { hydrateThumbtackLeads } from "@/lib/leadsStorage";
 import { hydratePricebook } from "@/lib/pricebookStorage";
 import { hydrateSettings } from "@/lib/settingsStorage";
 import { hydratePricingData } from "@/utils/pricingStorage";
@@ -24,6 +25,7 @@ const hydration = Promise.all([
   hydratePricebook(),
   hydrateClients(),
   hydrateSettings(),
+  hydrateThumbtackLeads(),
 ]).then(() => undefined);
 
 const timeout = new Promise<void>(resolve => setTimeout(resolve, HYDRATE_TIMEOUT_MS));

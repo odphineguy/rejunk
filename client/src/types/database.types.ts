@@ -1183,6 +1183,8 @@ export type Database = {
           price_note: string | null
           price_unit: string
           taxable: boolean
+          tenant_id: string
+          external_id: string | null
           updated_at: string
         }
         Insert: {
@@ -1205,6 +1207,8 @@ export type Database = {
           price_note?: string | null
           price_unit?: string
           taxable?: boolean
+          tenant_id?: string
+          external_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -1227,6 +1231,8 @@ export type Database = {
           price_note?: string | null
           price_unit?: string
           taxable?: boolean
+          tenant_id?: string
+          external_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1395,6 +1401,23 @@ export type Database = {
         }
         Relationships: []
       }
+      thumbtack_messages: {
+        Row: {
+          id: string
+          tenant_id: string
+          negotiation_id: string
+          message_id: string | null
+          direction: string
+          from_type: string | null
+          text: string
+          attachments: Json | null
+          sent_at: string | null
+          created_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       vehicles: {
         Row: {
           created_at: string
@@ -1493,9 +1516,46 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      app_leads_v: {
+        Row: {
+          tenant_id: string
+          negotiation_id: string
+          lead_id: string
+          customer_name: string | null
+          customer_phone: string | null
+          phone_is_relay: boolean | null
+          customer_email: string | null
+          category: string | null
+          city: string | null
+          state: string | null
+          received_at: string
+          status: string
+          kind: string
+          booked_at: string | null
+          booked_via: string | null
+          hcp_job_id: string | null
+          escalated_at: string | null
+          tv_install_referral: boolean
+          lead_price: string | null
+          lead_price_num: number | null
+          quoted_price: number | null
+          last_outbound_text: string | null
+          last_message_at: string | null
+          lead_count_for_phone: number
+          first_response_latency_ms: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      dashboard_metrics: {
+        Args: { p_tenant: string; p_date: string }
+        Returns: Json
+      }
+      dashboard_metrics_series: {
+        Args: { p_tenant: string; p_date: string; p_days?: number }
+        Returns: Json
+      }
       current_employee_profile_id: { Args: never; Returns: string }
       current_user_is_assigned_to_job: {
         Args: { target_job_id: string }

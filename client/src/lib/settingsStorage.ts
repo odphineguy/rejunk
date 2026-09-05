@@ -72,7 +72,13 @@ export async function hydrateSettings(): Promise<void> {
   if (!supabase || !canUseLocalStorage()) return;
   if (!(await ensureSession())) return;
 
-  const { data, error } = await supabase.from("app_settings").select("key, value");
+  // `app_settings` is shared with the webhook pipeline on rejunk-prod
+  // (thumbtack_responder / thumbtack_notify_state:* rows). Those are not
+  // app sections — never pull them into the browser cache.
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("key, value")
+    .not("key", "like", "thumbtack_%");
   if (error) {
     console.error("[settings] Hydration from Supabase failed:", error.message);
     return;
