@@ -92,6 +92,10 @@ Two distinct persistence patterns coexist:
    (from `hcp_appointments.total_amount` / `paid_amount`, captured by the webhook), leads, repeats, booking
    rate, rolling-30-day close rate, first-reply median, reviews, voice calls, per-resource capacity.
    `null` = no data → the tile shows "—", never a fake 0; Gross Margin is "n/a" until the pricing overhaul.
+   Real phone/email replacements for relay-number leads live in the server-only `app_contact_overrides`
+   table (migration `20260905041157`). `leadsStorage.ts` requests them through the token-validated
+   `contacts` action on `/api/staff` and merges them by negotiation ID; the anonymous Supabase client has
+   no table privileges, so never move these fields into `app_leads_v` or expose that table to the browser.
 3. **Supabase-first with offline outbox**: `lib/dispatchMessageStorage.ts` (driver ↔ dispatch messaging,
    keys `rejunk_dispatch_*_v1`) — cache-first writes, an outbox retries sends made while offline, and
    **Supabase Realtime** pushes live inserts. Event: `dispatch-messages-updated`.
@@ -261,6 +265,11 @@ policy for authenticated, now tightened), the `app_leads_v` view, the `dashboard
 (security definer, execute granted to `authenticated`), and an insert-only fleet seed into `vehicles`
 (SPR-01…06, BOX-01). Applied through the Supabase MCP / SQL editor, not the CLI. Never expose
 `thumbtack_tokens`, `businesses`, `proxy_numbers`, or `hcp_links` to the browser.
+
+`20260905041157_customer_contact_overrides.sql` **IS applied to rejunk-prod** (2026-09-04). It adds the
+server-only `app_contact_overrides` table for real Housecall Pro phone/email matches keyed to Thumbtack
+negotiations. RLS is enabled and `anon`/`authenticated` have no table privileges. Active office users
+receive those fields only through the staff-token-validated `contacts` action on `/api/staff`.
 
 ## Deployment
 

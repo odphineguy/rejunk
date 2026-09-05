@@ -225,6 +225,20 @@ async function list(supabase: SupabaseClient, body: Record<string, unknown>): Pr
   return { status: 200, body: { access } };
 }
 
+async function contacts(supabase: SupabaseClient, body: Record<string, unknown>): Promise<Result> {
+  const caller = await resolveToken(supabase, body.token);
+  if (!caller) return { status: 401, body: { error: "Your session expired. Sign in again." } };
+  const { data, error } = await supabase
+    .from("app_contact_overrides")
+    .select("negotiation_id, phone, email")
+    .eq("tenant_id", "progressive");
+  if (error) {
+    console.error("[staff-api] Contact overrides load failed.", error.message);
+    return { status: 500, body: { error: "Customer contact details could not be loaded." } };
+  }
+  return { status: 200, body: { contacts: data ?? [] } };
+}
+
 async function updatePin(supabase: SupabaseClient, body: Record<string, unknown>): Promise<Result> {
   const caller = await resolveToken(supabase, body.token);
   if (!caller) return { status: 401, body: { error: "Your session expired. Sign in again." } };
@@ -271,6 +285,8 @@ async function handleStaffAction(body: unknown): Promise<Result> {
       return revoke(supabase, payload);
     case "list":
       return list(supabase, payload);
+    case "contacts":
+      return contacts(supabase, payload);
     case "update-pin":
       return updatePin(supabase, payload);
     case "update-email":

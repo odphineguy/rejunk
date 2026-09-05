@@ -35,6 +35,45 @@ export type Database = {
         }
         Relationships: []
       }
+      app_contact_overrides: {
+        Row: {
+          created_at: string
+          customer_name: string
+          email: string | null
+          hcp_customer_id: string | null
+          match_method: string
+          negotiation_id: string
+          phone: string | null
+          source: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_name: string
+          email?: string | null
+          hcp_customer_id?: string | null
+          match_method: string
+          negotiation_id: string
+          phone?: string | null
+          source?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_name?: string
+          email?: string | null
+          hcp_customer_id?: string | null
+          match_method?: string
+          negotiation_id?: string
+          phone?: string | null
+          source?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       app_settings: {
         Row: {
           id: string

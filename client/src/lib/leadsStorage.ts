@@ -12,6 +12,8 @@
  */
 
 import { ensureSession, isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { postStaff } from "@/lib/staffApi";
+import { getStoredStaffSession, STAFF_SESSION_EVENT } from "@/lib/staffSession";
 import { APP_TENANT_ID } from "@/lib/tenant";
 
 const LEADS_KEY = "junk_estimator_thumbtack_leads_v1";
@@ -103,6 +105,23 @@ function notify() {
 
 const STATUSES: ThumbtackLeadStatus[] = ["new", "quoted", "escalated", "booked", "lost"];
 
+type ContactOverride = {
+  negotiation_id: string;
+  phone: string | null;
+  email: string | null;
+};
+
+async function loadContactOverrides(): Promise<Map<string, ContactOverride>> {
+  const session = getStoredStaffSession();
+  if (!session) return new Map();
+  const result = await postStaff<{ contacts?: ContactOverride[] }>("contacts", { token: session.token });
+  if (!result.ok) {
+    console.error("[leadsStorage] Real contact details load failed.", result.error);
+    return new Map();
+  }
+  return new Map((result.data.contacts ?? []).map(contact => [contact.negotiation_id, contact]));
+}
+
 function leadFromRow(row: Record<string, unknown>): ThumbtackLead {
   const status = String(row.status ?? "new") as ThumbtackLeadStatus;
   return {
@@ -188,7 +207,18 @@ export async function hydrateThumbtackLeads(
     console.error("[leadsStorage] Thumbtack leads load failed; cache kept.", error.message);
     return;
   }
-  cachedLeads = (data ?? []).map(row => leadFromRow(row as Record<string, unknown>));
+  const contactOverrides = await loadContactOverrides();
+  cachedLeads = (data ?? []).map(row => {
+    const lead = leadFromRow(row as Record<string, unknown>);
+    const contact = contactOverrides.get(lead.negotiationId);
+    if (!contact) return lead;
+    return {
+      ...lead,
+      phone: contact.phone || lead.phone,
+      phoneIsRelay: contact.phone ? false : lead.phoneIsRelay,
+      email: contact.email || lead.email,
+    };
+  });
   hydrated = true;
   writeJson(LEADS_KEY, cachedLeads);
   notify();
@@ -196,6 +226,12 @@ export async function hydrateThumbtackLeads(
 
 export function getThumbtackLeads(): ThumbtackLead[] {
   return cachedLeads;
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener(STAFF_SESSION_EVENT, () => {
+    void hydrateThumbtackLeads();
+  });
 }
 
 export function getThumbtackLead(negotiationId: string): ThumbtackLead | null {

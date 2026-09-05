@@ -14,6 +14,7 @@ export type StaffAction =
   | "grant"
   | "revoke"
   | "list"
+  | "contacts"
   | "update-pin"
   | "update-email";
 
