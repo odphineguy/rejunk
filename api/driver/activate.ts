@@ -11,14 +11,39 @@
  * dev middleware).
  */
 
+import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 
 interface ActivationEmailPayload {
   email: string;
   activationKey: string;
   employeeName?: string;
-  activationLink?: string;
   expiresAt?: string;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/**
+ * Only a signed-in office user may send activation mail (audit item 6: this
+ * used to be an unauthenticated branded email relay). Mirrors
+ * resolveStaffToken in server/driverAccess.ts.
+ */
+async function isActiveStaffToken(token: unknown): Promise<boolean> {
+  if (typeof token !== "string" || !token) return false;
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return false;
+  const supabase = createClient(url, key, { auth: { persistSession: false } });
+  const { data: session } = await supabase
+    .from("staff_sessions")
+    .select("staff_id, expires_at")
+    .eq("token", token)
+    .maybeSingle();
+  if (!session || new Date(session.expires_at).getTime() < Date.now()) return false;
+  const { data: staff } = await supabase.from("staff").select("active").eq("id", session.staff_id).maybeSingle();
+  return Boolean(staff?.active);
 }
 
 // Production sends from dispatch@dispatchai.help via RESEND_FROM (domain
@@ -29,21 +54,21 @@ const DEFAULT_BASE_URL = "https://rejunk.vercel.app";
 
 function validateActivationEmailPayload(body: unknown): ActivationEmailPayload | null {
   if (!body || typeof body !== "object") return null;
-  const { email, activationKey, employeeName, activationLink, expiresAt } = body as Record<string, unknown>;
+  const { email, activationKey, employeeName, expiresAt } = body as Record<string, unknown>;
   if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
   if (typeof activationKey !== "string" || !/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(activationKey)) return null;
   return {
     email,
     activationKey,
     employeeName: typeof employeeName === "string" ? employeeName.slice(0, 120) : undefined,
-    activationLink: typeof activationLink === "string" && /^https?:\/\//.test(activationLink) ? activationLink : undefined,
     expiresAt: typeof expiresAt === "string" ? expiresAt : undefined,
   };
 }
 
 function buildActivationEmailHtml(payload: ActivationEmailPayload) {
-  const link = payload.activationLink ?? `${DEFAULT_BASE_URL}/driver/activate?key=${encodeURIComponent(payload.activationKey)}`;
-  const greetingName = payload.employeeName?.split(" ")[0] || "there";
+  const baseUrl = (process.env.APP_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
+  const link = `${baseUrl}/driver/activate?key=${encodeURIComponent(payload.activationKey)}`;
+  const greetingName = escapeHtml(payload.employeeName?.split(" ")[0] || "there");
   const expiryLine = payload.expiresAt
     ? `This key expires on ${new Date(payload.expiresAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })} (72 hours from now).`
     : "This key expires 72 hours after it was sent.";
@@ -91,6 +116,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
   const body = typeof req.body === "string" ? safeParse(req.body) : req.body;
+  const staffToken = body && typeof body === "object" ? (body as Record<string, unknown>).staffToken : undefined;
+  if (!(await isActiveStaffToken(staffToken))) {
+    res.status(401).json({ error: "Sign in to the office app to send activation emails." });
+    return;
+  }
   const payload = validateActivationEmailPayload(body);
   if (!payload) {
     res.status(400).json({ error: "A valid email and activation key are required." });

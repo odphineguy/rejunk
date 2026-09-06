@@ -268,7 +268,8 @@ export interface DriverActivation {
   id: string;
   employeeId: string;
   employeeName?: string;
-  activationKey: string;
+  /** Plaintext key — only present on the create response; the DB stores a hash. */
+  activationKey?: string;
   emailSentTo?: string;
   status: DriverActivationStatus;
   expiresAt: string;

@@ -12,7 +12,6 @@ export interface ActivationEmailPayload {
   email: string;
   activationKey: string;
   employeeName?: string;
-  activationLink?: string;
   expiresAt?: string;
 }
 
@@ -22,23 +21,27 @@ export interface ActivationEmailPayload {
 const DEFAULT_FROM = "Rejunk Dispatch <onboarding@resend.dev>";
 const DEFAULT_BASE_URL = "https://rejunk.vercel.app";
 
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 export function validateActivationEmailPayload(body: unknown): ActivationEmailPayload | null {
   if (!body || typeof body !== "object") return null;
-  const { email, activationKey, employeeName, activationLink, expiresAt } = body as Record<string, unknown>;
+  const { email, activationKey, employeeName, expiresAt } = body as Record<string, unknown>;
   if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
   if (typeof activationKey !== "string" || !/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(activationKey)) return null;
   return {
     email,
     activationKey,
     employeeName: typeof employeeName === "string" ? employeeName.slice(0, 120) : undefined,
-    activationLink: typeof activationLink === "string" && /^https?:\/\//.test(activationLink) ? activationLink : undefined,
     expiresAt: typeof expiresAt === "string" ? expiresAt : undefined,
   };
 }
 
 export function buildActivationEmailHtml(payload: ActivationEmailPayload) {
-  const link = payload.activationLink ?? `${DEFAULT_BASE_URL}/driver/activate?key=${encodeURIComponent(payload.activationKey)}`;
-  const greetingName = payload.employeeName?.split(" ")[0] || "there";
+  const baseUrl = (process.env.APP_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
+  const link = `${baseUrl}/driver/activate?key=${encodeURIComponent(payload.activationKey)}`;
+  const greetingName = escapeHtml(payload.employeeName?.split(" ")[0] || "there");
   const expiryLine = payload.expiresAt
     ? `This key expires on ${new Date(payload.expiresAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })} (72 hours from now).`
     : "This key expires 72 hours after it was sent.";

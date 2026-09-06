@@ -145,19 +145,29 @@ back-compat; both shapes coexist.
 
 ### Driver activation & live GPS
 Drivers (not managers) have an app-level identity layered on top of the anonymous session. A manager
-activates an employee from `/employees` ("Mobile App" column / "App Access" card): `lib/driverActivation.ts`
-creates a `driver_activations` row (key `XXXX-XXXX-XXXX`, 72h expiry) and `POST /api/driver/activate`
-emails it via Resend (`server/driverEmail.ts`, shared by the Express route `server/routes/driverActivation.ts`,
-a Vite dev middleware in `vite.config.ts`, and the Vercel function `api/driver/activate.ts` — three places,
-keep in sync like the maps proxy). The driver enters the key at `/driver/activate`, sets a 4-digit PIN, and
-gets a `driver_sessions` token stored under `rejunk_driver_session`; returning drivers re-auth PIN-only at
-`/driver/login` (5 misses → 15-min lockout). All other `/driver` routes are wrapped in `DriverSessionGate`.
-Key/PIN validation runs **in the browser directly against Supabase** (`lib/driverSession.ts`; PBKDF2-SHA256
-hashes interchangeable with the Express endpoints). Activated drivers report GPS every 30s
-(`lib/driverLocation.ts`) into `driver_sessions` + `driver_location_history`; Dispatch Center's
-"Show drivers" toggle fetches sessions and subscribes to **Supabase Realtime** on `driver_sessions`,
-rendering profile-colored markers (helpers in `Map.tsx`). Subcontractors never get activation ("SMS only").
-RLS exposes only the last 24h of location history; dispatch treats >5 min of silence as offline.
+activates an employee from `/employees` ("Mobile App" column / "App Access" card). **Since 2026-09-06
+(security audit item 2) every key/PIN/token operation runs SERVER-SIDE:** `lib/driverActivation.ts`
+calls `POST /api/driver/auth` (`create-activation` / `revoke`, gated by the office user's **staff**
+session token) and then `POST /api/driver/activate` (Resend email, also staff-token gated; the link is
+built server-side, never taken from the request). The driver enters the key at `/driver/activate`, sets
+a 4-digit PIN, and gets a `driver_sessions` token stored under `rejunk_driver_session`; returning
+drivers re-auth PIN-only at `/driver/login` (5 misses → 15-min lockout, enforced on the
+`driver_activations` row via `failed_attempts` / `locked_until`, not in localStorage). All of this is
+`lib/driverSession.ts` → `/api/driver/auth` (`check-key`, `activate`, `login`, `validate`, `logout`,
+`update-pin`). The DB stores only **SHA-256 hashes** of keys and tokens (`activation_key_hash`,
+`session_token_hash`; `has_token` is a generated flag the office UI filters on) and column-level grants
+hide `pin_hash` and the hashes from the browser; the browser can no longer insert/update
+`driver_activations` or insert `driver_sessions` (migration `20260906000002`). Like the maps proxy and
+staff auth, the endpoint lives in **three kept-in-sync places**: shared logic `server/driverAccess.ts`
+(Express route `server/routes/driverActivation.ts` + Vite dev middleware in `vite.config.ts`) and the
+self-contained Vercel copy `api/driver/auth.ts`; the email template is `server/driverEmail.ts` ↔
+`api/driver/activate.ts`. All other `/driver` routes are wrapped in `DriverSessionGate`. Activated
+drivers report GPS every 30s (`lib/driverLocation.ts`) into `driver_sessions` + `driver_location_history`
+(the only driver-table columns still browser-writable: location + workday fields — an anonymous session
+can still spoof those until the identity overhaul); Dispatch Center's "Show drivers" toggle fetches
+sessions and subscribes to **Supabase Realtime** on `driver_sessions`, rendering profile-colored markers
+(helpers in `Map.tsx`). Subcontractors never get activation ("SMS only"). RLS exposes only the last 24h of
+location history; dispatch treats >5 min of silence as offline.
 
 ### Driver UX: simplified status flow, workday toggles, profile
 The driver job page (`pages/driver/DriverJobDetail.tsx`) is deliberately simple: a status strip with one

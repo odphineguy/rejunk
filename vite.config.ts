@@ -259,14 +259,40 @@ function vitePluginMapsProxy(): Plugin {
   };
 }
 
-// Dev-server twin of the Express POST /api/driver/activate route (the Vite dev
-// server doesn't run Express, same situation as the maps proxy above). Key/PIN
-// validation doesn't need a dev endpoint — the browser does that directly
-// against Supabase via client/src/lib/driverSession.ts.
+// Dev-server twin of the Express /api/driver routes (the Vite dev server
+// doesn't run Express, same situation as the maps proxy above).
+//   /api/driver/auth     — key/PIN/session auth + office create/revoke
+//                          (server/driverAccess.ts, service-role key)
+//   /api/driver/activate — activation email; requires a staff session token
 function vitePluginDriverApi(): Plugin {
   return {
     name: "rejunk-driver-api",
     configureServer(server: ViteDevServer) {
+      server.middlewares.use("/api/driver/auth", (req, res) => {
+        if (req.method !== "POST") {
+          res.writeHead(405, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "POST only" }));
+          return;
+        }
+        let body = "";
+        req.on("data", chunk => {
+          body += chunk.toString();
+        });
+        req.on("end", () => {
+          void (async () => {
+            try {
+              const { handleDriverAction } = await import("./server/driverAccess");
+              const result = await handleDriverAction(JSON.parse(body || "{}"));
+              res.writeHead(result.status, { "Content-Type": "application/json" });
+              res.end(JSON.stringify(result.body));
+            } catch (error) {
+              res.writeHead(500, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: String(error) }));
+            }
+          })();
+        });
+      });
+
       server.middlewares.use("/api/driver/activate", (req, res) => {
         if (req.method !== "POST") {
           res.writeHead(405, { "Content-Type": "application/json" });
@@ -280,11 +306,18 @@ function vitePluginDriverApi(): Plugin {
         req.on("end", () => {
           void (async () => {
             try {
+              const { getSupabaseAdmin, resolveStaffToken } = await import("./server/driverAccess");
               const { sendActivationEmail, validateActivationEmailPayload } =
                 await import("./server/driverEmail");
-              const payload = validateActivationEmailPayload(
-                JSON.parse(body || "{}")
-              );
+              const parsed = JSON.parse(body || "{}") as Record<string, unknown>;
+              const supabase = getSupabaseAdmin();
+              const staff = supabase ? await resolveStaffToken(supabase, parsed.staffToken) : null;
+              if (!staff) {
+                res.writeHead(401, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: "Sign in to the office app to send activation emails." }));
+                return;
+              }
+              const payload = validateActivationEmailPayload(parsed);
               if (!payload) {
                 res.writeHead(400, { "Content-Type": "application/json" });
                 res.end(
@@ -521,6 +554,7 @@ export default defineConfig(({ mode }) => {
     "SUPABASE_URL",
     "VITE_SUPABASE_URL",
     "SUPABASE_SERVICE_ROLE_KEY",
+    "APP_BASE_URL",
   ]) {
     if (!process.env[key] && env[key]) {
       process.env[key] = env[key];

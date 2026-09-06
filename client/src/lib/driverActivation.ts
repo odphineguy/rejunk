@@ -1,15 +1,20 @@
 /**
  * Manager-side driver activation operations (Employees page + Dispatch Center).
  *
- * The activation row is created directly in Supabase from the browser (same
- * direct-to-DB pattern as the rest of the app); only the email send goes
- * through the backend (`POST /api/driver/activate`). If the email endpoint is
- * unreachable (e.g. static Vercel deploy without the function), callers get
- * `emailSent: false` plus the key and link so the manager can text it instead.
+ * Since 2026-09-06 (security audit item 2) the activation row is created and
+ * revoked SERVER-SIDE through `POST /api/driver/auth` with the office user's
+ * staff session token — the browser can no longer insert/update
+ * driver_activations, and only ever sees the plaintext key once, in the
+ * create response (the DB stores a hash). The email send is a second call to
+ * `POST /api/driver/activate` (also staff-token gated). If the email fails,
+ * callers get `emailSent: false` plus the key and link so the manager can text
+ * it instead. Status reads (Mobile App column, live map) still come straight
+ * from Supabase — those columns hold nothing secret any more.
  */
 
-import { generateActivationKey } from "@/lib/driverAuth";
+import { postDriver } from "@/lib/driverSession";
 import { employeeName } from "@/lib/employeeStorage";
+import { getStoredStaffSession } from "@/lib/staffSession";
 import { ensureSession, supabase } from "@/lib/supabase";
 import type { EmployeeRecord } from "@/types/employees";
 import type { DriverActivation, DriverAppStatus, DriverSession } from "@/types/driver";
@@ -29,7 +34,6 @@ type ActivationRow = {
   id: string;
   employee_id: string;
   employee_name: string | null;
-  activation_key: string;
   email_sent_to: string | null;
   status: string;
   expires_at: string;
@@ -52,7 +56,7 @@ type SessionRow = {
   downtime_started_at?: string | null;
   downtime_vehicle_id?: string | null;
   downtime_reason?: string | null;
-  session_token?: string | null;
+  has_token?: boolean;
   created_at: string;
 };
 
@@ -61,7 +65,6 @@ export function mapActivationRow(row: ActivationRow): DriverActivation {
     id: row.id,
     employeeId: row.employee_id,
     employeeName: row.employee_name ?? undefined,
-    activationKey: row.activation_key,
     emailSentTo: row.email_sent_to ?? undefined,
     status: row.status as DriverActivation["status"],
     expiresAt: row.expires_at,
@@ -111,12 +114,12 @@ export async function fetchDriverAppStatuses(): Promise<Record<string, DriverApp
   const [activations, sessions] = await Promise.all([
     supabase
       .from("driver_activations")
-      .select("id, employee_id, employee_name, activation_key, email_sent_to, status, expires_at, activated_at, created_by, created_at")
+      .select("id, employee_id, employee_name, email_sent_to, status, expires_at, activated_at, created_by, created_at")
       .order("created_at", { ascending: false }),
     supabase
       .from("driver_sessions")
       .select("id, employee_id, activation_id, display_name, last_seen_at, last_lat, last_lng, last_heading, is_online, meal_break_started_at, downtime_started_at, downtime_vehicle_id, downtime_reason, created_at")
-      .not("session_token", "is", null)
+      .eq("has_token", true)
       .order("created_at", { ascending: false }),
   ]);
 
@@ -139,7 +142,7 @@ export async function fetchLiveDriverSessions(): Promise<DriverSession[]> {
   const { data, error } = await supabase
     .from("driver_sessions")
     .select("id, employee_id, activation_id, display_name, last_seen_at, last_lat, last_lng, last_heading, is_online, meal_break_started_at, downtime_started_at, downtime_vehicle_id, downtime_reason, created_at")
-    .not("session_token", "is", null)
+    .eq("has_token", true)
     .or(`is_online.eq.true,last_seen_at.gte.${oneHourAgo}`)
     .order("created_at", { ascending: false });
   if (error || !data) return [];
@@ -151,40 +154,34 @@ export async function fetchLiveDriverSessions(): Promise<DriverSession[]> {
   return Array.from(byEmployee.values());
 }
 
+function requireStaffToken(): string {
+  const token = getStoredStaffSession()?.token;
+  if (!token) throw new Error("Your office session expired. Sign in again to manage driver access.");
+  return token;
+}
+
 /**
  * Creates a fresh activation for the employee (revoking any earlier one) and
  * asks the backend to email the key. Throws only when the activation row
  * itself can't be created — email failure is reported, not thrown.
  */
-export async function activateDriver(employee: EmployeeRecord, options?: { createdBy?: string }): Promise<ActivateDriverResult> {
+export async function activateDriver(employee: EmployeeRecord): Promise<ActivateDriverResult> {
   if (!employee.email) throw new Error("This employee has no email on file. Add one first.");
   if (employee.type === "subcontractor") throw new Error("Subcontractors don't get app access — they get SMS only.");
-  if (!supabase || !(await ensureSession())) {
-    throw new Error("The backend isn't connected, so activations can't be created right now.");
+  const staffToken = requireStaffToken();
+  const name = employeeName(employee);
+
+  const created = await postDriver<{ activation: DriverActivation; activationKey: string; expiresAt: string }>(
+    "create-activation",
+    { staffToken, employeeId: employee.id, employeeName: name, email: employee.email },
+  );
+  if (!created.ok || !created.data.activationKey) {
+    throw new Error(created.error || "Couldn't create the activation. Try again.");
   }
-
-  // A resend invalidates everything that came before it.
-  await revokeDriverAccess(employee.id, { silent: true });
-
-  const activationKey = generateActivationKey();
-  const expiresAt = new Date(Date.now() + ACTIVATION_EXPIRY_HOURS * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabase
-    .from("driver_activations")
-    .insert({
-      employee_id: employee.id,
-      employee_name: employeeName(employee),
-      activation_key: activationKey,
-      email_sent_to: employee.email,
-      status: "pending",
-      expires_at: expiresAt,
-      created_by: options?.createdBy ?? null,
-    })
-    .select("id, employee_id, employee_name, activation_key, email_sent_to, status, expires_at, activated_at, created_by, created_at")
-    .single();
-  if (error || !data) throw new Error("Couldn't create the activation. Try again.");
-
-  const activation = mapActivationRow(data as ActivationRow);
+  const activationKey = created.data.activationKey;
+  const activation: DriverActivation = { ...created.data.activation, activationKey };
   const link = activationLink(activationKey);
+
   let emailSent = false;
   let emailError: string | undefined;
   try {
@@ -192,12 +189,11 @@ export async function activateDriver(employee: EmployeeRecord, options?: { creat
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        employeeId: employee.id,
+        staffToken,
         email: employee.email,
         activationKey,
-        employeeName: employeeName(employee),
-        activationLink: link,
-        expiresAt,
+        employeeName: name,
+        expiresAt: created.data.expiresAt,
       }),
     });
     if (response.ok) {
@@ -214,21 +210,10 @@ export async function activateDriver(employee: EmployeeRecord, options?: { creat
   return { activation, emailSent, emailError, activationLink: link };
 }
 
-/** Kills the driver's session token and marks their activations revoked. */
+/** Kills the driver's session token and marks their activations revoked (server-side, staff token required). */
 export async function revokeDriverAccess(employeeId: string, options?: { silent?: boolean }) {
-  if (!supabase || !(await ensureSession())) {
-    throw new Error("The backend isn't connected, so access can't be changed right now.");
-  }
-  await Promise.all([
-    supabase
-      .from("driver_activations")
-      .update({ status: "revoked" })
-      .eq("employee_id", employeeId)
-      .in("status", ["pending", "activated"]),
-    supabase
-      .from("driver_sessions")
-      .update({ session_token: null, is_online: false })
-      .eq("employee_id", employeeId),
-  ]);
+  const staffToken = requireStaffToken();
+  const res = await postDriver("revoke", { staffToken, employeeId });
+  if (!res.ok) throw new Error(res.error || "Access couldn't be changed right now.");
   if (!options?.silent) window.dispatchEvent(new Event("driver-activations-updated"));
 }

@@ -248,7 +248,7 @@ export type Database = {
       driver_activations: {
         Row: {
           activated_at: string | null
-          activation_key: string
+          activation_key_hash: string | null
           created_at: string
           created_by: string | null
           email_sent_to: string | null
@@ -256,13 +256,14 @@ export type Database = {
           employee_name: string | null
           expires_at: string
           id: string
+          failed_attempts: number
+          locked_until: string | null
           pin_hash: string | null
-          session_token: string | null
           status: string
         }
         Insert: {
           activated_at?: string | null
-          activation_key: string
+          activation_key_hash: string | null
           created_at?: string
           created_by?: string | null
           email_sent_to?: string | null
@@ -270,13 +271,14 @@ export type Database = {
           employee_name?: string | null
           expires_at: string
           id?: string
+          failed_attempts?: number
+          locked_until?: string | null
           pin_hash?: string | null
-          session_token?: string | null
           status?: string
         }
         Update: {
           activated_at?: string | null
-          activation_key?: string
+          activation_key_hash?: string | null
           created_at?: string
           created_by?: string | null
           email_sent_to?: string | null
@@ -284,8 +286,9 @@ export type Database = {
           employee_name?: string | null
           expires_at?: string
           id?: string
+          failed_attempts?: number
+          locked_until?: string | null
           pin_hash?: string | null
-          session_token?: string | null
           status?: string
         }
         Relationships: []
@@ -305,8 +308,9 @@ export type Database = {
           last_lat: number | null
           last_lng: number | null
           last_seen_at: string | null
+          has_token: boolean
           meal_break_started_at: string | null
-          session_token: string | null
+          session_token_hash: string | null
         }
         Insert: {
           activation_id?: string | null
@@ -323,7 +327,7 @@ export type Database = {
           last_lng?: number | null
           last_seen_at?: string | null
           meal_break_started_at?: string | null
-          session_token?: string | null
+          session_token_hash?: string | null
         }
         Update: {
           activation_id?: string | null
@@ -340,7 +344,7 @@ export type Database = {
           last_lng?: number | null
           last_seen_at?: string | null
           meal_break_started_at?: string | null
-          session_token?: string | null
+          session_token_hash?: string | null
         }
         Relationships: [
           {

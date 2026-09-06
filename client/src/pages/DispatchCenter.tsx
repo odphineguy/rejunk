@@ -394,15 +394,15 @@ export default function DispatchCenter() {
             "postgres_changes",
             { event: "*", schema: "public", table: "driver_sessions" },
             payload => {
-              const row = payload.new as { id?: string; session_token?: string | null } | null;
+              const row = payload.new as { id?: string; has_token?: boolean } | null;
               if (!row?.id) return;
               const session = mapSessionRow(row as never);
               setDriverSessions(previous => {
                 const others = previous.filter(
                   item => item.id !== session.id && item.employeeId !== session.employeeId
                 );
-                // A nulled token means dispatch revoked the session — drop the marker.
-                return row.session_token === null ? others : [...others, session];
+                // A cleared token means dispatch revoked the session — drop the marker.
+                return row.has_token === false ? others : [...others, session];
               });
             }
           )
