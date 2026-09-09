@@ -17,6 +17,7 @@ const PBKDF2_ITERATIONS = 100_000;
 const PBKDF2_KEY_BYTES = 32;
 const MAX_PIN_ATTEMPTS = 5;
 const PIN_WINDOW_MS = 15 * 60 * 1000;
+const PIN_LOCKOUT_MS = 15 * 60 * 1000;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const DEFAULT_FROM = "Rejunk Dispatch <onboarding@resend.dev>";
 const DEFAULT_BASE_URL = "https://rejunk.vercel.app";
@@ -77,6 +78,8 @@ type StaffRow = {
   must_change_pin: boolean;
   pin_hash: string;
   employee_id: string | null;
+  failed_attempts: number;
+  locked_until: string | null;
 };
 type Result = { status: number; body: Record<string, unknown> };
 
@@ -94,11 +97,47 @@ async function resolveToken(supabase: SupabaseClient, token: unknown): Promise<S
   if (!session || new Date(session.expires_at).getTime() < Date.now()) return null;
   const { data: staff } = await supabase
     .from("staff")
-    .select("id, full_name, email, role, active, must_change_pin, pin_hash, employee_id")
+    .select("id, full_name, email, role, active, must_change_pin, pin_hash, employee_id, failed_attempts, locked_until")
     .eq("id", session.staff_id)
     .maybeSingle();
   if (!staff || !staff.active) return null;
   return staff as StaffRow;
+}
+
+/**
+ * Durable PIN lockout (audit item 7): misses are counted on the staff row and
+ * the account locks for 15 minutes after 5, so the limit survives serverless
+ * cold starts and spans instances. The in-memory loginRateLimited() stays as a
+ * backstop for emails that don't exist (nothing to count on).
+ */
+function lockoutResponse(staff: StaffRow): Result | null {
+  const lockedMs = staff.locked_until ? new Date(staff.locked_until).getTime() - Date.now() : 0;
+  if (lockedMs <= 0) return null;
+  return {
+    status: 429,
+    body: { error: `Too many tries. Wait ${Math.ceil(lockedMs / 60000)} minutes, then try again.`, lockedForMs: lockedMs },
+  };
+}
+
+async function recordPinMiss(supabase: SupabaseClient, staff: StaffRow, message: string): Promise<Result> {
+  const attempts = (staff.failed_attempts ?? 0) + 1;
+  const lock = attempts >= MAX_PIN_ATTEMPTS;
+  await supabase
+    .from("staff")
+    .update({
+      failed_attempts: lock ? 0 : attempts,
+      locked_until: lock ? new Date(Date.now() + PIN_LOCKOUT_MS).toISOString() : null,
+    })
+    .eq("id", staff.id);
+  if (lock) {
+    return { status: 429, body: { error: "Too many tries. Locked for 15 minutes.", lockedForMs: PIN_LOCKOUT_MS } };
+  }
+  const remaining = MAX_PIN_ATTEMPTS - attempts;
+  return { status: 401, body: { error: message, remaining } };
+}
+
+async function clearPinMisses(supabase: SupabaseClient, staffId: string) {
+  await supabase.from("staff").update({ failed_attempts: 0, locked_until: null }).eq("id", staffId);
 }
 
 function publicStaff(staff: StaffRow) {
@@ -118,13 +157,20 @@ async function login(supabase: SupabaseClient, body: Record<string, unknown>): P
   if (loginRateLimited(email)) return { status: 429, body: { error: "Too many tries. Wait 15 minutes, then try again." } };
   const { data: staff } = await supabase
     .from("staff")
-    .select("id, full_name, email, role, active, must_change_pin, pin_hash, employee_id")
+    .select("id, full_name, email, role, active, must_change_pin, pin_hash, employee_id, failed_attempts, locked_until")
     .eq("email", email)
     .maybeSingle();
-  if (!staff || !staff.active || !verifyPin(pin as string, staff.pin_hash)) {
+  // Identical response for unknown email and wrong PIN — no email probing.
+  if (!staff || !staff.active) {
     return { status: 401, body: { error: "That email and PIN don't match." } };
   }
+  const locked = lockoutResponse(staff as StaffRow);
+  if (locked) return locked;
+  if (!verifyPin(pin as string, staff.pin_hash)) {
+    return recordPinMiss(supabase, staff as StaffRow, "That email and PIN don't match.");
+  }
   loginAttempts.delete(email);
+  await clearPinMisses(supabase, staff.id);
   const token = generateToken();
   await supabase.from("staff_sessions").insert({
     token,
@@ -180,13 +226,13 @@ async function grant(supabase: SupabaseClient, body: Record<string, unknown>): P
   if (existing) {
     await supabase
       .from("staff")
-      .update({ full_name: fullName, email, role, employee_id: employeeId, pin_hash: pinHash, active: true, must_change_pin: true })
+      .update({ full_name: fullName, email, role, employee_id: employeeId, pin_hash: pinHash, active: true, must_change_pin: true, failed_attempts: 0, locked_until: null })
       .eq("id", existing.id);
     await supabase.from("staff_sessions").delete().eq("staff_id", existing.id);
   } else {
     await supabase
       .from("staff")
-      .insert({ full_name: fullName, email, role, employee_id: employeeId, pin_hash: pinHash, active: true, must_change_pin: true });
+      .insert({ full_name: fullName, email, role, employee_id: employeeId, pin_hash: pinHash, active: true, must_change_pin: true, failed_attempts: 0, locked_until: null });
   }
   const sent = await sendStaffPinEmail({ email, fullName, pin, role });
   return { status: 200, body: { ok: true, email, role, pin, emailed: sent.sent, emailError: sent.error } };
@@ -246,13 +292,15 @@ async function updatePin(supabase: SupabaseClient, body: Record<string, unknown>
   const newPin = body.newPin;
   if (!isPin(newPin)) return { status: 400, body: { error: "Your new PIN must be exactly 4 digits." } };
   if (!caller.must_change_pin) {
+    const locked = lockoutResponse(caller);
+    if (locked) return locked;
     if (!isPin(currentPin) || !verifyPin(currentPin as string, caller.pin_hash)) {
-      return { status: 401, body: { error: "Your current PIN is wrong." } };
+      return recordPinMiss(supabase, caller, "Your current PIN is wrong.");
     }
   }
   await supabase
     .from("staff")
-    .update({ pin_hash: hashPin(newPin as string), must_change_pin: false })
+    .update({ pin_hash: hashPin(newPin as string), must_change_pin: false, failed_attempts: 0, locked_until: null })
     .eq("id", caller.id);
   return { status: 200, body: { ok: true } };
 }

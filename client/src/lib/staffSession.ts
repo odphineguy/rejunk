@@ -126,8 +126,15 @@ export async function loginWithEmailPin(email: string, pin: string): Promise<Sto
   }>("login", { email: normalizedEmail, pin });
 
   if (!res.ok || !res.data.token) {
-    // Wrong creds count toward the local lockout too (server also rate-limits).
-    if (res.status === 401) recordFailedPinAttempt();
+    // The server owns the real lockout (counted on the staff row, survives
+    // reloads and other devices). Mirror it locally so the login page can show
+    // a countdown; wrong creds also tick the local counter as a fallback.
+    const lockedForMs = (res.data as { lockedForMs?: number }).lockedForMs;
+    if (res.status === 429 && typeof lockedForMs === "number" && lockedForMs > 0) {
+      writeJson<PinAttempts>(PIN_ATTEMPTS_KEY, { count: 0, lockedUntil: Date.now() + lockedForMs });
+    } else if (res.status === 401) {
+      recordFailedPinAttempt();
+    }
     throw new Error(res.error || "That email and PIN don't match.");
   }
 

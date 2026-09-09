@@ -289,6 +289,12 @@ policy for authenticated, now tightened), the `app_leads_v` view, the `dashboard
 (SPR-01…06, BOX-01). Applied through the Supabase MCP / SQL editor, not the CLI. Never expose
 `thumbtack_tokens`, `businesses`, `proxy_numbers`, or `hcp_links` to the browser.
 
+`20260908000001_staff_pin_lockout.sql` **IS applied to rejunk-prod** (2026-09-08, audit item 7). Adds
+`failed_attempts` / `locked_until` to `staff`; the office login (`/api/staff` `login`, and a wrong current
+PIN on `update-pin`) counts misses on the row and locks for 15 min after 5 — same durable pattern as
+drivers. A fresh temp PIN (`grant`) or a successful login/PIN change clears it. The old in-memory
+per-email limiter stays only as a backstop for emails that don't exist.
+
 `20260905041157_customer_contact_overrides.sql` **IS applied to rejunk-prod** (2026-09-04). It adds the
 server-only `app_contact_overrides` table for real Housecall Pro phone/email matches keyed to Thumbtack
 negotiations. RLS is enabled and `anon`/`authenticated` have no table privileges. Active office users
