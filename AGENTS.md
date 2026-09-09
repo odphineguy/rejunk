@@ -196,6 +196,19 @@ the driver bottom nav. All of it flows through `lib/dispatchMessageStorage.ts` (
 offline outbox). Employees still live only in localStorage, so participant/sender ids are plain-text
 employee record ids.
 
+### Vision AI endpoint (photo estimates)
+`POST /api/vision-analyze` (Vite middleware in `vite.config.ts` + self-contained Vercel copy
+`api/vision-analyze.ts`, shared logic `server/visionAnalyze.ts` — keep the two in sync) is the only
+place the OpenAI key is used. **Since 2026-09-08 (security audit item 5) the browser sends only photos +
+details.** The server loads the model / temperature / token budget / System Instructions itself from the
+`app_settings` row `key = 'vision'` (written by Estimate Settings → Vision AI; seeded on rejunk-prod from
+`defaultVisionSettings.ts`), enforces a model allowlist (`gpt-4.1-mini`, `gpt-4.1`, `gpt-4o`) and a
+2500-token cap. Office calls (`VisionEstimatePanel`) must carry the office-login token (`staffToken`,
+validated against `staff_sessions` with the service-role key → 401 otherwise, 60/5 min per account);
+the public `/instant-estimate` page sends `source: "public"` instead and is always throttled per IP
+(20/5 min). Needs `OPENAI_API_KEY` + `SUPABASE_SERVICE_ROLE_KEY` server-side; without the latter it
+answers 503.
+
 ### Routing & shell
 `client/src/App.tsx` uses **wouter** (not react-router). Two route trees keyed on the URL:
 
@@ -319,6 +332,7 @@ the existing exception.)
   the `api/staff.ts` + driver Vercel functions). The service-role key bypasses RLS; it must **never** be
   `VITE_`-prefixed. Used by the office-login endpoint (`/api/staff`) — if missing in the Vercel env, the
   live office login returns 503 and nobody can sign in.
+- `OPENAI_API_KEY` — **server-side only**; used by `/api/vision-analyze` (see *Vision AI endpoint*).
 - `RESEND_API_KEY` / `RESEND_FROM` — Resend transactional email (driver activation keys + office-login
   PINs + website-lead notifications).
 - `BUILT_IN_FORGE_API_URL` / `BUILT_IN_FORGE_API_KEY` — Manus asset storage proxy (dev only).

@@ -1,27 +1,61 @@
 /**
- * Shared Vision photo-analysis logic: calls OpenAI's vision API with the
- * business's editable System Instructions and returns the structured estimate
- * JSON. Used by the Vite dev middleware (vitePluginVisionApi in vite.config.ts).
+ * Shared Vision photo-analysis logic (security audit item 5, 2026-09-08).
+ *
+ * The browser sends ONLY photos + optional details (+ `source` / `staffToken`).
+ * Everything that costs money is decided here, never by the caller:
+ *   * the model, temperature, token budget and System Instructions are loaded
+ *     server-side from the `app_settings` row `key = 'vision'` (the Estimate
+ *     Settings → Vision AI card writes it), the model is checked against an
+ *     allowlist and the token budget is capped;
+ *   * office calls must carry a valid office-login token (`staff_sessions`,
+ *     see server/staffAccess.ts) — no token, no OpenAI call;
+ *   * the public marketing estimator (`source: "public"`) needs no login but is
+ *     always rate-limited per IP, and office callers get a generous per-account
+ *     limit too, so a leaked token can't run up the bill unbounded.
+ *
+ * Used by the Vite dev middleware (vitePluginVisionApi in vite.config.ts).
  *
  * SELF-CONTAINED TWIN: the Vercel deployment uses api/vision-analyze.ts, which
  * cannot import ../server/* at runtime (same gotcha as api/lead.ts). Keep the
- * validation + OpenAI call below in sync with that file.
+ * logic below in sync with that file.
  *
- * Env: OPENAI_API_KEY (server-side only — never VITE_-prefixed).
+ * Env: OPENAI_API_KEY, SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (all
+ * server-side only — never VITE_-prefixed).
  */
 
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
 const MAX_PHOTOS = 10;
+const MAX_DETAILS_CHARS = 5000;
+const MAX_PROMPT_CHARS = 20000;
+
+/** Models the server will ever send to OpenAI. Anything else in the saved
+ * settings falls back to the default. */
+const ALLOWED_MODELS = new Set(["gpt-4.1-mini", "gpt-4.1", "gpt-4o"]);
+const DEFAULT_MODEL = "gpt-4.1-mini";
+const DEFAULT_TEMPERATURE = 0.3;
+const DEFAULT_MAX_TOKENS = 1500;
+const MAX_TOKENS_CAP = 2500;
+
+// Rate limits (in-memory: per warm instance on Vercel, so a blunt backstop,
+// not a durable quota).
+const PUBLIC_WINDOW_MS = 5 * 60 * 1000;
+const PUBLIC_MAX_PER_IP = 20;
+const STAFF_WINDOW_MS = 5 * 60 * 1000;
+const STAFF_MAX_PER_ACCOUNT = 60;
 
 export interface VisionPayload {
   photos: string[];
   details: string;
-  model: string;
-  temperature: number;
-  maxTokens: number;
-  systemInstructions: string;
-  /** "public" for the marketing-site estimator (rate-limited by IP in the
-   * Vercel function), "" for the logged-in staff Vision tab. */
-  source: string;
+  /** "public" for the marketing-site estimator, "" for the office Vision tab. */
+  source: "public" | "";
+  /** Office-login session token; required unless source is "public". */
+  staffToken: string;
+}
+
+export interface VisionRunResult {
+  status: number;
+  body: unknown;
 }
 
 export function validateVisionPayload(body: unknown): VisionPayload | null {
@@ -36,40 +70,154 @@ export function validateVisionPayload(body: unknown): VisionPayload | null {
   );
   if (photos.length !== b.photos.length) return null;
 
-  const systemInstructions =
-    typeof b.systemInstructions === "string" && b.systemInstructions.trim()
-      ? b.systemInstructions.slice(0, 20000)
-      : "";
-  if (!systemInstructions) return null;
-
   return {
     photos,
-    details: typeof b.details === "string" ? b.details.slice(0, 5000) : "",
-    model: typeof b.model === "string" && b.model.trim() ? b.model.trim() : "gpt-4.1-mini",
-    temperature: typeof b.temperature === "number" ? b.temperature : 0.3,
-    maxTokens: typeof b.maxTokens === "number" ? b.maxTokens : 1500,
-    systemInstructions,
+    details: typeof b.details === "string" ? b.details.slice(0, MAX_DETAILS_CHARS) : "",
     source: b.source === "public" ? "public" : "",
+    staffToken: typeof b.staffToken === "string" ? b.staffToken : "",
   };
 }
 
-export interface VisionRunResult {
-  status: number;
-  body: unknown;
+// ------------------------------------------------------------ Supabase admin
+
+let adminClient: SupabaseClient | null | undefined;
+function getSupabaseAdmin(): SupabaseClient | null {
+  if (adminClient !== undefined) return adminClient;
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  adminClient = url && key ? createClient(url, key, { auth: { persistSession: false } }) : null;
+  if (!adminClient) {
+    console.warn("[vision-api] SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY missing; Vision AI disabled.");
+  }
+  return adminClient;
+}
+
+/** Resolves an office session token to an ACTIVE staff id, or null. */
+async function resolveStaffToken(supabase: SupabaseClient, token: string): Promise<string | null> {
+  if (!token) return null;
+  const { data: session } = await supabase
+    .from("staff_sessions")
+    .select("staff_id, expires_at")
+    .eq("token", token)
+    .maybeSingle();
+  if (!session || new Date(session.expires_at).getTime() < Date.now()) return null;
+  const { data: staff } = await supabase
+    .from("staff")
+    .select("id, active")
+    .eq("id", session.staff_id)
+    .maybeSingle();
+  if (!staff || !staff.active) return null;
+  return staff.id as string;
+}
+
+// ------------------------------------------------------------ vision config
+
+interface VisionConfig {
+  model: string;
+  temperature: number;
+  maxTokens: number;
+  systemInstructions: string;
+}
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, n));
+}
+
+/** Loads the business's Vision settings from app_settings (key "vision") and
+ * sanitises them. Returns null when the row is missing or has no prompt. */
+async function loadVisionConfig(supabase: SupabaseClient): Promise<VisionConfig | null> {
+  const { data } = await supabase.from("app_settings").select("value").eq("key", "vision").maybeSingle();
+  const v = (data?.value && typeof data.value === "object" ? data.value : {}) as Record<string, unknown>;
+  const systemInstructions =
+    typeof v.systemInstructions === "string" ? v.systemInstructions.trim().slice(0, MAX_PROMPT_CHARS) : "";
+  if (!systemInstructions) return null;
+  const model = typeof v.model === "string" && ALLOWED_MODELS.has(v.model.trim()) ? v.model.trim() : DEFAULT_MODEL;
+  const temperature =
+    typeof v.temperature === "number" && Number.isFinite(v.temperature)
+      ? clamp(v.temperature, 0, 1)
+      : DEFAULT_TEMPERATURE;
+  const maxTokens =
+    typeof v.maxTokens === "number" && Number.isFinite(v.maxTokens)
+      ? clamp(Math.round(v.maxTokens), 300, MAX_TOKENS_CAP)
+      : DEFAULT_MAX_TOKENS;
+  return { model, temperature, maxTokens, systemInstructions };
+}
+
+// ------------------------------------------------------------- rate limiting
+
+const rateHits = new Map<string, number[]>();
+function rateLimited(bucket: string, windowMs: number, max: number): boolean {
+  const now = Date.now();
+  const recent = (rateHits.get(bucket) ?? []).filter(t => now - t < windowMs);
+  if (recent.length >= max) {
+    rateHits.set(bucket, recent);
+    return true;
+  }
+  recent.push(now);
+  rateHits.set(bucket, recent);
+  return false;
+}
+
+// ------------------------------------------------------------ request entry
+
+const PUBLIC_LIMIT_MESSAGE =
+  "You've run a lot of estimates in a short time. Please wait a few minutes, or call/text us for a quote.";
+
+/**
+ * Full request handling — auth, rate limit, config, OpenAI call. `ip` is the
+ * caller's address (x-forwarded-for on Vercel, socket address in dev).
+ */
+export async function handleVisionRequest(body: unknown, ip: string): Promise<VisionRunResult> {
+  const payload = validateVisionPayload(body);
+  if (!payload) {
+    return { status: 400, body: { error: "Send 1-10 image data URLs." } };
+  }
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    return { status: 503, body: { error: "Vision AI is not configured on the server." } };
+  }
+
+  if (payload.source === "public") {
+    if (rateLimited(`ip:${ip || "unknown"}`, PUBLIC_WINDOW_MS, PUBLIC_MAX_PER_IP)) {
+      return { status: 429, body: { error: PUBLIC_LIMIT_MESSAGE } };
+    }
+  } else {
+    const staffId = await resolveStaffToken(supabase, payload.staffToken);
+    if (!staffId) {
+      return { status: 401, body: { error: "Please sign in to the office app to use Vision AI." } };
+    }
+    if (rateLimited(`staff:${staffId}`, STAFF_WINDOW_MS, STAFF_MAX_PER_ACCOUNT)) {
+      return {
+        status: 429,
+        body: { error: "Too many analyses in a short time. Please wait a few minutes and try again." },
+      };
+    }
+  }
+
+  const visionConfig = await loadVisionConfig(supabase);
+  if (!visionConfig) {
+    return {
+      status: 503,
+      body: { error: "Vision AI isn't set up yet — open Estimate Settings → Vision AI and click Save once." },
+    };
+  }
+
+  return runVisionAnalysis(payload, visionConfig);
 }
 
 type ContentPart =
   | { type: "text"; text: string }
   | { type: "image_url"; image_url: { url: string } };
 
-export async function runVisionAnalysis(payload: VisionPayload): Promise<VisionRunResult> {
+export async function runVisionAnalysis(payload: VisionPayload, config: VisionConfig): Promise<VisionRunResult> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return { status: 502, body: { error: "OPENAI_API_KEY is not configured on the server." } };
   }
 
   const photoCount = payload.photos.length;
-  const system = payload.systemInstructions.replace(/\{photoCount\}/g, String(photoCount));
+  const system = config.systemInstructions.replace(/\{photoCount\}/g, String(photoCount));
   const userText =
     `There ${photoCount === 1 ? "is" : "are"} ${photoCount} photo${photoCount === 1 ? "" : "s"}, numbered 1 to ${photoCount}.` +
     (payload.details.trim()
@@ -88,9 +236,9 @@ export async function runVisionAnalysis(payload: VisionPayload): Promise<VisionR
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: payload.model,
-        temperature: payload.temperature,
-        max_tokens: payload.maxTokens,
+        model: config.model,
+        temperature: config.temperature,
+        max_tokens: config.maxTokens,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: system },

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 
 import { hydrateSettings } from "@/lib/settingsStorage";
-import { analyzePhotos, loadVisionSettings } from "@/lib/visionStorage";
+import { analyzePhotos } from "@/lib/visionStorage";
 import {
   hydratePricingData,
   loadPricingSettings,
@@ -305,7 +305,6 @@ export default function InstantEstimatePage() {
       analysis = await analyzePhotos({
         photos: photos.map(p => p.dataUrl),
         details: form.details,
-        settings: loadVisionSettings(),
         source: "public",
       });
     } catch (error) {

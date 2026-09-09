@@ -23,7 +23,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { loadPricingSettings } from "@/utils/pricingStorage";
 import { downloadQuotePdf } from "@/utils/quotePdf";
-import { analyzePhotos, loadVisionSettings } from "@/lib/visionStorage";
+import { analyzePhotos } from "@/lib/visionStorage";
 import type { VisionAnalysisResult } from "@/types/vision";
 
 const MAX_PHOTOS = 10;
@@ -223,7 +223,6 @@ export function VisionEstimatePanel() {
       const analysis = await analyzePhotos({
         photos: photos.map((p) => p.dataUrl),
         details,
-        settings: loadVisionSettings(),
       });
       setResult(analysis);
       setItems(

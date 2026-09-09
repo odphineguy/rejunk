@@ -493,21 +493,12 @@ function vitePluginVisionApi(): Plugin {
         req.on("end", () => {
           void (async () => {
             try {
-              const { runVisionAnalysis, validateVisionPayload } = await import(
-                "./server/visionAnalyze"
-              );
-              const payload = validateVisionPayload(JSON.parse(body || "{}"));
-              if (!payload) {
-                res.writeHead(400, { "Content-Type": "application/json" });
-                res.end(
-                  JSON.stringify({
-                    error:
-                      "Send 1-10 image data URLs plus the system instructions.",
-                  })
-                );
-                return;
-              }
-              const result = await runVisionAnalysis(payload);
+              const { handleVisionRequest } = await import("./server/visionAnalyze");
+              const ip =
+                (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ||
+                req.socket.remoteAddress ||
+                "unknown";
+              const result = await handleVisionRequest(JSON.parse(body || "{}"), ip);
               res.writeHead(result.status, {
                 "Content-Type": "application/json",
               });
@@ -555,6 +546,7 @@ export default defineConfig(({ mode }) => {
     "VITE_SUPABASE_URL",
     "SUPABASE_SERVICE_ROLE_KEY",
     "APP_BASE_URL",
+    "OPENAI_API_KEY",
   ]) {
     if (!process.env[key] && env[key]) {
       process.env[key] = env[key];

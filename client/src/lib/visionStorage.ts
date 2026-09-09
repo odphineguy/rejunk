@@ -4,6 +4,7 @@
 // the server, which holds the OpenAI key.
 
 import { loadSettingsSection, saveSettingsSection } from "@/lib/settingsStorage";
+import { getStoredStaffSession } from "@/lib/staffSession";
 import { defaultVisionSettings } from "@/data/defaultVisionSettings";
 import type { VisionAnalysisResult, VisionSettings } from "@/types/vision";
 
@@ -19,29 +20,28 @@ export function saveVisionSettings(value: VisionSettings): VisionSettings {
 
 /**
  * Sends the (already compressed) photo data URLs + optional details to the
- * server, which calls OpenAI with the business's System Instructions and
- * returns the structured estimate. Throws with a human-readable message on
- * failure (e.g. the key isn't configured).
+ * server, which calls OpenAI with the business's saved Vision settings (model,
+ * token budget and System Instructions are loaded SERVER-SIDE from
+ * app_settings — the browser can't choose them). Office calls carry the
+ * office-login token; the public estimator sends `source: "public"` instead
+ * and is rate-limited by IP. Throws with a human-readable message on failure.
  */
 export async function analyzePhotos(input: {
   photos: string[];
   details?: string;
-  settings: VisionSettings;
-  /** "public" for the marketing-site estimator — the server rate-limits those
-   * by IP. Omitted for the logged-in staff Vision tab (never throttled). */
+  /** "public" for the marketing-site estimator (no login, IP-throttled).
+   * Omitted for the logged-in staff Vision tab (needs an office session). */
   source?: "public";
 }): Promise<VisionAnalysisResult> {
+  const staffToken = input.source === "public" ? "" : (getStoredStaffSession()?.token ?? "");
   const response = await fetch("/api/vision-analyze", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       photos: input.photos,
       details: input.details ?? "",
-      model: input.settings.model,
-      temperature: input.settings.temperature,
-      maxTokens: input.settings.maxTokens,
-      systemInstructions: input.settings.systemInstructions,
       source: input.source ?? "",
+      staffToken,
     }),
   });
 
