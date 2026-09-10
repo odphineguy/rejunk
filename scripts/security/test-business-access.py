@@ -30,7 +30,7 @@ with tempfile.TemporaryDirectory(prefix='rejunk-access-') as temp:
                 assert any(x in e.stderr for x in ('permission denied','row-level security','required','Invalid','Report range')), e.stderr
             else: raise AssertionError('Expected denial: '+s)
         run(*cmd,'-f',str(ROOT/'scripts/security/business-access-fixture.sql'))
-        for migration in ('20260910040019_bind_business_identity.sql','20260910040026_restrict_business_data.sql'):
+        for migration in ('20260910042932_bind_business_identity.sql','20260910043256_restrict_business_data.sql'):
             run(*cmd,'-f',str(ROOT/'supabase/migrations'/migration))
         assert actor('select count(*) from jobs')=='0'
         assert actor('select count(*) from app_leads_v')=='0'

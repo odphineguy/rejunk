@@ -5,15 +5,15 @@ verified. Other entries distinguish repository changes from deployed verificatio
 
 | Original audit item | Repository status | Remaining work |
 | --- | --- | --- |
-| 1. Broad anonymous business-data access | Identity bridge and restrictive policies prepared and tested locally | Ordered production rollout below is pending |
-| 2. Driver credentials and GPS | Credential fix already committed; own-session GPS and assigned-job access prepared | Deploy and verify the new identity policies |
+| 1. Broad anonymous business-data access | Deployed and verified against production roles | Signed-in UI and Realtime acceptance remain |
+| 2. Driver credentials and GPS | Credential fix and own-session GPS/assigned-job policies deployed | Live driver workflow acceptance remains |
 | 3. Profile self-promotion | Applied and verified on rejunk-prod | End-to-end office/driver workflow checks remain |
-| 4. Pipeline reads and tenant authorization | Staff/tenant checks and invoker view prepared | Ordered production rollout pending |
+| 4. Pipeline reads and tenant authorization | Staff/tenant checks and invoker view deployed | Signed-in UI acceptance remains |
 | 5. Vision abuse | Request authentication and server-owned settings added in `ee6ef3c` | Verify deployed behavior; process-local throttling remains a limitation |
 | 6. Activation email relay | Staff gating and server-built links added in `3ae8e02` | Verify deployed behavior |
 | 7. Office PIN lockout | Durable counter migration added in `4d5449c` | Verify live schema and deployed behavior |
-| 8. Public internal photos | Private storage and signed links prepared | Deploy client before changing bucket visibility |
-| 9. Dashboard resource exhaustion | Authorization and range bounds prepared | Deployment, durable request limits and timeout verification remain |
+| 8. Public internal photos | Private storage and signed-link client deployed | Live signed-photo UI acceptance remains |
+| 9. Dashboard resource exhaustion | Authorization and range bounds deployed | Durable request limits and timeout verification remain |
 | 10. Fleet data in Git | Still open | Sanitize seed data; assess repository/history exposure separately |
 
 ## Item 3: applied fix
@@ -64,17 +64,17 @@ are separate open issues, not closed by this migration. See the
 Highest next priority: identity-bound database access
 for the remaining business tables and pipeline reads (items 1, 2, and 4).
 
-## Prepared business-data lockdown (not deployed)
+## Business-data lockdown (deployed)
 
-The next change implements items 1/4 and the remaining GPS part of item 2;
-private job-photo access also addresses item 8. These migrations are **not yet
-applied**. The live database still has the broad policies until phase 2 completes.
+This change implements items 1/4 and the remaining GPS part of item 2;
+private job-photo access also addresses item 8. Both migrations are applied to
+rejunk-prod, following the app/database rollout order.
 
-- `20260910040019_bind_business_identity.sql`: additive bridge. An authenticated
+- `20260910042932_bind_business_identity.sql`: additive bridge. An authenticated
   transport session must present a real staff/driver token. A private binding
   resolves the current active staff session or driver token hash on every query.
   Expiry, logout, and revocation invalidate access without waiting for JWT expiry.
-- `20260910040026_restrict_business_data.sql`: restrictive gates on existing
+- `20260910043256_restrict_business_data.sql`: restrictive gates on existing
   public tables; shared tenant tables require `progressive`. Anonymous roles lose
   table privileges; browser TRUNCATE is revoked. The pipeline continues using its
   service-role access. Existing server-only tables remain server-only.
@@ -112,7 +112,7 @@ Live read-only inspection confirmed PostgreSQL 17.6, pgcrypto in `extensions`,
 no existing `app_private` schema, two owner logins, no activated drivers, seven
 jobs with one legacy name assignment, and no employee-ID assignments yet.
 
-### Required rollout order
+### Rollout procedure (completed)
 
 1. Apply **only** `bind_business_identity` to rejunk-prod. Keep the existing
    restrictions unchanged at this stage. Verify the bridge functions and grants.
@@ -144,3 +144,27 @@ an already-used device are not encrypted; this change prevents new unauthorized
 server reads, not extraction from a previously authorized device. Several older
 optional driver operational tables/RPCs still are not deployed; this change does
 not pretend those pre-existing features are now fully synchronized.
+
+### Production verification — September 9, 2026 (Phoenix)
+
+Applied bridge version `20260910042932`, pushed app commit `01b19fd`, and verified
+Vercel deployment `dpl_9SHtoayEu8NzRg5QY89W8xW98dmD` was READY with
+`rejunk.vercel.app` assigned before applying restriction version `20260910043256`.
+A schema-only snapshot was saved locally before the restriction migration.
+
+All 49 public tables have the restrictive identity gate. The job-photo bucket
+is private; the leads view has security_invoker enabled. Anonymous jobs SELECT
+and authenticated execution of the private report implementation are denied.
+Transaction-local role checks confirmed an unbound authenticated session sees
+zero jobs, leads and driver sessions; forged tokens and report calls are denied.
+A valid existing office session bound successfully and read 7 jobs, 409 lead-view
+rows, 2 saved estimates and a one-day dashboard report. The clients table was empty.
+These checks rolled back their temporary bindings; no business records were changed.
+Service-role reads still return 7 jobs and 374 raw Thumbtack leads.
+
+The deployed browser correctly reached staff sign-in. No signed-in browser session
+was available in the verification browser, and there were no activated drivers.
+Therefore signed-in UI, live driver workflows, signed-photo rendering and Realtime
+event delivery remain acceptance checks, not claimed as verified. The synthetic
+database/client regression suites passed. Reload old office and driver tabs to
+load the identity-aware client. The broader audit remains open.

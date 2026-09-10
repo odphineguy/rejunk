@@ -112,9 +112,9 @@ settings, estimator) is the Supabase-backed `loadPricingSettings().disposalFacil
 type extends `DisposalFacility` with legacy display fields (`name`, `type`, `lat`, `lng`, …) for
 back-compat; both shapes coexist.
 
-### Prepared business-data authorization rollout (not yet deployed)
+### Business-data authorization (deployed September 9, 2026)
 
-The working client now binds its Supabase transport identity to a verified
+The deployed client now binds its Supabase transport identity to a verified
 staff/driver login through `bind_business_identity`. Follow the ordered rollout in
 `SECURITY_REMEDIATION.md`: additive bridge migration, app deployment, then restrictive
 business-data migration. Never apply the restrictions before deploying this client.
@@ -124,12 +124,13 @@ login records on every query, including Realtime RLS. Drivers use whitelisted jo
 RPCs, own-session GPS, member-only messaging, and signed job-photo URLs. New dispatch
 assignments include stable employee IDs. Staff/driver endpoint copies are unchanged.
 `app_leads_v` becomes an invoker view and report RPCs enforce staff/tenant/range checks.
-Until both migrations and the app are deployed, the older live behavior described
-below still applies. The broader audit and office-versus-owner money masking remain open.
+Both migrations and the app are deployed. This section supersedes older anonymous-access
+descriptions below. The broader audit and office-versus-owner money masking remain open.
 
 ### Auth — three independent layers
-1. **Anonymous Supabase session (data / RLS).** `lib/supabase.ts` `ensureSession()` does **transparent
-   anonymous sign-in** so every visitor gets an `authenticated` session for row-level security. This
+1. **Anonymous Supabase session (data / RLS).** `lib/supabase.ts` `ensureSession()` creates an anonymous
+   transport session only after an office/driver login exists, then binds its verified token.
+   An unbound `authenticated` session cannot access business data. This
    **requires the Anonymous provider enabled** (Auth → Providers); if off, the app falls back to
    local-only mode. `supabase` is `null` when env vars are absent (callers treat null as "not configured").
 2. **Office login — "the front door."** Every internal office route is wrapped in `StaffSessionGate`; no
