@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix='rejunk-access-') as temp:
             else: raise AssertionError('Expected denial: '+s)
         run(*cmd,'-f',str(ROOT/'scripts/security/business-access-fixture.sql'))
         run(*cmd,"-f",str(ROOT/"scripts/security/owner-financial-fixture.sql"))
-        for migration in ('20260910042932_bind_business_identity.sql','20260910043256_restrict_business_data.sql','20260910060045_owner_financial_access.sql','20260910053012_enforce_owner_financial_access.sql'):
+        for migration in ('20260910042932_bind_business_identity.sql','20260910043256_restrict_business_data.sql','20260910060045_owner_financial_access.sql','20260910060647_enforce_owner_financial_access.sql'):
             run(*cmd,'-f',str(ROOT/'supabase/migrations'/migration))
 
         assert actor("select bind_business_identity(repeat('s',64),null)",2)=='t'

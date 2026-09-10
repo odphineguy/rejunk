@@ -1,6 +1,8 @@
 # Owner-only financial access
 
-Status: additive migration applied as `20260910060045`; app deployment and enforcement pending.
+Status: deployed. Additive migration `20260910060045` and enforcement migration
+`20260910060647` are applied to rejunk-prod. App commit `2f9a041` is live
+on rejunk.vercel.app (Vercel deployment `dpl_5dedhtSs3HfFwfkWyDnERYujZg4f`).
 
 Office staff retain customer quote/invoice totals and operational job/customer data.
 Owners alone can retrieve structured costs, profit/margin calculations, payment
@@ -54,7 +56,22 @@ Passed:
   Playwright CLI `run-code --filename`. All external calls are intercepted;
   no production accounts or business records are created by this browser test.
 
-## Rollout
+### Live verification
+
+Transaction-local role tests passed after enforcement; all temporary identity and
+role changes were rolled back. Owner access returned all 7 jobs and financial
+report fields. Office direct reads returned zero raw jobs, pricebook rows and
+leads; the safe APIs returned all 7 jobs and 409 lead/client rows, with customer
+prices present and protected job fields absent. Office reports and daily series
+omitted revenue, collected and average job size while retaining operational KPIs.
+Office payment insertion was denied; service-role job access remained intact.
+The deployed quote endpoint rejects an unauthenticated POST with HTTP 401.
+
+A real office-account workflow and owner reload remain user acceptance checks.
+The advisor still reports broader pre-existing issues; the new private quote
+table intentionally has RLS with no browser policies.
+
+## Rollout (completed through step 4)
 
 1. Apply only `owner_financial_access` (additive RPCs/private quote and payment storage).
 2. Push the app and confirm the exact Vercel deployment is ready.

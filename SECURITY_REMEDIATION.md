@@ -172,7 +172,7 @@ load the identity-aware client. The broader audit remains open.
 
 ## Owner-only financial access follow-up
 
-Implemented and locally verified; see `OWNER_FINANCIAL_ACCESS.md` for details,
+Deployed with live owner/office database checks; see `OWNER_FINANCIAL_ACCESS.md` for details,
 tests, and the ordered rollout. Office users retain customer quote and invoice
 totals. Costs, margins, profit, payments, acquisition costs, receipt files and
 financial report fields are protected by the server/database role.

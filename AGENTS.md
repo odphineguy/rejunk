@@ -127,7 +127,7 @@ assignments include stable employee IDs. Staff/driver endpoint copies are unchan
 Both migrations and the app are deployed. This section supersedes older anonymous-access
 descriptions below. The broader audit and office-versus-owner money masking remain open.
 
-### Owner financial access (prepared rollout)
+### Owner financial access (deployed)
 
 See `OWNER_FINANCIAL_ACCESS.md` for the owner/office boundary and ordered rollout.
 The role-aware client reads financial-bearing records via `business_rows`;
@@ -135,8 +135,8 @@ office writes use allowlisted merge RPCs. Cost-based office quotes run through
 `/api/quote`, generated from the existing pricing engine, and keep their private
 financial snapshot server-side. Payments move from localStorage to owner-only
 `app_payments`. Server-backed financial caches are memory-only and reset across
-account changes. These updates supersede older persistence descriptions below
-once both financial migrations and the app have been deployed.
+account changes. These updates supersede older persistence descriptions below.
+Both financial migrations and the app are deployed; see the verification record.
 
 ### Auth — three independent layers
 1. **Anonymous Supabase session (data / RLS).** `lib/supabase.ts` `ensureSession()` creates an anonymous
