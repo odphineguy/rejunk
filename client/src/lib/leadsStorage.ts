@@ -1,3 +1,5 @@
+import {currentStaffIdentity} from "@/lib/financialCache";
+import { businessRows } from "@/lib/businessAccess";
 /**
  * Thumbtack leads for Clients & Leads (DASHBOARD_LEADS_SPEC §2, 2026-09-04).
  *
@@ -83,8 +85,8 @@ const canUseLocalStorage = () =>
 function readJson<T>(key: string, fallback: T): T {
   if (!canUseLocalStorage()) return fallback;
   try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
+    window.localStorage.removeItem(key);
+    return fallback;
   } catch {
     return fallback;
   }
@@ -92,7 +94,7 @@ function readJson<T>(key: string, fallback: T): T {
 
 function writeJson<T>(key: string, value: T) {
   if (!canUseLocalStorage()) return;
-  window.localStorage.setItem(key, JSON.stringify(value));
+  window.localStorage.removeItem(key);
 }
 
 let cachedLeads: ThumbtackLead[] = readJson<ThumbtackLead[]>(LEADS_KEY, []);
@@ -191,24 +193,21 @@ export async function setClientSource(
 export async function hydrateThumbtackLeads(
   days: number = LEADS_WINDOW_DAYS
 ): Promise<void> {
+ const requestIdentity=currentStaffIdentity();
   if (!isSupabaseConfigured || !supabase) return;
   if (!(await ensureSession())) return;
 
   const since = new Date(Date.now() - days * 86400000).toISOString();
   // Thumbtack rows: trailing window. Direct customers: always (their
   // received_at is the first job, which can be much older).
-  const { data, error } = await supabase
-    .from("app_leads_v")
-    .select("*")
-    .eq("tenant_id", APP_TENANT_ID)
-    .or(`received_at.gte.${since},source.neq.thumbtack`)
-    .order("received_at", { ascending: false });
+  const { data, error } = await businessRows("app_leads_v");
   if (error) {
     console.error("[leadsStorage] Thumbtack leads load failed; cache kept.", error.message);
     return;
   }
   const contactOverrides = await loadContactOverrides();
-  cachedLeads = (data ?? []).map(row => {
+ if(requestIdentity!==currentStaffIdentity()) return;
+  cachedLeads = (data ?? []).filter(row => row.source !== "thumbtack" || row.received_at >= since).sort((a,b) => String(b.received_at).localeCompare(String(a.received_at))).map(row => {
     const lead = leadFromRow(row as Record<string, unknown>);
     const contact = contactOverrides.get(lead.negotiationId);
     if (!contact) return lead;
@@ -249,18 +248,12 @@ export async function loadConversation(
 ): Promise<ThumbtackMessage[]> {
   if (!isSupabaseConfigured || !supabase) return [];
   if (!(await ensureSession())) return [];
-  const { data, error } = await supabase
-    .from("thumbtack_messages")
-    .select("id, direction, from_type, text, sent_at, created_at")
-    .eq("tenant_id", APP_TENANT_ID)
-    .eq("negotiation_id", negotiationId)
-    .order("sent_at", { ascending: true, nullsFirst: false })
-    .order("created_at", { ascending: true });
+  const { data, error } = await (supabase as any).rpc("business_conversation", {negotiation: negotiationId});
   if (error) {
     console.error("[leadsStorage] Conversation load failed.", error.message);
     throw new Error(error.message);
   }
-  return (data ?? []).map(row => ({
+  return (data ?? []).map((row: Record<string, any>) => ({
     id: row.id,
     direction: row.direction === "inbound" ? "inbound" : "outbound",
     fromType: row.from_type,
@@ -343,3 +336,5 @@ export function downloadThumbtackLeadsCsv(leads: ThumbtackLead[]): void {
   anchor.remove();
   URL.revokeObjectURL(url);
 }
+
+window.addEventListener("business-cache-reset", () => { cachedLeads=[]; hydrated=false; notify(); });

@@ -1,3 +1,4 @@
+import officeQuoteHandler from "./officeQuote";
 import express from "express";
 import { createServer } from "http";
 import path from "path";
@@ -15,6 +16,7 @@ async function startServer() {
 
   app.use("/api/driver", express.json(), driverActivationRouter);
   app.use("/api/lead", express.json(), leadRouter);
+  app.post("/api/quote", express.json({limit:"32kb"}), officeQuoteHandler);
   app.use("/api/staff", express.json(), staffAccessRouter);
 
   app.use("/maps-proxy", async (req, res) => {

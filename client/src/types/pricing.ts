@@ -336,6 +336,8 @@ export interface BestFacilityRecommendation {
 }
 
 export interface SavedEstimate {
+  /** Server-owned financial snapshot for an office-created junk quote. */
+  quoteId?: string;
   id: string;
   createdAt: string;
   updatedAt: string;

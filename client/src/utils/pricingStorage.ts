@@ -1,3 +1,4 @@
+import {currentStaffIdentity} from "@/lib/financialCache";
 import { defaultPricingSettings } from "@/data/defaultPricing";
 import type { MaterialHandlingClass, MaterialPricingRule, PricingSettings, SavedEstimate, Vehicle } from "@/types/pricing";
 import {
@@ -20,8 +21,8 @@ function readJson<T>(key: string, fallback: T): T {
   }
 
   try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
+    window.localStorage.removeItem(key);
+    return fallback;
   } catch {
     return fallback;
   }
@@ -32,7 +33,7 @@ function writeJson<T>(key: string, value: T) {
     return;
   }
 
-  window.localStorage.setItem(key, JSON.stringify(value));
+  window.localStorage.removeItem(key);
 }
 
 function defaultHandlingClass(material: Partial<MaterialPricingRule>): MaterialHandlingClass {
@@ -143,6 +144,7 @@ function reportRemoteError(context: string) {
  * Falls back to the localStorage cache when Supabase is unconfigured/unreachable.
  */
 export async function hydratePricingData(): Promise<void> {
+ const requestIdentity=currentStaffIdentity();
   if (!isSupabaseConfigured) return;
 
   const [remoteSettings, remoteEstimates] = await Promise.all([
@@ -156,6 +158,7 @@ export async function hydratePricingData(): Promise<void> {
     }),
   ]);
 
+ if(requestIdentity!==currentStaffIdentity()) return;
   if (remoteSettings) {
     cachedSettings = mergeSettings(remoteSettings);
     writeJson(SETTINGS_KEY, cachedSettings);
@@ -219,7 +222,7 @@ export function loadSavedEstimates(): SavedEstimate[] {
   return cachedEstimates;
 }
 
-export function saveEstimate(estimate: SavedEstimate) {
+function cacheEstimate(estimate: SavedEstimate) {
   const estimateIndex = cachedEstimates.findIndex((item) => item.id === estimate.id);
   const updatedEstimate = {
     ...estimate,
@@ -232,8 +235,19 @@ export function saveEstimate(estimate: SavedEstimate) {
       : [updatedEstimate, ...cachedEstimates];
 
   writeJson(SAVED_ESTIMATES_KEY, cachedEstimates);
-  void upsertSavedEstimateRemote(updatedEstimate).catch(reportRemoteError("estimate save"));
   return updatedEstimate;
+}
+
+export function saveEstimate(estimate: SavedEstimate) {
+ const updated = cacheEstimate(estimate);
+ void upsertSavedEstimateRemote(updated).catch(reportRemoteError("estimate save"));
+ return updated;
+}
+
+/** Wait for the server snapshot before offering conversion to a job. */
+export async function saveEstimateConfirmed(estimate: SavedEstimate) {
+ await upsertSavedEstimateRemote(estimate);
+ return cacheEstimate(estimate);
 }
 
 export function deleteSavedEstimate(estimateId: string) {
@@ -242,3 +256,5 @@ export function deleteSavedEstimate(estimateId: string) {
   void deleteSavedEstimateRemote(estimateId).catch(reportRemoteError("estimate delete"));
   return cachedEstimates;
 }
+
+window.addEventListener("business-cache-reset", () => { cachedSettings=mergeSettings({}); cachedEstimates=[]; window.dispatchEvent(new Event("pricing-settings-updated")); });

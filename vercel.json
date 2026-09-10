@@ -1,7 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "vite build && tsx scripts/prerender.ts",
+  "buildCommand": "node scripts/security/build-office-quote.mjs && vite build && tsx scripts/prerender.ts",
   "outputDirectory": "dist/public",
   "framework": "vite",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 }

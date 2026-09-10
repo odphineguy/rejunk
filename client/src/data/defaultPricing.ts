@@ -1,4 +1,4 @@
-import { facilities } from "@/data/facilities";
+import { facilities } from "./facilities";
 import type { MaterialPricingRule, PricingSettings, Vehicle, VolumePricingBenchmark } from "@/types/pricing";
 
 export const defaultHeavyBedloadPricing = {

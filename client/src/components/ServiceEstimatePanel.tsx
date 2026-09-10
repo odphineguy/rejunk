@@ -1,3 +1,4 @@
+import { useStaffSession } from "@/hooks/useStaffSession";
 import { useEffect, useMemo, useState } from "react";
 import { Copy, FileDown, Minus, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -11,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { PhotoRequiredBanner } from "@/components/PhotoRequiredBanner";
 import { loadMapScript } from "@/components/Map";
 import { getPricebook } from "@/lib/pricebookStorage";
-import { saveEstimate } from "@/utils/pricingStorage";
+import { saveEstimateConfirmed } from "@/utils/pricingStorage";
 import { calculateServiceEstimate, DEFAULT_SERVICE_CONFIG } from "@/utils/serviceCalculator";
 import { getPointToPointRoute, type PointToPointRoute } from "@/utils/distanceRouting";
 import { downloadQuotePdf, type QuotePdfLine } from "@/utils/quotePdf";
@@ -199,6 +200,7 @@ export function ServiceEstimatePanel({
   onResetMoving,
   loadSeed,
 }: ServiceEstimatePanelProps) {
+  const { isOwner } = useStaffSession();
   const copy = PANEL_COPY[mode];
   const [pricebook, setPricebook] = useState(() => getPricebook());
   const [itemQty, setItemQty] = useState<Record<string, number>>({});
@@ -455,7 +457,7 @@ export function ServiceEstimatePanel({
     photoRequired: result.photoRequired,
   });
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!hasItems) {
       toast.error("Add at least one service item before saving.");
       return;
@@ -501,7 +503,9 @@ export function ServiceEstimatePanel({
       serviceType: deriveServiceType(),
       crewSize: result.crewSize,
     };
-    saveEstimate(estimate);
+    try { await saveEstimateConfirmed(estimate); } catch(error) {
+      toast.error(error instanceof Error ? error.message : "Estimate could not be saved."); return;
+    }
     onSaved();
     toast.success(copy.savedToast);
   };
@@ -862,11 +866,12 @@ export function ServiceEstimatePanel({
                     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Quote</p>
                     <p className="mt-1 text-2xl font-bold text-primary">{money(result.total)}</p>
                   </div>
+                  {isOwner && (
                   <div className="rounded-lg border border-border bg-muted/40 p-3">
                     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Est. Profit</p>
                     <p className="mt-1 text-lg font-bold">{money(result.grossProfitDollars)}</p>
                     <p className="text-xs text-muted-foreground">{Math.round(result.grossMarginDecimal * 100)}% margin</p>
-                  </div>
+                  </div>)}
                 </div>
 
                 {mode === "moving" && routeMiles != null && (

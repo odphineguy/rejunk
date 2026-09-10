@@ -357,6 +357,20 @@ function vitePluginStaffApi(): Plugin {
   return {
     name: "rejunk-staff-api",
     configureServer(server: ViteDevServer) {
+      server.middlewares.use("/api/quote", (req, res) => {
+        let body = "";
+        req.on("data", chunk => { body += chunk; if (body.length > 32768) req.destroy(); });
+        req.on("end", async () => {
+          res.setHeader("Content-Type", "application/json");
+          res.setHeader("Cache-Control", "no-store");
+          if (req.method !== "POST") { res.statusCode=405; res.end('{"error":"Use POST."}'); return; }
+          try {
+            const {handleOfficeQuote} = await import("./server/officeQuote");
+            const result = await handleOfficeQuote(JSON.parse(body || "{}"));
+            res.statusCode=result.status; res.end(JSON.stringify(result.body));
+          } catch { res.statusCode=503; res.end('{"error":"Quote service unavailable."}'); }
+        });
+      });
       server.middlewares.use("/api/staff", (req, res) => {
         if (req.method !== "POST") {
           res.writeHead(405, { "Content-Type": "application/json" });

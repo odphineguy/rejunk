@@ -127,3 +127,6 @@ Fleet - Sheet1.csv
 .firecrawl/
 landing-assets/
 client/public/landing-preview/
+
+# Local browser verification artifacts
+.playwright-cli/

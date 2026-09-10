@@ -1,3 +1,4 @@
+import { clearFinancialCaches } from "@/lib/financialCache";
 /**
  * Staff-side session management for the office app ("the front door").
  *
@@ -70,6 +71,7 @@ export function isOwner(session: StoredStaffSession | null = getStoredStaffSessi
 }
 
 export function clearStaffSession() {
+  clearFinancialCaches();
   void clearDatabaseIdentity();
   const stored = readJson<StoredStaffSession>(SESSION_KEY);
   if (stored?.token) void postStaff("logout", { token: stored.token });
@@ -96,6 +98,7 @@ export async function validateStoredStaffSession(): Promise<StaffSessionCheck> {
     clearStaffSession();
     return "invalid";
   }
+  if(res.data.role && res.data.role !== stored.role) clearFinancialCaches();
   // Refresh cached fields in case role/email/name changed server-side.
   writeJson(SESSION_KEY, {
     ...stored,
@@ -149,6 +152,7 @@ export async function loginWithEmailPin(email: string, pin: string): Promise<Sto
     mustChangePin: res.data.mustChangePin,
     expiresAt: Date.now() + SESSION_TTL_MS,
   };
+  clearFinancialCaches();
   writeJson(SESSION_KEY, session);
   resetPinAttempts();
   window.dispatchEvent(new Event(STAFF_SESSION_EVENT));

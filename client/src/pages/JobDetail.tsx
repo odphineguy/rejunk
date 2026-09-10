@@ -1,3 +1,5 @@
+import { isOwner as currentUserIsOwner } from "@/lib/staffSession";
+import { useStaffSession } from "@/hooks/useStaffSession";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import { ArrowLeft, CalendarClock, CopyPlus, Download, MessageSquare, Receipt, Save, Send, Trash2 } from "lucide-react";
@@ -127,6 +129,7 @@ export function NewJob() {
 }
 
 export default function JobDetail() {
+  const { isOwner } = useStaffSession();
   const [, params] = useRoute("/jobs/:jobId");
   const [, navigate] = useLocation();
   const [settings, setSettings] = useState(() => loadPricingSettings());
@@ -388,7 +391,7 @@ export default function JobDetail() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <JobStatusBadge status={job.status} />
-                  <PaymentStatusBadge status={job.paymentStatus} />
+                  {isOwner && <PaymentStatusBadge status={job.paymentStatus} />}
                   {jobWarnings.map((warning) => (
                     <JobWarningBadge key={warning.code} warning={warning} />
                   ))}
@@ -608,7 +611,7 @@ export default function JobDetail() {
             </Card>
           )}
 
-          <Card>
+          {isOwner && (<Card>
             <CardHeader>
               <CardTitle>Quoted vs Actual</CardTitle>
               <CardDescription>Compare the saved estimate against the final job economics.</CardDescription>
@@ -629,9 +632,9 @@ export default function JobDetail() {
                 formatter={(value) => `${percent.format(value * 100)}%`}
               />
             </CardContent>
-          </Card>
+          </Card>)}
 
-          <Card>
+          {isOwner && (<Card>
             <CardHeader>
               <CardTitle>Actual Costs & Receipt</CardTitle>
               <CardDescription>Track final costs, dump receipt details, and scale-ticket data.</CardDescription>
@@ -680,9 +683,9 @@ export default function JobDetail() {
                 Upload placeholder: file storage is not connected yet.
               </div>
             </CardContent>
-          </Card>
+          </Card>)}
 
-          {facilityCheck && (
+          {isOwner && facilityCheck && (
             <Card>
               <CardHeader>
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -735,7 +738,7 @@ export default function JobDetail() {
             </Card>
           )}
 
-          {routeRecommendation && (
+          {isOwner && routeRecommendation && (
             <Card>
               <CardHeader>
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -802,7 +805,10 @@ export default function JobDetail() {
         </div>
 
         <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
-          <Card className="border-primary/30">
+          {!isOwner && <Card><CardHeader><CardTitle>Customer quote</CardTitle></CardHeader>
+            <CardContent><p className="text-2xl font-bold">{money(job.quotedAmount)}</p></CardContent>
+          </Card>}
+          {isOwner && (<Card className="border-primary/30">
             <CardHeader>
               <CardTitle>Financial Summary</CardTitle>
               <CardDescription>{job.sourceEstimateId ? "Linked to saved estimate" : "Manual job record"}</CardDescription>
@@ -824,12 +830,12 @@ export default function JobDetail() {
                 <DetailRow label="Crew lead" value={job.assignment?.crewLead || "Unassigned"} />
               </div>
             </CardContent>
-          </Card>
+          </Card>)}
 
           <Card>
             <CardHeader>
               <CardTitle>Update Job</CardTitle>
-              <CardDescription>Move the job through dispatch and payment states.</CardDescription>
+              <CardDescription>Update the job status and schedule.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -847,7 +853,7 @@ export default function JobDetail() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              {isOwner && (<div className="space-y-2">
                 <Label>Payment status</Label>
                 <Select value={job.paymentStatus} onValueChange={(value) => applyUpdates({ paymentStatus: value as PaymentStatus })}>
                   <SelectTrigger className="w-full">
@@ -861,7 +867,7 @@ export default function JobDetail() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
+              </div>)}
               <div className="grid grid-cols-2 gap-2">
                 <Button onClick={() => toast.success("Job saved")}>
                   <Save className="size-4" />
@@ -877,12 +883,12 @@ export default function JobDetail() {
                     Schedule
                   </Link>
                 </Button>
-                <Button variant="outline" asChild>
+                {isOwner && (<Button variant="outline" asChild>
                   <a href={job.actuals?.dumpReceiptUrl || "#"} onClick={(event) => !job.actuals?.dumpReceiptUrl && event.preventDefault()}>
                     <Receipt className="size-4" />
                     Receipt
                   </a>
-                </Button>
+                </Button>)}
                 <Button variant="destructive" className="col-span-2" onClick={removeJob}>
                   <Trash2 className="size-4" />
                   Delete Job
@@ -1010,7 +1016,7 @@ function DisposalEventsPanel({ jobId, events, onSaved }: { jobId: string; events
               <EditableField label="Material" value={event.materialType ?? ""} onChange={(value) => setDraftEvents((current) => current.map((item) => item.id === event.id ? { ...item, materialType: value } : item))} />
               <SelectLite label="Status" value={event.status} onChange={(value) => setDraftEvents((current) => current.map((item) => item.id === event.id ? { ...item, status: value as JobDisposalEvent["status"] } : item))} options={["planned", "en_route", "arrived", "unloading", "completed", "rejected", "canceled"].map((value) => ({ value, label: value.replaceAll("_", " ") }))} />
               <EditableField label="Net weight lbs" type="number" value={String(event.netWeightLbs ?? "")} onChange={(value) => setDraftEvents((current) => current.map((item) => item.id === event.id ? { ...item, netWeightLbs: fieldNumber(value), netWeightTons: fieldNumber(value) / 2000 } : item))} />
-              <EditableField label="Disposal cost" type="number" value={String(event.disposalCost ?? "")} onChange={(value) => setDraftEvents((current) => current.map((item) => item.id === event.id ? { ...item, disposalCost: fieldNumber(value) } : item))} />
+              {currentUserIsOwner() && <EditableField label="Disposal cost" type="number" value={String(event.disposalCost ?? "")} onChange={(value) => setDraftEvents((current) => current.map((item) => item.id === event.id ? { ...item, disposalCost: fieldNumber(value) } : item))} />}
               <EditableField label="Receipt number" value={event.receiptNumber ?? ""} onChange={(value) => setDraftEvents((current) => current.map((item) => item.id === event.id ? { ...item, receiptNumber: value } : item))} />
               <EditableField label="Scale ticket" value={event.scaleTicketNumber ?? ""} onChange={(value) => setDraftEvents((current) => current.map((item) => item.id === event.id ? { ...item, scaleTicketNumber: value } : item))} />
               <div className="md:col-span-2">

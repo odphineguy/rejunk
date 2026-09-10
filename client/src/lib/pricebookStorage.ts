@@ -1,3 +1,4 @@
+import {currentStaffIdentity} from "@/lib/financialCache";
 import { defaultPricebookCategories, defaultPricebookItems } from "@/data/defaultPricebook";
 import {
   deletePricebookCategoryRemote,
@@ -31,8 +32,8 @@ const canUseLocalStorage = () => typeof window !== "undefined" && Boolean(window
 function readJson<T>(key: string, fallback: T): T {
   if (!canUseLocalStorage()) return fallback;
   try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
+    window.localStorage.removeItem(key);
+    return fallback;
   } catch {
     return fallback;
   }
@@ -40,7 +41,7 @@ function readJson<T>(key: string, fallback: T): T {
 
 function writeJson<T>(key: string, value: T) {
   if (!canUseLocalStorage()) return;
-  window.localStorage.setItem(key, JSON.stringify(value));
+  window.localStorage.removeItem(key);
 }
 
 function idFor(prefix: string) {
@@ -72,12 +73,14 @@ function commit(next: PricebookState) {
  * default v4 catalog to shared data (one-time, guarded by a localStorage flag).
  */
 export async function hydratePricebook(): Promise<void> {
+ const requestIdentity=currentStaffIdentity();
   if (!isSupabaseConfigured) return;
 
   const remote = await loadPricebookRemote().catch((error) => {
     reportRemoteError("pricebook load")(error);
     return null;
   });
+ if(requestIdentity!==currentStaffIdentity()) return;
   if (!remote) return; // unreachable — keep the local cache
 
   const alreadySeeded = canUseLocalStorage() && window.localStorage.getItem(PRICEBOOK_SEEDED_KEY) === "1";
@@ -164,3 +167,5 @@ export function deletePricebookItem(itemId: string): PricebookState {
   void deletePricebookItemRemote(itemId).catch(reportRemoteError("item delete"));
   return cache;
 }
+
+window.addEventListener("business-cache-reset", () => { cache=defaultState; window.dispatchEvent(new Event("pricebook-updated")); });

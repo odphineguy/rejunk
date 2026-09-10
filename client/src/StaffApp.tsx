@@ -1,3 +1,4 @@
+import OfficeEstimateBuilder from "./pages/OfficeEstimateBuilder";
 import { useEffect, useState, type ReactNode } from "react";
 import { Redirect, Route, Switch } from "wouter";
 
@@ -54,11 +55,12 @@ function OwnerOnly({ children }: { children: ReactNode }) {
 }
 
 function StaffRouter() {
+  const {isOwner} = useStaffSession();
   return (
     <Switch>
       <Route path={"/dashboard"} component={Dashboard} />
       <Route path={"/map"} component={Home} />
-      <Route path={"/estimate-builder"} component={EstimateBuilder} />
+      <Route path={"/estimate-builder"} component={isOwner ? EstimateBuilder : OfficeEstimateBuilder} />
       <Route path={"/jobs/new"} component={NewJob} />
       <Route path={"/jobs/:jobId"} component={JobDetail} />
       <Route path={"/jobs"} component={Jobs} />
@@ -99,7 +101,7 @@ function StaffRouter() {
       <Route path={"/settings/sms"} component={SmsNotifications} />
       <Route path={"/settings/email-templates"} component={EmailTemplates} />
       <Route path={"/settings/calendar"} component={CalendarSettings} />
-      <Route path={"/settings/estimates"} component={EstimateSettings} />
+      <Route path={"/settings/estimates"}><OwnerOnly><EstimateSettings /></OwnerOnly></Route>
       <Route path={"/settings/contact-form"} component={ContactFormSettings} />
       <Route path={"/settings/affiliate"} component={AffiliateSettings} />
       <Route path={"/settings/reviews"} component={ReviewSettings} />

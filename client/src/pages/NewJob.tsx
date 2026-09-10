@@ -1,3 +1,4 @@
+import { useStaffSession } from "@/hooks/useStaffSession";
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft, Copy, GripVertical, Plus, Save, Trash2 } from "lucide-react";
@@ -66,6 +67,7 @@ function newItem(stopId: string): JobItem {
 }
 
 export default function NewJob() {
+  const { isOwner } = useStaffSession();
   const [, navigate] = useLocation();
   const employees = useMemo(() => employeeOptions(), []);
   const vehicles = useMemo(() => loadPricingSettings().vehicles.filter((vehicle) => vehicle.isActive), []);
@@ -304,8 +306,8 @@ export default function NewJob() {
             </CardHeader>
             <CardContent className="space-y-4">
               <Field label="Quoted amount" type="number" value={quotedAmount} onChange={setQuotedAmount} />
-              <Field label="Estimated cost" type="number" value={estimatedCost} onChange={setEstimatedCost} />
-              <Field label="Estimated profit" type="number" value={estimatedProfit} onChange={setEstimatedProfit} />
+              {isOwner && <Field label="Estimated cost" type="number" value={estimatedCost} onChange={setEstimatedCost} />}
+              {isOwner && <Field label="Estimated profit" type="number" value={estimatedProfit} onChange={setEstimatedProfit} />}
             </CardContent>
           </Card>
 

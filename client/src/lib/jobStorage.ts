@@ -1,3 +1,4 @@
+import {currentStaffIdentity} from "@/lib/financialCache";
 import { actualChargedAmount, actualProfit, actualTotalCost } from "@/lib/jobIntelligence";
 import { deleteJobRemote, loadJobsRemote, upsertJobRemote } from "@/lib/dataStore";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -12,8 +13,8 @@ function readJson<T>(key: string, fallback: T): T {
   if (!canUseLocalStorage()) return fallback;
 
   try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
+    window.localStorage.removeItem(key);
+    return fallback;
   } catch {
     return fallback;
   }
@@ -21,7 +22,7 @@ function readJson<T>(key: string, fallback: T): T {
 
 function writeJson<T>(key: string, value: T) {
   if (!canUseLocalStorage()) return;
-  window.localStorage.setItem(key, JSON.stringify(value));
+  window.localStorage.removeItem(key);
 }
 
 function jobId() {
@@ -58,7 +59,7 @@ function parseEstimateLocation(address: string | undefined) {
 
 // Synchronous in-memory cache. Pages read this synchronously; Supabase reads
 // happen through hydrateJobs() and writes are fire-and-forget below.
-// localStorage stays as an offline warm cache / fallback.
+// Financial snapshots stay in memory; a new session reloads them from the server.
 let cachedJobs = normalizeJobs(readJson<Job[]>(JOBS_KEY, []));
 
 function reportRemoteError(context: string) {
@@ -79,12 +80,14 @@ function reportRemoteError(context: string) {
  * a browser's cached fake jobs into the clean production DB.)
  */
 export async function hydrateJobs(): Promise<void> {
+ const requestIdentity=currentStaffIdentity();
   if (!isSupabaseConfigured) return;
 
   const remote = await loadJobsRemote().catch((error) => {
     reportRemoteError("jobs load")(error);
     return null;
   });
+ if(requestIdentity!==currentStaffIdentity()) return;
   if (!remote) return; // unreachable — keep the local cache
 
   cachedJobs = normalizeJobs(remote);
@@ -220,3 +223,5 @@ export function getActualFinancials(job: Job) {
     profit: actualProfit(job),
   };
 }
+
+window.addEventListener("business-cache-reset", () => { cachedJobs=[]; window.dispatchEvent(new Event("jobs-updated")); });

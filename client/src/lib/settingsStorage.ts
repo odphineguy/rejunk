@@ -1,3 +1,5 @@
+import {currentStaffIdentity} from "@/lib/financialCache";
+import {isOwner} from "@/lib/staffSession";
 // Supabase-backed persistence for the /settings/* sub-pages, with localStorage
 // as the warm cache / offline fallback (same pattern as pricingStorage):
 // hydrate once at startup, read synchronously from the cache, write-through in
@@ -26,7 +28,7 @@ export function loadSettingsSection<T extends object>(
   section: string,
   defaults: T
 ): T {
-  if (!canUseLocalStorage()) return defaults;
+  if (!canUseLocalStorage() || !isOwner()) return defaults;
   try {
     const raw = window.localStorage.getItem(keyFor(section));
     if (!raw) return defaults;
@@ -40,6 +42,7 @@ export function saveSettingsSection<T extends object>(
   section: string,
   value: T
 ): T {
+  if (!isOwner()) throw new Error("Owner access required.");
   if (canUseLocalStorage()) {
     window.localStorage.setItem(keyFor(section), JSON.stringify(value));
     dispatchSettingsEvent(section);
@@ -69,7 +72,8 @@ async function pushSection(section: string, value: object) {
  * promoted up to Supabase instead of being overwritten.
  */
 export async function hydrateSettings(): Promise<void> {
-  if (!supabase || !canUseLocalStorage()) return;
+ const requestIdentity=currentStaffIdentity();
+  if (!supabase || !canUseLocalStorage() || !isOwner()) return;
   if (!(await ensureSession())) return;
 
   // `app_settings` is shared with the webhook pipeline on rejunk-prod
@@ -84,6 +88,7 @@ export async function hydrateSettings(): Promise<void> {
     return;
   }
 
+ if(requestIdentity!==currentStaffIdentity()) return;
   const remoteSections = new Set<string>();
   for (const row of data ?? []) {
     remoteSections.add(row.key);

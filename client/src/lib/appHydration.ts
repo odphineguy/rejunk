@@ -1,3 +1,4 @@
+import { hydratePayments } from "@/lib/paymentStorage";
 /**
  * Startup hydration for the Supabase-backed caches, shared by the staff and
  * driver bundles. This used to live in main.tsx, but the public landing page
@@ -28,6 +29,7 @@ async function hydrateOffice() {
     hydrateJobs(),
     hydratePricebook(),
     hydrateClients(),
+    hydratePayments(),
     hydrateSettings(),
     hydrateThumbtackLeads(),
   ]);
@@ -36,8 +38,7 @@ const hydration = hydrateOffice();
 function currentLoginToken(): string | null {
   try {
     return (
-      JSON.parse(localStorage.getItem("rejunk_staff_session") ?? "null")
-        ?.token ?? null
+      localStorage.getItem("rejunk_staff_session")
     );
   } catch {
     return null;

@@ -168,3 +168,14 @@ Therefore signed-in UI, live driver workflows, signed-photo rendering and Realti
 event delivery remain acceptance checks, not claimed as verified. The synthetic
 database/client regression suites passed. Reload old office and driver tabs to
 load the identity-aware client. The broader audit remains open.
+
+
+## Owner-only financial access follow-up
+
+Implemented and locally verified; see `OWNER_FINANCIAL_ACCESS.md` for details,
+tests, and the ordered rollout. Office users retain customer quote and invoice
+totals. Costs, margins, profit, payments, acquisition costs, receipt files and
+financial report fields are protected by the server/database role.
+
+The user confirmed normal office-app login and access after the prior anonymous
+access rollout. Driver and Realtime acceptance checks remain open.

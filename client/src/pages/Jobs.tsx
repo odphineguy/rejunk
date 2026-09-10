@@ -252,7 +252,7 @@ export default function Jobs() {
             icon={CheckCircle2}
           />
           <StatCard label="Canceled" value={counts.canceled} icon={XCircle} />
-          <StatCard label="Unpaid" value={counts.unpaid} icon={Briefcase} />
+          {isOwner && <StatCard label="Unpaid" value={counts.unpaid} icon={Briefcase} />}
         </div>
 
         <Card>
@@ -333,7 +333,7 @@ export default function Jobs() {
                   <TableHead>Material</TableHead>
                   <TableHead>Facility</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Payment</TableHead>
+                  {isOwner && <TableHead>Payment</TableHead>}
                   <TableHead>Warn</TableHead>
                   <TableHead className="text-right">Quote</TableHead>
                   {isOwner && (
@@ -412,9 +412,9 @@ export default function Jobs() {
                       <TableCell>
                         <JobStatusBadge status={job.status} />
                       </TableCell>
-                      <TableCell>
+                      {isOwner && <TableCell>
                         <PaymentStatusBadge status={job.paymentStatus} />
-                      </TableCell>
+                      </TableCell>}
                       <TableCell>
                         <JobWarningSummary warnings={warnings} />
                       </TableCell>
@@ -442,7 +442,7 @@ export default function Jobs() {
                 {filteredJobs.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={isOwner ? 13 : 12}
+                      colSpan={isOwner ? 13 : 11}
                       className="h-24 text-center text-muted-foreground"
                     >
                       No jobs match the current filters.
