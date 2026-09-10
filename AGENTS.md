@@ -112,6 +112,21 @@ settings, estimator) is the Supabase-backed `loadPricingSettings().disposalFacil
 type extends `DisposalFacility` with legacy display fields (`name`, `type`, `lat`, `lng`, …) for
 back-compat; both shapes coexist.
 
+### Prepared business-data authorization rollout (not yet deployed)
+
+The working client now binds its Supabase transport identity to a verified
+staff/driver login through `bind_business_identity`. Follow the ordered rollout in
+`SECURITY_REMEDIATION.md`: additive bridge migration, app deployment, then restrictive
+business-data migration. Never apply the restrictions before deploying this client.
+The old anonymous transport alone will no longer authorize database access.
+The bridge uses private session bindings checked against active, unexpired/revoked
+login records on every query, including Realtime RLS. Drivers use whitelisted job
+RPCs, own-session GPS, member-only messaging, and signed job-photo URLs. New dispatch
+assignments include stable employee IDs. Staff/driver endpoint copies are unchanged.
+`app_leads_v` becomes an invoker view and report RPCs enforce staff/tenant/range checks.
+Until both migrations and the app are deployed, the older live behavior described
+below still applies. The broader audit and office-versus-owner money masking remain open.
+
 ### Auth — three independent layers
 1. **Anonymous Supabase session (data / RLS).** `lib/supabase.ts` `ensureSession()` does **transparent
    anonymous sign-in** so every visitor gets an `authenticated` session for row-level security. This

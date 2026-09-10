@@ -1615,6 +1615,14 @@ export type Database = {
       }
     }
     Functions: {
+      bind_business_identity: {
+        Args: { staff_token?: string; driver_token?: string };
+        Returns: boolean;
+      };
+      driver_create_thread: {
+        Args: { kind: string; target_job_id?: string };
+        Returns: string;
+      };
       dashboard_metrics: {
         Args: { p_tenant: string; p_date: string }
         Returns: Json

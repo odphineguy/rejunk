@@ -18,6 +18,7 @@
  * driver identity (name, employee id) rides along on the session response.
  */
 
+import { clearDatabaseIdentity } from "@/lib/supabase";
 import { normalizeActivationKey } from "@/lib/driverAuth";
 import type { StoredDriverSession } from "@/types/driver";
 
@@ -103,6 +104,7 @@ export function storeDriverSession(session: StoredDriverSession) {
 }
 
 export function clearDriverSession() {
+  void clearDatabaseIdentity();
   const stored = readJson<StoredDriverSession>(SESSION_KEY);
   if (stored?.sessionToken) void postDriver("logout", { sessionToken: stored.sessionToken });
   if (!canUseLocalStorage()) return;
@@ -137,7 +139,7 @@ export async function validateStoredSession(): Promise<SessionCheck> {
     "validate",
     { sessionToken: stored.sessionToken },
   );
-  if (!res.ok) return "offline";
+  if (res.status === 0 || res.status >= 500) return "offline";
   if (!res.data.valid) {
     if (canUseLocalStorage()) window.localStorage.removeItem(SESSION_KEY);
     window.dispatchEvent(new Event("driver-session-updated"));

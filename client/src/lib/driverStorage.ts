@@ -3,7 +3,7 @@ import { getStoredDriverSession } from "@/lib/driverSession";
 import { getEmployees, employeeName } from "@/lib/employeeStorage";
 import { getJobs, updateJob } from "@/lib/jobStorage";
 import { canTransitionJobStatus, statusActivityMessage, toDriverStatus } from "@/lib/jobStatus";
-import { ensureSession, supabase } from "@/lib/supabase";
+import { ensureSession, isDriverDatabaseContext, supabase } from "@/lib/supabase";
 import { loadPricingSettings } from "@/utils/pricingStorage";
 import type { EmployeeRecord } from "@/types/employees";
 import type { DriverJobStatus, Job } from "@/types/jobs";
@@ -55,7 +55,12 @@ const emptyOperationalCache = (): OperationalCache => ({
 
 const canUseLocalStorage = () => typeof window !== "undefined" && Boolean(window.localStorage);
 
+function driverCacheKey(key: string) {
+  return isDriverDatabaseContext() ? `${key}:driver:${getStoredDriverSession()?.employeeId ?? "signed-out"}` : `${key}:office`;
+}
+
 function readJson<T>(key: string, fallback: T): T {
+  key = driverCacheKey(key);
   if (!canUseLocalStorage()) return fallback;
   try {
     const raw = window.localStorage.getItem(key);
@@ -66,6 +71,7 @@ function readJson<T>(key: string, fallback: T): T {
 }
 
 function writeJson<T>(key: string, value: T) {
+  key = driverCacheKey(key);
   if (!canUseLocalStorage()) return;
   window.localStorage.setItem(key, JSON.stringify(value));
 }
@@ -268,13 +274,13 @@ export async function loadDriverToday(): Promise<DriverTodayData> {
     if (!error && Array.isArray(data)) {
       const remoteJobs = data.map((row: { job: Job; stops?: JobStop[]; items?: JobItem[]; activity?: JobActivity[]; photos?: JobPhoto[]; disposalEvents?: JobDisposalEvent[]; messages?: JobMessage[]; issues?: JobIssue[] }) => {
         const mergedCache: OperationalCache = {
-          stops: row.stops ?? [],
-          items: row.items ?? [],
-          activity: row.activity ?? [],
-          photos: row.photos ?? [],
-          disposalEvents: row.disposalEvents ?? [],
-          messages: row.messages ?? [],
-          issues: row.issues ?? [],
+          stops: row.stops ?? cache.stops ?? [],
+          items: row.items ?? cache.items ?? [],
+          activity: row.activity ?? cache.activity ?? [],
+          photos: row.photos ?? cache.photos ?? [],
+          disposalEvents: row.disposalEvents ?? cache.disposalEvents ?? [],
+          messages: row.messages ?? cache.messages ?? [],
+          issues: row.issues ?? cache.issues ?? [],
         };
         return toDriverJob(row.job, mergedCache, driver);
       });
@@ -283,6 +289,8 @@ export async function loadDriverToday(): Promise<DriverTodayData> {
       return result;
     }
   }
+
+  if (supabase) return cached ? { ...cached, fromCache: true } : todayBuckets([], driver);
 
   const localJobs = getJobs().filter((job) => isJobAssignedToDriver(job, driver)).map((job) => toDriverJob(job, cache, driver));
   const result = todayBuckets(localJobs, driver);
@@ -295,6 +303,7 @@ export async function getDriverJob(jobId: string): Promise<DriverJob | null> {
   const today = await loadDriverToday();
   const fromToday = [today.activeJob, ...today.upcomingJobs, ...today.completedJobs].filter(Boolean).find((job) => job?.id === jobId);
   if (fromToday) return fromToday;
+  if (supabase) return null;
   const driver = today.driver ?? defaultDriverFromEmployees();
   const job = getJobs().find((item) => item.id === jobId);
   if (!job || !isJobAssignedToDriver(job, driver)) return null;
@@ -311,12 +320,19 @@ function upsertOperational<K extends keyof OperationalCache>(key: K, row: any) {
 }
 
 export async function updateDriverJobStatus(jobId: string, nextStatus: DriverJobStatus, message?: string) {
-  const job = getJobs().find((item) => item.id === jobId);
+  const job = supabase ? await getDriverJob(jobId) : getJobs().find((item) => item.id === jobId);
   if (!job) throw new Error("Job not found.");
   if (!canTransitionJobStatus(job.status, nextStatus)) throw new Error("That status transition is not available.");
 
   const previousStatus = toDriverStatus(job.status);
-  updateJob(jobId, { status: nextStatus });
+  if (supabase) {
+    if (!(await ensureSession())) throw new Error("Sign in again to update this job.");
+    const { error } = await (supabase as any).rpc("driver_update_job_status", { target_job_id: jobId, next_status: nextStatus, note: message });
+    if (error) throw new Error(error.message);
+    await loadDriverToday();
+  } else {
+    updateJob(jobId, { status: nextStatus });
+  }
   const activity: JobActivity = {
     id: id("activity"),
     jobId,
@@ -327,14 +343,6 @@ export async function updateDriverJobStatus(jobId: string, nextStatus: DriverJob
     createdAt: new Date().toISOString(),
   };
   upsertOperational("activity", activity);
-
-  if (supabase && await ensureSession()) {
-    await (supabase as any).rpc("driver_update_job_status", {
-      target_job_id: jobId,
-      next_status: nextStatus,
-      note: activity.message,
-    });
-  }
 }
 
 export async function updateStopStatus(stop: JobStop, status: JobStopStatus) {
@@ -566,7 +574,7 @@ function photoRowToJobPhoto(row: {
     stopId: row.stop_id ?? undefined,
     uploadedBy: row.uploaded_by ?? undefined,
     storagePath: row.storage_path,
-    publicUrl: supabase ? supabase.storage.from("job-photos").getPublicUrl(row.storage_path).data.publicUrl : undefined,
+    publicUrl: undefined,
     photoType: row.photo_type,
     visibility: row.visibility,
     caption: row.caption ?? undefined,
@@ -588,7 +596,9 @@ export async function syncJobPhotos(jobIds?: string[]): Promise<void> {
   const { data, error } = await query;
   if (error || !Array.isArray(data)) return;
 
-  const remote: JobPhoto[] = data.map(photoRowToJobPhoto);
+  const signed = await supabase.storage.from("job-photos").createSignedUrls(data.map((row: { storage_path: string }) => row.storage_path), 900);
+  const urls = new Map(signed.data?.map(row => [row.path, row.signedUrl]));
+  const remote: JobPhoto[] = data.map((row: Parameters<typeof photoRowToJobPhoto>[0]) => ({ ...photoRowToJobPhoto(row), publicUrl: urls.get(row.storage_path) ?? undefined }));
   const remoteIds = new Set(remote.map((photo) => photo.id));
   const cache = readJson(OPERATIONAL_CACHE_KEY, emptyOperationalCache());
   const merged = [...remote, ...cache.photos.filter((photo) => !remoteIds.has(photo.id))];
@@ -616,7 +626,9 @@ export async function uploadJobPhoto(input: {
   if (supabase && await ensureSession()) {
     const uploaded = await supabase.storage.from("job-photos").upload(storagePath, compressed, { upsert: false });
     if (uploaded.error) throw uploaded.error;
-    publicUrl = supabase.storage.from("job-photos").getPublicUrl(storagePath).data.publicUrl;
+    const signed = await supabase.storage.from("job-photos").createSignedUrl(storagePath, 900);
+    if (signed.error) throw signed.error;
+    publicUrl = signed.data.signedUrl;
   } else {
     publicUrl = URL.createObjectURL(compressed);
   }
@@ -700,8 +712,17 @@ export async function updateDisposalEventStatus(event: JobDisposalEvent, status:
  * rejected, ...). Updates the local disposal event and notes it in the
  * activity log; dispatch sees the change via the shared jobs/driver data.
  */
+export type DriverFacility = { id: string; facilityName: string; address?: string; city?: string };
+export async function loadDriverFacilities(): Promise<DriverFacility[]> {
+  if (!supabase) return loadPricingSettings().disposalFacilities.filter(f => f.isActive);
+  if (!(await ensureSession())) return [];
+  const { data, error } = await (supabase as any).rpc("get_driver_facilities");
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
 export async function updateDisposalEventFacility(event: JobDisposalEvent, facilityId: string) {
-  const facility = loadPricingSettings().disposalFacilities.find((item) => item.id === facilityId);
+  const facility = (await loadDriverFacilities()).find((item) => item.id === facilityId);
   if (!facility) throw new Error("That facility is not in the facility list.");
   const now = new Date().toISOString();
   const updated: JobDisposalEvent = {

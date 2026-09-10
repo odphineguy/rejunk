@@ -40,6 +40,8 @@ export type JobServiceType =
 export type JobPriority = "low" | "normal" | "high" | "urgent";
 
 export interface JobAssignment {
+  /** Stable ids for database authorization; names are display-only. */
+  employeeIds?: string[];
   crewLead?: string;
   crewMembers?: string[];
   vehicleId?: string;

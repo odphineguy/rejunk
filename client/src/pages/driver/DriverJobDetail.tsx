@@ -24,7 +24,7 @@ import {
 } from "@/lib/driverStorage";
 import { toDriverStatus } from "@/lib/jobStatus";
 import { customerStops, disposalEvents } from "@/lib/operationalMetrics";
-import { loadPricingSettings } from "@/utils/pricingStorage";
+import { loadDriverFacilities, type DriverFacility } from "@/lib/driverStorage";
 import type { DriverJob, JobPhotoType, JobPhotoVisibility } from "@/types/driver";
 import type { DriverJobStatus } from "@/types/jobs";
 
@@ -135,7 +135,12 @@ export default function DriverJobDetail() {
   const [changingFacilityFor, setChangingFacilityFor] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const facilities = useMemo(() => loadPricingSettings().disposalFacilities.filter((facility) => facility.isActive), []);
+  const [facilities, setFacilities] = useState<DriverFacility[]>([]);
+  useEffect(() => {
+    let active = true;
+    void loadDriverFacilities().then(rows => { if (active) setFacilities(rows); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   const refresh = async () => {
     if (!params?.jobId) return;
@@ -147,10 +152,14 @@ export default function DriverJobDetail() {
     void refresh();
     // Pull photos other devices uploaded for this job (no-op when nothing new).
     if (params?.jobId) void syncJobPhotos([params.jobId]);
+    const photoTimer = window.setInterval(() => {
+      if (params?.jobId) void syncJobPhotos([params.jobId]);
+    }, 10 * 60 * 1000);
     const update = () => void refresh();
     window.addEventListener("jobs-updated", update);
     window.addEventListener("driver-data-updated", update);
     return () => {
+      window.clearInterval(photoTimer);
       window.removeEventListener("jobs-updated", update);
       window.removeEventListener("driver-data-updated", update);
     };

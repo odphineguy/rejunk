@@ -19,15 +19,43 @@ import { hydratePricingData } from "@/utils/pricingStorage";
 
 const HYDRATE_TIMEOUT_MS = 2500;
 
-const hydration = Promise.all([
-  hydratePricingData(),
-  hydrateJobs(),
-  hydratePricebook(),
-  hydrateClients(),
-  hydrateSettings(),
-  hydrateThumbtackLeads(),
-]).then(() => undefined);
+import { ensureSession, isDriverDatabaseContext } from "@/lib/supabase";
 
-const timeout = new Promise<void>(resolve => setTimeout(resolve, HYDRATE_TIMEOUT_MS));
+async function hydrateOffice() {
+  if (isDriverDatabaseContext() || !(await ensureSession())) return;
+  await Promise.all([
+    hydratePricingData(),
+    hydrateJobs(),
+    hydratePricebook(),
+    hydrateClients(),
+    hydrateSettings(),
+    hydrateThumbtackLeads(),
+  ]);
+}
+const hydration = hydrateOffice();
+function currentLoginToken(): string | null {
+  try {
+    return (
+      JSON.parse(localStorage.getItem("rejunk_staff_session") ?? "null")
+        ?.token ?? null
+    );
+  } catch {
+    return null;
+  }
+}
+let lastLogin = currentLoginToken();
+window.addEventListener("staff-session-updated", () => {
+  const next = currentLoginToken();
+  const changed = next !== lastLogin;
+  lastLogin = next;
+  if (next && changed) void hydrateOffice().catch(console.error);
+});
 
-export const appDataReady: Promise<void> = Promise.race([hydration, timeout]).catch(() => undefined);
+const timeout = new Promise<void>(resolve =>
+  setTimeout(resolve, HYDRATE_TIMEOUT_MS)
+);
+
+export const appDataReady: Promise<void> = Promise.race([
+  hydration,
+  timeout,
+]).catch(() => undefined);

@@ -158,6 +158,7 @@ function legacyAssignment(assignment: DispatchAssignmentInput) {
   return {
     crewLead: employeeDisplay(assignment.crewLeadId) || employeeDisplay(assignment.driverId),
     crewMembers: helperNames,
+    employeeIds: Array.from(new Set([assignment.crewLeadId, assignment.driverId, ...assignment.helperIds].filter((id): id is string => Boolean(id)))),
     vehicleId: assignment.vehicleId,
     vehicleName: assignment.vehicleName,
   };

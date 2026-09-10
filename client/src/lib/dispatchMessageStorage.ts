@@ -9,7 +9,8 @@
  */
 
 import { employeeName, getEmployees } from "@/lib/employeeStorage";
-import { ensureSession, supabase } from "@/lib/supabase";
+import { getStoredDriverSession } from "@/lib/driverSession";
+import { ensureSession, isDriverDatabaseContext, supabase } from "@/lib/supabase";
 import type {
   CreateThreadInput,
   DispatchMessage,
@@ -28,7 +29,12 @@ type CachedThread = Omit<DispatchThread, "lastMessage" | "unreadCount">;
 
 const canUseLocalStorage = () => typeof window !== "undefined" && Boolean(window.localStorage);
 
+function scopedCacheKey(key: string) {
+  return isDriverDatabaseContext() ? `${key}:driver:${getStoredDriverSession()?.employeeId ?? "signed-out"}` : key;
+}
+
 function readJson<T>(key: string, fallback: T): T {
+  key = scopedCacheKey(key);
   if (!canUseLocalStorage()) return fallback;
   try {
     const raw = window.localStorage.getItem(key);
@@ -39,6 +45,7 @@ function readJson<T>(key: string, fallback: T): T {
 }
 
 function writeJson<T>(key: string, value: T) {
+  key = scopedCacheKey(key);
   if (!canUseLocalStorage()) return;
   window.localStorage.setItem(key, JSON.stringify(value));
 }
@@ -308,6 +315,12 @@ export async function sendMessage(
   body: string,
   metadata?: Record<string, unknown>,
 ): Promise<DispatchMessage | null> {
+  if (isDriverDatabaseContext()) {
+    const driver = getStoredDriverSession();
+    if (!driver) throw new Error("Sign in again to send a message.");
+    senderId = driver.employeeId;
+    senderName = driver.displayName ?? "Driver";
+  }
   const trimmed = body.trim();
   if (!trimmed) return null;
   const now = new Date().toISOString();
@@ -373,6 +386,16 @@ export async function flushOutbox() {
  * driver, one job thread per job.
  */
 export async function createThread(input: CreateThreadInput): Promise<DispatchThread> {
+  if (supabase && isDriverDatabaseContext()) {
+    if (!(await remoteReady())) throw new Error("Sign in again to start a conversation.");
+    const { data, error } = await supabase.rpc("driver_create_thread", { kind: input.threadType, target_job_id: input.jobId });
+    if (error) throw new Error(error.message);
+    await syncFromRemote();
+    const thread = readThreadCache().find(item => item.id === data);
+    if (!thread) throw new Error("Couldn't load the conversation. Try again.");
+    return hydrateThread(thread, readMessageCache(), getStoredDriverSession()?.employeeId ?? "");
+  }
+
   await syncFromRemote();
   const existing = findExistingThread(input);
   if (existing) {

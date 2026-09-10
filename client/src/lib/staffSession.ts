@@ -11,6 +11,7 @@
  * nothing for the other.
  */
 
+import { clearDatabaseIdentity } from "@/lib/supabase";
 import { postStaff } from "@/lib/staffApi";
 
 const SESSION_KEY = "rejunk_staff_session";
@@ -69,6 +70,7 @@ export function isOwner(session: StoredStaffSession | null = getStoredStaffSessi
 }
 
 export function clearStaffSession() {
+  void clearDatabaseIdentity();
   const stored = readJson<StoredStaffSession>(SESSION_KEY);
   if (stored?.token) void postStaff("logout", { token: stored.token });
   if (!canUseLocalStorage()) return;
