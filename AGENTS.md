@@ -13,8 +13,10 @@ facility map + quote calculator and has grown into a small operations platform. 
 2. **Run the operations** around those quotes — jobs, dispatch, schedule, clients, invoices, payments,
    messages, employees, and a separate mobile **driver app** (`/driver`).
 
-It is built for **Sam**, a 17-year junk-removal operator who is **not a developer** — when explaining
-work, use plain language. The guiding pricing principle is **bias toward the floor**: never underprice.
+It is owned and built by **Abe** (Rejunk is his product). **Progressive Transportation Services**, Abe's own
+Phoenix junk-removal / moving / handyman company, is the first client on it (tenant `progressive`) and today runs
+on **Housecall Pro** — which the drivers dislike and which doesn't fit junk/moving work. **The goal is for Rejunk to
+replace Housecall Pro.** Abe is not a developer — when explaining work, use plain language. The guiding pricing principle is **bias toward the floor**: never underprice.
 See `DECISIONS.md` (the *why* behind major choices, newest on top) before relitigating settled questions,
 and `rejunk-pricebook-v4.md` + `rejunk-operations-rules-v1.md` for the authoritative pricing/ops rules.
 
