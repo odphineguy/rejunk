@@ -212,6 +212,26 @@ export function moveJobToSlot(
   return updates;
 }
 
+/**
+ * Move a job to another day, keeping its clock time and duration. Used by the Month view for jobs
+ * that have a time but no vehicle yet (so no slot to preserve). Returns null if the job has no time.
+ */
+export function moveJobToDay(job: Job, day: Date): Partial<Job> | null {
+  if (!job.scheduledStart) return null;
+  const currentStart = new Date(job.scheduledStart);
+  if (Number.isNaN(currentStart.getTime())) return null;
+  const start = new Date(day);
+  start.setHours(currentStart.getHours(), currentStart.getMinutes(), 0, 0);
+  const updates: Partial<Job> = { scheduledStart: start.toISOString() };
+  const currentEnd = job.scheduledEnd ? new Date(job.scheduledEnd) : null;
+  if (currentEnd && currentEnd > currentStart) {
+    updates.scheduledEnd = new Date(
+      start.getTime() + (currentEnd.getTime() - currentStart.getTime())
+    ).toISOString();
+  }
+  return updates;
+}
+
 /** Jobs already finished or canceled shouldn't be dragged around the board. */
 export function isJobMovable(job: Job) {
   return job.status !== "completed" && job.status !== "canceled";

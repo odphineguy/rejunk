@@ -26,6 +26,7 @@ import {
   getSlot,
   isJobMovable,
   jobSlotKey,
+  moveJobToDay,
   moveJobToSlot,
   newJobHrefForSlot,
   type DailySlot,
@@ -757,17 +758,32 @@ function MonthDayCell({
   const inMonth = day.getMonth() === month;
   const isToday = sameDay(day, new Date());
   // Dropping on a month day keeps the job's slot (AM/PM + vehicle) and only changes the date.
+  // A job with a time but no vehicle yet just moves date and stays in "Needs a slot".
   const drop = useDropTarget(jobId => {
     const job = jobs.find(candidate => candidate.id === jobId);
-    const slot = job ? getSlot(jobSlotKey(job, settings.vehicles)) : undefined;
     if (!job) return;
-    if (!slot) {
+    const slot = getSlot(jobSlotKey(job, settings.vehicles));
+    if (slot) {
+      moveJob(jobId, day, slot);
+      return;
+    }
+    if (!isJobMovable(job)) {
+      toast.error("Finished or canceled jobs can't be moved.");
+      return;
+    }
+    const updates = moveJobToDay(job, day);
+    if (!updates) {
       toast.error(
-        "This job has no time or vehicle yet — drop it on a slot in Week view instead."
+        "This job has no scheduled time yet — set one on the job page first."
       );
       return;
     }
-    moveJob(jobId, day, slot);
+    if (job.scheduledStart && sameDay(new Date(job.scheduledStart), day))
+      return;
+    if (!updateJob(job.id, updates)) return;
+    toast.success(
+      `${job.customerName} moved to ${agendaDayFmt.format(day)}. Pick a vehicle to put it in a slot.`
+    );
   });
 
   return (
