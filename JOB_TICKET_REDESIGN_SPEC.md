@@ -323,9 +323,25 @@ Everything needed to do that automatically is already in the shared database:
   HCP webhook. `thumbtack_messages` holds the full thread (`direction`, `text`, `sent_at`) — the same
   thread David wrote, so it contains the quote tier, crew size, addresses, stairs, TV count, and any
   `[TV-INSTALL]` / `[ESCALATE]` decisions.
-- **Verify in the pipeline repo:** whether Thumbtack image attachments are captured (a URL or storage
-  object per message). The app's `ThumbtackMessage` type has text only. If images aren't stored yet, the
-  pipeline needs to save them (bucket `thumbtack-media`) before this phase can attach photos to tickets.
+- **Verified in `rejunk-webhook-services` (Sep 12):** attachments ARE captured. `thumbtack_leads.attachments`
+  and `thumbtack_messages.attachments` are jsonb arrays of `{fileName, fileSize, mimeType, url,
+  description}` (webhook `supabase/functions/thumbtack-webhook/index.ts:509`; schema in
+  `thumbtack-webhook-pipeline-spec.md:97,127`). The app's `ThumbtackMessage` type just doesn't read the
+  column yet. The `url` is a `thumbtack.com/attachment/...` link — assume it can expire or need auth, so
+  the worker must **copy each file into Supabase storage at ingest** (bucket `thumbtack-media`, keyed by
+  message id) and the ticket references our copy.
+- **`thumbtack_leads` already holds structured lead facts:** `location_address/city/state/zip`,
+  `schedule`, `category`, `description`, `details` (Thumbtack's Q&A array), `crew_required`,
+  `quoted_price`, `pricebook_item_ids`. Start from these; the thread fills in the rest.
+- **An extractor already exists:** `_shared/enrichment.ts` runs on every inbound customer message —
+  regex for real phone/email (relay numbers discarded), then a **Haiku tool-call extractor**
+  (`record_access_details`: `gate_code`, `unit`, `access_notes`, `address_correction`, temperature 0,
+  keyword-gated) — and today appends the result as **notes on the HCP job** (mode `off | draft | live`
+  per tenant, idempotent `enrichment_events` ledger, email alert). D11 is that module grown up: a full
+  ticket extractor whose output lands in Rejunk's `jobs` instead of HCP notes. Reuse its relay-number
+  rules, the ledger pattern, and the draft/live gate.
+- `hcp_appointments` (upserted by `_shared/hcp_automations.ts` `upsertAppointment`) carries the
+  appointment window, customer, city, and totals per HCP job.
 
 **Flow**
 
@@ -333,8 +349,8 @@ Everything needed to do that automatically is already in the shared database:
    whose customer matches a Thumbtack lead. (Later, when Rejunk owns booking: the booking page itself.)
 2. **Gather:** the negotiation's messages, the lead row (name, phone, category), the HCP appointment
    (date/time, total), and any images.
-3. **Extract** with one Claude call (server-side, service role, model `claude-sonnet-5`, structured JSON
-   output) from the thread: pickup and delivery addresses, gate codes / access notes per address, floors
+3. **Extract** with one Claude call (server-side, service role, model `claude-sonnet-5`, tool-call
+   structured output like `record_access_details` but for the whole ticket) over the lead row + thread: pickup and delivery addresses, gate codes / access notes per address, floors
    and flights, elevator, parking, item list, wall-mounted TVs, piano type, third-party pickup, the quote
    tier and price David stated, day type, crew size, special instructions, and a short "what the customer
    said" summary. Each field carries a confidence and the message it came from. Never invent; leave
@@ -349,9 +365,10 @@ Everything needed to do that automatically is already in the shared database:
 6. **Idempotent** on `hcp_job_id`; re-running updates `needs_review` fields, never overwrites
    dispatcher edits.
 
-**Where it runs:** the pipeline repo already owns the HCP + Thumbtack webhooks and the service-role key,
-so the extraction job belongs there (a queue worker), writing the ticket into `jobs` for tenant
-`progressive`. The app side is the review UI and the `needs_review` status. Keep the extraction prompt
+**Where it runs:** the pipeline repo already owns the HCP + Thumbtack webhooks, the service-role key, and
+`enrichment.ts`, so the extraction job belongs there — a new `_shared/ticket_extractor.ts` triggered from
+the `negotiation_job_map` / `hcp_appointments` path (not per-message), writing the ticket into `jobs` for
+tenant `progressive` and copying attachments into storage. The app side is the review UI and the `needs_review` status. Keep the extraction prompt
 in the pipeline repo next to David's prompt so the two stay in step.
 
 **Acceptance:** for the last 20 real bookings, the auto-created ticket needs zero edits on addresses and
@@ -370,8 +387,8 @@ sample jobs load, re-save, and reload with stops/crew intact on a second browser
 "Moving" on the driver phone with two stops.
 
 **Phase 2 — Booking → ticket (D11).** The highest-value phase; needs only phase 1's ticket shape and the
-`needs_review` status. Pipeline-side worker + app-side review queue. If image capture is missing in the
-pipeline, ship text-only first and add photos when the bucket exists.
+`needs_review` status. Pipeline-side worker + app-side review queue. Attachments are already captured; the worker
+copies them into storage and links them to the ticket.
 
 **Phase 3 — New Job form (D5) + estimate handoff (D6).** Acceptance: booking a 2BR move takes < 1 minute,
 lands in PM Box Truck with 2 movers, blocks "Book it" with 1 mover, and the same job created from an
@@ -418,8 +435,8 @@ Each phase ships on its own; `pnpm check` clean; commit locally, push on Abe's w
 
 1. **Per-unit rows later** — when the fleet grows, should the calendar show a row per truck (BOX-01,
    BOX-02) as HCP does, or per class? Spec assumes per class now, per unit later.
-2. **Thumbtack images** — does the pipeline store message attachments today? (D11 depends on it for
-   photos; text-only works without it.)
+2. **Thumbtack attachment links** — do `thumbtack.com/attachment/...` URLs expire? (Spec assumes yes and
+   copies files at ingest; if they're permanent, skip the copy.)
 3. **Deposit** — when Rejunk owns booking, is the $50 deposit collected through Stripe on a Rejunk page,
    or does HCP's booking page stay for a while with the ticket created from the HCP webhook?
 4. **Employees table** — fine to create `app_employees` now (additive), or wait for the driver-phase
