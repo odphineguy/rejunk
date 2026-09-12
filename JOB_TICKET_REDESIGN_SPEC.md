@@ -102,6 +102,54 @@ views. **Every real ticket is hand-keyed.**
 - The ops rules already say: each vehicle has its own schedule track, max 2 morning starts per driver,
   2-worker jobs need 2 drivers in the same block, box truck for full moves, vans for assembly.
 
+## What the Thumbtack agent ("David", prompt v20) tells us
+
+Abe supplied the agent YAML on Sep 12. It is the customer-facing source of truth for what gets sold and
+how it gets scheduled, so the ticket has to be able to hold what David promises. Pricing numbers live in
+the pipeline repo (`rejunk-webhook-services`) and `data/movingRates.ts` — not repeated here.
+
+**The service menu David actually quotes (junk is NOT on it)**
+
+| What David sells | Vehicle | Crew | Time shape |
+|---|---|---|---|
+| Cargo van delivery ($120 flat) — small item one person carries | Van | 1 | short |
+| Van flat ($199) — one large item or matching set, ≤15 mi | Van | 1 ("your mover") | short |
+| Small Move package (≤8 items) | Box truck | 2 | first 2 h included |
+| Studio / 1BR package | Box truck | 2 | 4 on-site hours included |
+| 2BR package · Small House package | Box truck | 3 | 6 on-site hours included |
+| 3BR+ / large house — hourly | Box truck | 4 (4-h min; falls back to 3) | 6–8 h est.; >8 h escalates |
+| Hourly 2- or 3-mover truck job (excluded items, misc.) | Box truck | 2–3 | 2-h min |
+| Labor-only (no truck) | none | 2 | 2-h min, **full payment at booking** |
+| Piano (flat tiers by type) | Box truck | 2 | add-on to a move or standalone |
+| Furniture assembly (per-item flat, $125 min) | Van ("assembly tech") | 1 | **max ONE assembly job per day** |
+| TV mount / unmount add-on ($125 / $149 per TV) | "our installation team" (separate crew) | — | tagged `[TV-INSTALL]` for dispatch |
+
+Trash / debris / unwanted-item hauling is explicitly **referred to Lugg**. Junk removal survives only for
+direct customers, so it is a real but minor service type (D1).
+
+**How David sees availability — this is the capacity model the ticket must feed**
+
+- Two calendars: **"truck crew"** (morning / afternoon openings per date) and **"assembly tech"** (a date
+  with one assembly job reads "fully booked"). Assembly leads only ever see the assembly calendar.
+- The truck calendar carries a **VAN line**: `van: AM n/u · PM n/u` (booked / capacity, open or closed).
+  Van-flat and cargo-van deliveries book against the van line; packages and hourly book against the truck
+  openings. A van opening never makes a truck job possible and vice versa.
+- Availability is offered only as **morning** or **afternoon** — never clock windows. The customer picks
+  the actual slot on the booking page. So "AM / PM × vehicle" is exactly how the business already thinks.
+- Day type: **weekend = Fri, Sat, Sun + first two and last two calendar days of the month** (Phoenix
+  time). Every quote depends on it; the ticket should store it.
+
+**Booking mechanics the ticket must carry**
+
+- Today the booking happens on the **Housecall Pro booking page** with a **$50 deposit** (credit toward the
+  invoice, date held 24 h). Labor-only and pickups from a seller / third party's home require **full
+  payment at booking** and dispatch sends an invoice link by hand.
+- Tags David emits for dispatch: `[ESCALATE]` (safe, hot tub, built-in appliances, >300 lb, >8 h with 4
+  movers, out of area, scam signals, complaints, assisted booking…) and `[TV-INSTALL]` (TV count, sizes,
+  which location).
+- Every 4-mover quote carries the fourth-mover fallback sentence; crew size on a package is "dispatch's
+  call and never changes the price".
+
 ## Design
 
 ### D1. Service type is the first question on every ticket
@@ -109,13 +157,19 @@ views. **Every real ticket is hand-keyed.**
 `Job.serviceType` becomes **required** and drives which fields, sections, and columns appear. Collapse the
 current ten values into the five the business actually runs, keeping the old ones as aliases on read:
 
-| serviceType | What it is | Default vehicle | Min crew |
+| serviceType | What it is | Default vehicle | Crew |
 |---|---|---|---|
-| `moving` | Furniture / household move, A → B (also labor-only loads, PODs) | Box truck for 2BR+; van for studio/small | 2 |
-| `assembly_handyman` | Assembly, mounting, small repairs | Van | 1 (2 if item > 75 lb or overhead) |
-| `delivery` | Pick up an item somewhere, deliver it (appliance, store purchase) | Van unless heavy → box truck | 1–2 |
-| `junk_removal` | Haul-away with a disposal stop | Van for 1–3 items; box truck for cleanouts | 1–2 |
+| `moving` | Packages, hourly truck moves, labor-only, piano (sub-kind below) | Box truck (none for labor-only) | from tier: 2 / 3 / 4 |
+| `delivery` | Cargo-van delivery ($120) and the $199 van flat single large item | Van | 1 |
+| `assembly_handyman` | Assembly, mounting, small repairs (the "assembly tech" calendar) | Van | 1 (2 if > 75 lb / overhead) |
+| `junk_removal` | Haul-away with a disposal stop (direct customers only; Thumbtack refers to Lugg) | Van for 1–3 items; box truck for cleanouts | 1–2 |
 | `other` | Anything else, free-text label | — | 1 |
+
+`moving` carries a required **`movingKind`** that fixes crew and time shape straight from the rate card:
+`small_move` (2 movers, 2 h incl.) · `studio_1br` (2, 4 h) · `two_br` (3, 6 h) · `small_house` (3, 6 h) ·
+`hourly_2` · `hourly_3` · `hourly_4` (4-h min, 6–8 h est.) · `labor_only` (2, no truck) · `piano` (2).
+`delivery` carries `deliveryKind`: `cargo_van` | `van_flat`. TV install is an **add-on** on any ticket
+(`tvInstall: { count, sizes, locations }`), not a service type — it goes to the installation crew.
 
 Aliases: `furniture_assembly`→`assembly_handyman`, `appliance_moving`→`delivery`,
 `specialty_moving`/`labor_only`→`moving`, `heavy_material_hauling`/`demolition`→`junk_removal`.
@@ -137,6 +191,15 @@ interface Job {
   requiredCrew: number;                 // from service rules / estimate (safety floor)
   vehicleId?: string;                   // ONE place. Fleet unit id (spr-01, box-01)
   slot?: SlotKey;                       // optional cache of am_van/pm_box_truck; derived otherwise
+  movingKind?: MovingKind;              // required when serviceType === "moving" (D1)
+  deliveryKind?: "cargo_van" | "van_flat";
+  dayType: "weekday" | "weekend";       // Phoenix rule incl. month-end; stored, never recomputed on read
+  quote?: { tier: string; low: number; high: number; includedHours?: number; source: "david" | "estimate" | "manual" };
+  paymentTerms: "deposit" | "full_upfront";   // full_upfront = labor-only or third-party pickup
+  thirdPartyPickup?: boolean;           // pickup at a seller / marketplace / store — drives paymentTerms
+  tvInstall?: { count: number; sizes: string[]; locations: ("pickup" | "delivery")[] };
+  escalation?: { reason: string; resolvedAt?: string };   // from [ESCALATE]; blocks "Book it" until resolved
+  leadRef?: { source: "thumbtack" | "website" | "hcp" | "direct"; negotiationId?: string; hcpJobId?: string };
   junk?: JunkDetails;                   // materialType, materialName, cubicYards, weight, facility,
                                         //   warnings, route comparisons, actuals (disposal ticket)
   moving?: MovingDetails;               // homeSize, stories, flights per stop, piano, packing,
@@ -183,10 +246,13 @@ sections revealed in order, no wizard framework:
 3. **Where** — stops. Moving/delivery: **Pickup** and **Delivery** cards (address, contact, floor/flights,
    elevator, parking notes). Assembly/junk: one **Service** card. "Add stop" for multi-stop jobs (ops rule:
    multi-stop = separate schedule blocks — warn when >2 stops).
-4. **When** — a **mini slot picker**: day + the four slots, showing which are open/taken (reuse
-   `buildDayBoard`). Picking a slot sets the arrival window and vehicle. Big moves can take **both
-   half-days** (AM + PM of the same vehicle = "full day"). Same-day / Sunday / after-6PM show the surcharge
-   reminders from the ops rules.
+4. **When** — a **mini slot picker**: day + the slots, showing which are open/taken (reuse
+   `buildDayBoard`). Picking a slot sets the arrival window and vehicle. The slot rows must match what
+   David is told: **AM Box / PM Box** (truck crew), **AM Van / PM Van** (van line), and an
+   **Assembly tech** row capped at one job per day. Time shape comes from `movingKind`: Studio/1BR fits
+   one half-day; 2BR, Small House, and any 4-mover job **block both halves of the truck** ("full day");
+   Small Move, deliveries, and assembly are one half-day. The picker shows the day-type tag (weekday /
+   weekend) so the quote tier is right. Same-day / Sunday / after-6PM show the surcharge reminders.
 5. **Crew** — required crew shown as a number the dispatcher can raise but not lower below the safety
    floor (2 for moving; 2 for anything > 75 lb / overhead / appliance; 3 for piano/safe). Pick employees
    from the live list; block save if fewer than required are assigned when status is "scheduled".
@@ -227,11 +293,24 @@ junk. No prices (unchanged rule). Status strip unchanged.
 
 ### D9. Calendar ties in
 
+- Add the **Assembly tech** row to `DAILY_SLOTS` (capacity 1/day, van class, whole day) so the calendar
+  and David's "assembly tech" calendar agree. Van capacity per half-day = number of active SPR vans (the
+  VAN line's `n/u`), not 1 — make `capacity` a property of a slot row, not implied.
+
 - Ticket carries `slot` after booking; the calendar still derives from time + vehicle class so hand-edits
   stay consistent. Full-day bookings show the card spanning AM and PM cells.
 - Crew capacity as a second dimension: a day header shows "2 of 4 movers assigned" when crew is short.
 - Dropping a job whose `requiredCrew > 1` onto a slot where the assigned crew is already on another job in
   that half-day shows a warning (not a block).
+
+### D10. Rejunk becomes the [CALENDAR] block (the HCP-replacement hinge)
+
+Today David's availability comes from "our scheduling system" (HCP). Once tickets carry slot + vehicle +
+day type, a small server-side RPC `availability_block(tenant, from_date, days)` can produce exactly the
+text David expects: per date → day-type tag, truck AM/PM open or full, `van: AM n/u · PM n/u`, and the
+assembly-tech line. That is the first concrete thing that lets Progressive turn HCP off: the agent quotes
+off Rejunk's calendar, and a booking page + $50 deposit (later phase, Stripe) writes the ticket David
+already scoped. Keep it read-only and tenant-scoped; the pipeline repo consumes it.
 
 ## Phases
 
@@ -252,6 +331,9 @@ estimate carries pickup/delivery/items.
 
 **Phase 4 — Driver app (D8), calendar extras (D9).**
 
+**Phase 5 — Availability feed for David (D10).** Read-only RPC + a test that renders one week exactly in
+the `[CALENDAR]` format. Booking page + deposit is a separate spec.
+
 Each phase ships on its own; `pnpm check` clean; commit locally, push on Abe's word.
 
 ## Do not modify
@@ -263,17 +345,30 @@ Each phase ships on its own; `pnpm check` clean; commit locally, push on Abe's w
 - The unapplied `202606070001–3` migrations: leave them; don't apply, don't depend on them. If phase 1
   needs persistence beyond `jobs.data`, write a **new** additive migration.
 
+## Answered by the agent YAML (confirm, don't re-ask)
+
+1. **Full-day moves** — packages with 6 included hours (2BR, Small House) and every 4-mover job block
+   **both halves** of the truck. Studio/1BR (4 h) and Small Move (2 h) are one half-day.
+2. **Crew floor** — not always 2. The $199 van flat and the $120 cargo-van delivery are **1-mover** jobs
+   ("your mover", never "crew"). Truck moves are 2 / 3 / 4 by tier; labor-only and piano are 2.
+3. **Junk removal** — not sold on Thumbtack at all (Lugg referral). Keep the disposal flow but demote it
+   to a minor service type; don't spend design effort on it.
+
 ## Open questions for Abe
 
-1. **Full-day moves**: should a big move block *both* half-days of the truck (AM + PM), or do you book
-   them as one PM slot and accept overrun? The spec assumes both.
-2. **Crew floor for moving**: always 2, or is a 1-mover van job (small item delivery) a real thing you
-   book? Spec assumes 2 for `moving`, 1 for `delivery` of light items.
-3. **Second box truck / more vans** later — is the slot count per vehicle class fixed at 1, or per fleet
-   unit (SPR-01, SPR-02… each their own row)? Per-unit rows are the HCP-style answer and what the ops
-   rules describe ("each vehicle has its own schedule track"). Spec assumes per-class now, per-unit later.
-4. **Junk jobs**: keep the landfill/disposal actuals flow as-is under `junk`, or simplify since it's rare?
-5. **Lead → job**: `CREATE_ESTIMATE_FROM_LEAD_SPEC.md` already covers lead → estimate. Is lead → ticket
-   (skip the estimate for repeat customers who call direct) wanted in phase 2, or later?
-6. **Employees table**: fine to create `app_employees` now, or wait for the driver-phase migrations to be
-   reconciled? Spec says create now; it's additive.
+1. **Assembly tech** — is that a specific person (and a specific van) separate from the moving crew? If
+   the same driver and van also do van-flat deliveries, the Assembly row and the Van AM/PM rows compete
+   for the same vehicle and the calendar should show that.
+2. **Van capacity** — David's VAN line shows `n/u`. Is `u` the count of active vans (5 today: SPR-01/02/
+   03/04/06) or the number of van *drivers* available that day? The calendar today shows one van slot per
+   half-day; the spec makes capacity a number per row.
+3. **Per-unit rows later** — when the fleet grows, should the calendar show a row per truck (BOX-01,
+   BOX-02) as HCP does, or per class? Spec assumes per class now, per unit later.
+4. **Lead → ticket** — David scopes the job in chat and the customer books on HCP. Should a booked
+   Thumbtack negotiation (`app_leads_v` status `booked`) auto-create a draft ticket in Rejunk with the
+   quote tier, addresses, crew, and TV-install add-on pre-filled? `CREATE_ESTIMATE_FROM_LEAD_SPEC.md`
+   covers lead → estimate; this would be lead → ticket. Spec assumes yes, in phase 2.
+5. **Deposit** — when Rejunk owns booking, is the $50 deposit collected through Stripe on a Rejunk page,
+   or does HCP's booking page stay for a while with the ticket created from the HCP webhook?
+6. **Employees table** — fine to create `app_employees` now (additive), or wait for the driver-phase
+   migrations to be reconciled? Spec says now.
