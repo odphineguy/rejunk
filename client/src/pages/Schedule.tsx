@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { useLocation } from "wouter";
+import { toast } from "sonner";
 import {
   AlertTriangle,
   CalendarDays,
@@ -17,11 +18,15 @@ import { OperationsShell } from "@/components/OperationsShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getJobWarningsWithFacilityCheck } from "@/lib/jobIntelligence";
-import { getJobs } from "@/lib/jobStorage";
+import { getJobs, updateJob } from "@/lib/jobStorage";
 import {
   DAILY_SLOTS,
+  DRAG_MIME,
   SLOTS_PER_DAY,
+  getSlot,
+  isJobMovable,
   jobSlotKey,
+  moveJobToSlot,
   newJobHrefForSlot,
   type DailySlot,
   type SlotKey,
@@ -155,6 +160,46 @@ function buildDayBoard(jobs: Job[], day: Date, vehicles: Vehicles): DayBoard {
   return { bySlot, unslotted, booked };
 }
 
+type MoveJob = (jobId: string, day: Date, slot: DailySlot) => void;
+
+function startJobDrag(event: DragEvent, job: Job) {
+  event.dataTransfer.setData(DRAG_MIME, job.id);
+  event.dataTransfer.setData("text/plain", job.customerName);
+  event.dataTransfer.effectAllowed = "move";
+}
+
+function isJobDrag(event: DragEvent) {
+  return Array.from(event.dataTransfer.types).includes(DRAG_MIME);
+}
+
+/** Shared drag-over / drop wiring for a drop target. */
+function useDropTarget(onDrop: (jobId: string) => void) {
+  const [over, setOver] = useState(false);
+  return {
+    over,
+    props: {
+      onDragOver: (event: DragEvent) => {
+        if (!isJobDrag(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        if (!over) setOver(true);
+      },
+      onDragLeave: (event: DragEvent) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null))
+          return;
+        setOver(false);
+      },
+      onDrop: (event: DragEvent) => {
+        if (!isJobDrag(event)) return;
+        event.preventDefault();
+        setOver(false);
+        const jobId = event.dataTransfer.getData(DRAG_MIME);
+        if (jobId) onDrop(jobId);
+      },
+    },
+  };
+}
+
 function jobsForDay(jobs: Job[], day: Date) {
   return jobs
     .filter(
@@ -225,6 +270,35 @@ export default function Schedule() {
   );
   const weeks = useMemo(() => monthWeeks(cursor), [cursor]);
   const agenda = useMemo(() => upcomingGroups(jobs, cursor), [jobs, cursor]);
+
+  const moveJob: MoveJob = (jobId, day, slot) => {
+    const job = jobs.find(candidate => candidate.id === jobId);
+    if (!job) return;
+    if (!isJobMovable(job)) {
+      toast.error("Finished or canceled jobs can't be moved.");
+      return;
+    }
+    const alreadyThere =
+      job.scheduledStart &&
+      sameDay(new Date(job.scheduledStart), day) &&
+      jobSlotKey(job, settings.vehicles) === slot.key;
+    if (alreadyThere) return;
+
+    const occupied = buildDayBoard(jobs, day, settings.vehicles).bySlot[
+      slot.key
+    ].filter(other => other.id !== job.id);
+    const updates = moveJobToSlot(job, day, slot, settings.vehicles);
+    if (!updateJob(job.id, updates)) return;
+
+    const where = `${slot.label} on ${agendaDayFmt.format(day)}`;
+    if (occupied.length > 0) {
+      toast.warning(
+        `${job.customerName} moved to ${where} — that slot now has ${occupied.length + 1} jobs.`
+      );
+    } else {
+      toast.success(`${job.customerName} moved to ${where}.`);
+    }
+  };
 
   const headerLabel =
     view === "day"
@@ -309,6 +383,7 @@ export default function Schedule() {
               jobs={jobs}
               settings={settings}
               navigate={navigate}
+              moveJob={moveJob}
             />
           )}
           {view === "week" && (
@@ -317,6 +392,7 @@ export default function Schedule() {
               jobs={jobs}
               settings={settings}
               navigate={navigate}
+              moveJob={moveJob}
             />
           )}
           {view === "month" && (
@@ -325,6 +401,7 @@ export default function Schedule() {
               month={cursor.getMonth()}
               jobs={jobs}
               settings={settings}
+              moveJob={moveJob}
               onSelectDay={day => {
                 setCursor(startOfDay(day));
                 setView("day");
@@ -356,11 +433,16 @@ function JobSlotCard({
   const missingReceiptWarning = warnings.find(
     warning => warning.code === "missing_receipt"
   );
+  const movable = isJobMovable(job);
   return (
     <button
       onClick={() => navigate(`/jobs/${job.id}`)}
+      draggable={movable}
+      onDragStart={event => startJobDrag(event, job)}
+      title={movable ? "Drag to another slot or day" : undefined}
       className={cn(
         "w-full rounded-md border p-2 text-left shadow-sm transition-colors",
+        movable && "cursor-grab active:cursor-grabbing",
         tone === "warning"
           ? "border-amber-400/60 bg-amber-50 hover:bg-amber-100/70 dark:bg-amber-950/30 dark:hover:bg-amber-950/50"
           : "border-primary/30 bg-primary/5 hover:bg-primary/10"
@@ -406,11 +488,13 @@ function SlotBoard({
   jobs,
   settings,
   navigate,
+  moveJob,
 }: {
   days: Date[];
   jobs: Job[];
   settings: ReturnType<typeof loadPricingSettings>;
   navigate: (to: string) => void;
+  moveJob: MoveJob;
 }) {
   const isSingleDay = days.length === 1;
   const columns = `120px repeat(${days.length}, minmax(${isSingleDay ? "0" : "150px"}, 1fr))`;
@@ -485,6 +569,7 @@ function SlotBoard({
                 jobs={boards[index].bySlot[slot.key]}
                 settings={settings}
                 navigate={navigate}
+                moveJob={moveJob}
               />
             ))}
           </div>
@@ -540,45 +625,43 @@ function SlotCell({
   jobs,
   settings,
   navigate,
+  moveJob,
 }: {
   day: Date;
   slot: DailySlot;
   jobs: Job[];
   settings: ReturnType<typeof loadPricingSettings>;
   navigate: (to: string) => void;
+  moveJob: MoveJob;
 }) {
   const isPast = startOfDay(day).getTime() < startOfDay(new Date()).getTime();
   const overbooked = jobs.length > 1;
-
-  if (jobs.length === 0) {
-    if (isPast) {
-      return (
-        <div className="flex min-h-28 items-center justify-center border-r border-border p-2 text-xs text-muted-foreground/60 last:border-r-0">
-          Open
-        </div>
-      );
-    }
-    return (
-      <div className="min-h-28 border-r border-border p-2 last:border-r-0">
-        <button
-          onClick={() => navigate(newJobHrefForSlot(day, slot))}
-          className="flex h-full min-h-24 w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border text-xs font-medium text-muted-foreground transition-colors hover:border-primary/60 hover:bg-primary/5 hover:text-primary"
-          title={`Book the ${slot.label} slot on ${dayHeaderFmt.format(day)}`}
-        >
-          <Plus className="size-4" />
-          Open · Book
-        </button>
-      </div>
-    );
-  }
+  const drop = useDropTarget(jobId => moveJob(jobId, day, slot));
 
   return (
     <div
+      {...drop.props}
       className={cn(
-        "min-h-28 space-y-2 border-r border-border p-2 last:border-r-0",
-        overbooked && "bg-amber-50/60 dark:bg-amber-950/20"
+        "min-h-28 space-y-2 border-r border-border p-2 transition-colors last:border-r-0",
+        overbooked && "bg-amber-50/60 dark:bg-amber-950/20",
+        drop.over && "bg-primary/10 ring-2 ring-inset ring-primary/60"
       )}
     >
+      {jobs.length === 0 &&
+        (isPast ? (
+          <div className="flex min-h-24 items-center justify-center text-xs text-muted-foreground/60">
+            Open
+          </div>
+        ) : (
+          <button
+            onClick={() => navigate(newJobHrefForSlot(day, slot))}
+            className="flex h-full min-h-24 w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border text-xs font-medium text-muted-foreground transition-colors hover:border-primary/60 hover:bg-primary/5 hover:text-primary"
+            title={`Book the ${slot.label} slot on ${dayHeaderFmt.format(day)}`}
+          >
+            <Plus className="size-4" />
+            Open · Book
+          </button>
+        ))}
       {overbooked && (
         <div className="flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
           <AlertTriangle className="size-3" />
@@ -602,6 +685,7 @@ function MonthGrid({
   month,
   jobs,
   settings,
+  moveJob,
   onSelectDay,
   navigate,
 }: {
@@ -609,6 +693,7 @@ function MonthGrid({
   month: number;
   jobs: Job[];
   settings: ReturnType<typeof loadPricingSettings>;
+  moveJob: MoveJob;
   onSelectDay: (day: Date) => void;
   navigate: (to: string) => void;
 }) {
@@ -631,89 +716,136 @@ function MonthGrid({
             key={weekIndex}
             className="grid grid-cols-7 border-b border-border last:border-b-0"
           >
-            {week.map(day => {
-              const dayJobs = jobsForDay(jobs, day);
-              const board = buildDayBoard(jobs, day, settings.vehicles);
-              const inMonth = day.getMonth() === month;
-              const isToday = sameDay(day, new Date());
-              return (
-                <div
-                  key={day.toISOString()}
-                  className={cn(
-                    "min-h-28 border-r border-border p-1.5 last:border-r-0",
-                    !inMonth && "bg-muted/20",
-                    isToday && "bg-primary/5"
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-1">
-                    <button
-                      onClick={() => onSelectDay(day)}
-                      className={cn(
-                        "flex size-6 items-center justify-center rounded-full text-xs font-semibold transition-colors hover:bg-muted",
-                        isToday &&
-                          "bg-primary text-primary-foreground hover:bg-primary",
-                        !inMonth && "text-muted-foreground"
-                      )}
-                      title="Open day"
-                    >
-                      {day.getDate()}
-                    </button>
-                    {(board.booked > 0 || board.unslotted.length > 0) && (
-                      <span
-                        className={cn(
-                          "rounded-full px-1.5 text-[10px] font-semibold",
-                          board.booked >= SLOTS_PER_DAY
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted text-muted-foreground"
-                        )}
-                        title={`${board.booked} of ${SLOTS_PER_DAY} slots booked`}
-                      >
-                        {board.booked}/{SLOTS_PER_DAY}
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-1 flex gap-0.5">
-                    {DAILY_SLOTS.map(slot => (
-                      <span
-                        key={slot.key}
-                        title={`${slot.label}: ${board.bySlot[slot.key].length ? "booked" : "open"}`}
-                        className={cn(
-                          "h-1 flex-1 rounded-full",
-                          board.bySlot[slot.key].length
-                            ? "bg-primary"
-                            : "bg-border"
-                        )}
-                      />
-                    ))}
-                  </div>
-                  <div className="mt-1 space-y-1">
-                    {dayJobs.slice(0, 3).map(job => (
-                      <button
-                        key={job.id}
-                        onClick={() => navigate(`/jobs/${job.id}`)}
-                        className="block w-full truncate rounded border border-primary/30 bg-primary/5 px-1.5 py-0.5 text-left text-[11px] font-medium transition-colors hover:bg-primary/10"
-                        title={job.customerName}
-                      >
-                        {job.scheduledStart
-                          ? `${timeLabel(job.scheduledStart)} `
-                          : ""}
-                        {job.customerName}
-                      </button>
-                    ))}
-                    {dayJobs.length > 3 && (
-                      <button
-                        onClick={() => onSelectDay(day)}
-                        className="px-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-                      >
-                        +{dayJobs.length - 3} more
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            {week.map(day => (
+              <MonthDayCell
+                key={day.toISOString()}
+                day={day}
+                month={month}
+                jobs={jobs}
+                settings={settings}
+                moveJob={moveJob}
+                onSelectDay={onSelectDay}
+                navigate={navigate}
+              />
+            ))}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function MonthDayCell({
+  day,
+  month,
+  jobs,
+  settings,
+  moveJob,
+  onSelectDay,
+  navigate,
+}: {
+  day: Date;
+  month: number;
+  jobs: Job[];
+  settings: ReturnType<typeof loadPricingSettings>;
+  moveJob: MoveJob;
+  onSelectDay: (day: Date) => void;
+  navigate: (to: string) => void;
+}) {
+  const dayJobs = jobsForDay(jobs, day);
+  const board = buildDayBoard(jobs, day, settings.vehicles);
+  const inMonth = day.getMonth() === month;
+  const isToday = sameDay(day, new Date());
+  // Dropping on a month day keeps the job's slot (AM/PM + vehicle) and only changes the date.
+  const drop = useDropTarget(jobId => {
+    const job = jobs.find(candidate => candidate.id === jobId);
+    const slot = job ? getSlot(jobSlotKey(job, settings.vehicles)) : undefined;
+    if (!job) return;
+    if (!slot) {
+      toast.error(
+        "This job has no time or vehicle yet — drop it on a slot in Week view instead."
+      );
+      return;
+    }
+    moveJob(jobId, day, slot);
+  });
+
+  return (
+    <div
+      {...drop.props}
+      className={cn(
+        "min-h-28 border-r border-border p-1.5 transition-colors last:border-r-0",
+        !inMonth && "bg-muted/20",
+        isToday && "bg-primary/5",
+        drop.over && "bg-primary/10 ring-2 ring-inset ring-primary/60"
+      )}
+    >
+      <div className="flex items-center justify-between gap-1">
+        <button
+          onClick={() => onSelectDay(day)}
+          className={cn(
+            "flex size-6 items-center justify-center rounded-full text-xs font-semibold transition-colors hover:bg-muted",
+            isToday && "bg-primary text-primary-foreground hover:bg-primary",
+            !inMonth && "text-muted-foreground"
+          )}
+          title="Open day"
+        >
+          {day.getDate()}
+        </button>
+        {(board.booked > 0 || board.unslotted.length > 0) && (
+          <span
+            className={cn(
+              "rounded-full px-1.5 text-[10px] font-semibold",
+              board.booked >= SLOTS_PER_DAY
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground"
+            )}
+            title={`${board.booked} of ${SLOTS_PER_DAY} slots booked`}
+          >
+            {board.booked}/{SLOTS_PER_DAY}
+          </span>
+        )}
+      </div>
+      <div className="mt-1 flex gap-0.5">
+        {DAILY_SLOTS.map(slot => (
+          <span
+            key={slot.key}
+            title={`${slot.label}: ${board.bySlot[slot.key].length ? "booked" : "open"}`}
+            className={cn(
+              "h-1 flex-1 rounded-full",
+              board.bySlot[slot.key].length ? "bg-primary" : "bg-border"
+            )}
+          />
+        ))}
+      </div>
+      <div className="mt-1 space-y-1">
+        {dayJobs.slice(0, 3).map(job => {
+          const movable = isJobMovable(job);
+          return (
+            <button
+              key={job.id}
+              onClick={() => navigate(`/jobs/${job.id}`)}
+              draggable={movable}
+              onDragStart={event => startJobDrag(event, job)}
+              className={cn(
+                "block w-full truncate rounded border border-primary/30 bg-primary/5 px-1.5 py-0.5 text-left text-[11px] font-medium transition-colors hover:bg-primary/10",
+                movable && "cursor-grab active:cursor-grabbing"
+              )}
+              title={job.customerName}
+            >
+              {job.scheduledStart ? `${timeLabel(job.scheduledStart)} ` : ""}
+              {job.customerName}
+            </button>
+          );
+        })}
+        {dayJobs.length > 3 && (
+          <button
+            onClick={() => onSelectDay(day)}
+            className="px-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+          >
+            +{dayJobs.length - 3} more
+          </button>
+        )}
       </div>
     </div>
   );

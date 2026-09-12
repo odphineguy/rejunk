@@ -143,3 +143,78 @@ export function newJobHrefForSlot(day: Date, slot: DailySlot) {
   });
   return `/jobs/new?${params.toString()}`;
 }
+
+function withClockTime(day: Date, hhmm: string) {
+  const [h, m] = hhmm.split(":").map(Number);
+  const next = new Date(day);
+  next.setHours(h, m, 0, 0);
+  return next;
+}
+
+/**
+ * Work out the field changes needed to move a job onto `day` in `slot`.
+ * - Same half-day (AM→AM / PM→PM): keep the job's clock time, only the date changes.
+ * - Different half-day: start at the slot's default window start.
+ * - The end time keeps the job's existing duration when it has one, else the slot's window end.
+ * - Vehicle class change (van ↔ box truck): assign the first active vehicle of the new class.
+ */
+export function moveJobToSlot(
+  job: Job,
+  day: Date,
+  slot: DailySlot,
+  vehicles: Vehicle[]
+): Partial<Job> {
+  const currentStart = job.scheduledStart ? new Date(job.scheduledStart) : null;
+  const currentEnd = job.scheduledEnd ? new Date(job.scheduledEnd) : null;
+  const samePeriod = jobPeriod(job) === slot.period;
+
+  const start =
+    samePeriod && currentStart
+      ? (() => {
+          const next = new Date(day);
+          next.setHours(
+            currentStart.getHours(),
+            currentStart.getMinutes(),
+            0,
+            0
+          );
+          return next;
+        })()
+      : withClockTime(day, slot.windowStart);
+
+  let end: Date;
+  if (currentStart && currentEnd && currentEnd > currentStart) {
+    end = new Date(
+      start.getTime() + (currentEnd.getTime() - currentStart.getTime())
+    );
+  } else {
+    end = withClockTime(day, slot.windowEnd);
+  }
+
+  const updates: Partial<Job> = {
+    scheduledStart: start.toISOString(),
+    scheduledEnd: end.toISOString(),
+  };
+  if (job.status === "open") updates.status = "scheduled";
+
+  if (jobVehicleClass(job, vehicles) !== slot.vehicleClass) {
+    const vehicle = defaultVehicleForSlot(slot, vehicles);
+    if (vehicle) {
+      updates.vehicleId = vehicle.id;
+      updates.vehicleName = vehicle.vehicleName;
+      updates.assignment = {
+        ...job.assignment,
+        vehicleId: vehicle.id,
+        vehicleName: vehicle.vehicleName,
+      };
+    }
+  }
+  return updates;
+}
+
+/** Jobs already finished or canceled shouldn't be dragged around the board. */
+export function isJobMovable(job: Job) {
+  return job.status !== "completed" && job.status !== "canceled";
+}
+
+export const DRAG_MIME = "application/x-rejunk-job-id";
