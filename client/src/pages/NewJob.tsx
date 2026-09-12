@@ -21,6 +21,7 @@ import {
   serviceTypeOptions,
   type DispatchAssignmentInput,
 } from "@/lib/dispatchOperations";
+import { defaultVehicleForSlot, getSlot } from "@/lib/scheduleSlots";
 import { loadPricingSettings } from "@/utils/pricingStorage";
 import type { CustomerJobStopType, JobItem, JobStop } from "@/types/driver";
 import type { JobLeadSource, JobPriority, JobServiceType } from "@/types/jobs";
@@ -71,15 +72,23 @@ export default function NewJob() {
   const [, navigate] = useLocation();
   const employees = useMemo(() => employeeOptions(), []);
   const vehicles = useMemo(() => loadPricingSettings().vehicles.filter((vehicle) => vehicle.isActive), []);
+  // Prefill from the Schedule page ("Open · Book" on a slot): /jobs/new?date=YYYY-MM-DD&slot=am_van
+  const prefill = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const slot = getSlot(params.get("slot"));
+    const date = params.get("date") ?? "";
+    const vehicle = slot ? defaultVehicleForSlot(slot, vehicles) : undefined;
+    return { date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "", slot, vehicle };
+  }, [vehicles]);
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [leadSource, setLeadSource] = useState<JobLeadSource>("phone");
   const [serviceType, setServiceType] = useState<JobServiceType>("junk_removal");
   const [jobLabel, setJobLabel] = useState("");
-  const [scheduledDate, setScheduledDate] = useState("");
-  const [windowStart, setWindowStart] = useState("");
-  const [windowEnd, setWindowEnd] = useState("");
+  const [scheduledDate, setScheduledDate] = useState(prefill.date);
+  const [windowStart, setWindowStart] = useState(prefill.slot?.windowStart ?? "");
+  const [windowEnd, setWindowEnd] = useState(prefill.slot?.windowEnd ?? "");
   const [notes, setNotes] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
   const [priority, setPriority] = useState<JobPriority>("normal");
@@ -89,7 +98,12 @@ export default function NewJob() {
   const [estimatedProfit, setEstimatedProfit] = useState("");
   const [stops, setStops] = useState<JobStop[]>(() => [newStop(1)]);
   const [items, setItems] = useState<JobItem[]>([]);
-  const [assignment, setAssignment] = useState<DispatchAssignmentInput>({ helperIds: [], crewSequence: 1 });
+  const [assignment, setAssignment] = useState<DispatchAssignmentInput>({
+    helperIds: [],
+    crewSequence: 1,
+    vehicleId: prefill.vehicle?.id,
+    vehicleName: prefill.vehicle?.vehicleName,
+  });
 
   const scheduledStart = scheduledDate && windowStart ? new Date(`${scheduledDate}T${windowStart}`).toISOString() : undefined;
   const scheduledEnd = scheduledDate && windowEnd ? new Date(`${scheduledDate}T${windowEnd}`).toISOString() : undefined;

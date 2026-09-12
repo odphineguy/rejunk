@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+} from "lucide-react";
 
 import {
   JobStatusBadge,
@@ -12,13 +18,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getJobWarningsWithFacilityCheck } from "@/lib/jobIntelligence";
 import { getJobs } from "@/lib/jobStorage";
+import {
+  DAILY_SLOTS,
+  SLOTS_PER_DAY,
+  jobSlotKey,
+  newJobHrefForSlot,
+  type DailySlot,
+  type SlotKey,
+} from "@/lib/scheduleSlots";
 import { cn } from "@/lib/utils";
 import { loadPricingSettings } from "@/utils/pricingStorage";
 import type { Job } from "@/types/jobs";
 
 type ScheduleView = "day" | "week" | "month" | "agenda";
 
-const hours = Array.from({ length: 13 }, (_, index) => index + 6);
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -35,11 +48,10 @@ function startOfDay(date: Date) {
   return next;
 }
 
+/** Weeks run Sunday → Saturday. */
 function startOfWeek(date: Date) {
   const next = new Date(date);
-  const day = next.getDay();
-  const offset = day === 0 ? -6 : 1 - day;
-  next.setDate(next.getDate() + offset);
+  next.setDate(next.getDate() - next.getDay());
   next.setHours(0, 0, 0, 0);
   return next;
 }
@@ -68,12 +80,6 @@ function sameDay(a: Date, b: Date) {
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
   );
-}
-
-function hourLabel(hour: number) {
-  const suffix = hour >= 12 ? "PM" : "AM";
-  const display = hour % 12 || 12;
-  return `${display} ${suffix}`;
 }
 
 function timeLabel(value: string) {
@@ -125,12 +131,28 @@ function monthWeeks(date: Date) {
   return weeks;
 }
 
-function jobsForSlot(jobs: Job[], day: Date, hour: number) {
-  return jobs.filter(job => {
-    if (!job.scheduledStart) return false;
-    const start = new Date(job.scheduledStart);
-    return sameDay(start, day) && start.getHours() === hour;
-  });
+type Vehicles = ReturnType<typeof loadPricingSettings>["vehicles"];
+
+interface DayBoard {
+  bySlot: Record<SlotKey, Job[]>;
+  unslotted: Job[];
+  booked: number;
+}
+
+/** Sort a day's jobs into the four daily slots (plus a bucket for jobs that don't fit one). */
+function buildDayBoard(jobs: Job[], day: Date, vehicles: Vehicles): DayBoard {
+  const bySlot = Object.fromEntries(
+    DAILY_SLOTS.map(slot => [slot.key, [] as Job[]])
+  ) as Record<SlotKey, Job[]>;
+  const unslotted: Job[] = [];
+  for (const job of jobsForDay(jobs, day)) {
+    if (job.status === "canceled") continue;
+    const key = jobSlotKey(job, vehicles);
+    if (key) bySlot[key].push(job);
+    else unslotted.push(job);
+  }
+  const booked = DAILY_SLOTS.filter(slot => bySlot[slot.key].length > 0).length;
+  return { bySlot, unslotted, booked };
 }
 
 function jobsForDay(jobs: Job[], day: Date) {
@@ -282,7 +304,7 @@ export default function Schedule() {
           </div>
 
           {view === "day" && (
-            <TimeGrid
+            <SlotBoard
               days={[cursor]}
               jobs={jobs}
               settings={settings}
@@ -290,7 +312,7 @@ export default function Schedule() {
             />
           )}
           {view === "week" && (
-            <TimeGrid
+            <SlotBoard
               days={weekDays}
               jobs={jobs}
               settings={settings}
@@ -302,6 +324,7 @@ export default function Schedule() {
               weeks={weeks}
               month={cursor.getMonth()}
               jobs={jobs}
+              settings={settings}
               onSelectDay={day => {
                 setCursor(startOfDay(day));
                 setView("day");
@@ -322,10 +345,12 @@ function JobSlotCard({
   job,
   settings,
   navigate,
+  tone = "default",
 }: {
   job: Job;
   settings: ReturnType<typeof loadPricingSettings>;
   navigate: (to: string) => void;
+  tone?: "default" | "warning";
 }) {
   const warnings = getJobWarningsWithFacilityCheck(job, settings);
   const missingReceiptWarning = warnings.find(
@@ -334,7 +359,12 @@ function JobSlotCard({
   return (
     <button
       onClick={() => navigate(`/jobs/${job.id}`)}
-      className="w-full rounded-md border border-primary/30 bg-primary/5 p-2 text-left shadow-sm transition-colors hover:bg-primary/10"
+      className={cn(
+        "w-full rounded-md border p-2 text-left shadow-sm transition-colors",
+        tone === "warning"
+          ? "border-amber-400/60 bg-amber-50 hover:bg-amber-100/70 dark:bg-amber-950/30 dark:hover:bg-amber-950/50"
+          : "border-primary/30 bg-primary/5 hover:bg-primary/10"
+      )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -354,6 +384,9 @@ function JobSlotCard({
           job.materialType?.replaceAll("_", " ") ||
           "Material not set"}
       </div>
+      <div className="truncate text-xs text-muted-foreground">
+        {job.vehicleName || job.assignment?.vehicleName || "No vehicle"}
+      </div>
       <div className="mt-1 truncate text-xs font-semibold">
         {money(job.quotedAmount)} · {job.paymentStatus.replaceAll("_", " ")}
       </div>
@@ -368,7 +401,7 @@ function JobSlotCard({
   );
 }
 
-function TimeGrid({
+function SlotBoard({
   days,
   jobs,
   settings,
@@ -380,20 +413,24 @@ function TimeGrid({
   navigate: (to: string) => void;
 }) {
   const isSingleDay = days.length === 1;
-  const columns = `76px repeat(${days.length}, minmax(${isSingleDay ? "0" : "150px"}, 1fr))`;
+  const columns = `120px repeat(${days.length}, minmax(${isSingleDay ? "0" : "150px"}, 1fr))`;
+  const boards = days.map(day => buildDayBoard(jobs, day, settings.vehicles));
+  const hasUnslotted = boards.some(board => board.unslotted.length > 0);
 
   return (
     <div className="overflow-x-auto">
-      <div style={{ minWidth: isSingleDay ? undefined : 1120 }}>
+      <div style={{ minWidth: isSingleDay ? undefined : 1180 }}>
         <div
           className="grid border-b border-border"
           style={{ gridTemplateColumns: columns }}
         >
           <div className="border-r border-border bg-muted/30 p-3 text-sm font-medium text-muted-foreground">
-            Time
+            Slot
           </div>
-          {days.map(day => {
+          {days.map((day, index) => {
             const isToday = sameDay(day, new Date());
+            const board = boards[index];
+            const full = board.booked >= SLOTS_PER_DAY;
             return (
               <div
                 key={day.toISOString()}
@@ -402,47 +439,160 @@ function TimeGrid({
                   isToday && "bg-primary/5"
                 )}
               >
-                <div className="text-xs font-semibold uppercase text-muted-foreground">
-                  {new Intl.DateTimeFormat("en-US", {
-                    weekday: "short",
-                  }).format(day)}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-xs font-semibold uppercase text-muted-foreground">
+                      {new Intl.DateTimeFormat("en-US", {
+                        weekday: "short",
+                      }).format(day)}
+                    </div>
+                    <div className="text-2xl font-bold">{day.getDate()}</div>
+                  </div>
+                  <span
+                    className={cn(
+                      "mt-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                      full
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    )}
+                    title={`${board.booked} of ${SLOTS_PER_DAY} slots booked`}
+                  >
+                    {board.booked}/{SLOTS_PER_DAY}
+                  </span>
                 </div>
-                <div className="text-2xl font-bold">{day.getDate()}</div>
               </div>
             );
           })}
         </div>
 
-        {hours.map(hour => (
+        {DAILY_SLOTS.map(slot => (
           <div
-            key={hour}
+            key={slot.key}
             className="grid min-h-28 border-b border-border last:border-b-0"
             style={{ gridTemplateColumns: columns }}
           >
-            <div className="border-r border-border bg-muted/20 p-3 text-sm font-medium text-muted-foreground">
-              {hourLabel(hour)}
+            <div className="border-r border-border bg-muted/20 p-3">
+              <div className="text-sm font-semibold">{slot.label}</div>
+              <div className="text-xs text-muted-foreground">
+                {slotWindowLabel(slot)}
+              </div>
             </div>
-            {days.map(day => {
-              const slotJobs = jobsForSlot(jobs, day, hour);
-              return (
-                <div
-                  key={`${day.toISOString()}-${hour}`}
-                  className="min-h-28 space-y-2 border-r border-border p-2 last:border-r-0"
-                >
-                  {slotJobs.map(job => (
-                    <JobSlotCard
-                      key={job.id}
-                      job={job}
-                      settings={settings}
-                      navigate={navigate}
-                    />
-                  ))}
-                </div>
-              );
-            })}
+            {days.map((day, index) => (
+              <SlotCell
+                key={`${day.toISOString()}-${slot.key}`}
+                day={day}
+                slot={slot}
+                jobs={boards[index].bySlot[slot.key]}
+                settings={settings}
+                navigate={navigate}
+              />
+            ))}
           </div>
         ))}
+
+        {hasUnslotted && (
+          <div
+            className="grid min-h-20 border-t-2 border-border bg-muted/10"
+            style={{ gridTemplateColumns: columns }}
+          >
+            <div className="border-r border-border p-3">
+              <div className="text-sm font-semibold">Needs a slot</div>
+              <div className="text-xs text-muted-foreground">
+                No time or vehicle yet
+              </div>
+            </div>
+            {boards.map((board, index) => (
+              <div
+                key={days[index].toISOString()}
+                className="space-y-2 border-r border-border p-2 last:border-r-0"
+              >
+                {board.unslotted.map(job => (
+                  <JobSlotCard
+                    key={job.id}
+                    job={job}
+                    settings={settings}
+                    navigate={navigate}
+                    tone="warning"
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+function slotWindowLabel(slot: DailySlot) {
+  const fmt = (value: string) => {
+    const [h, m] = value.split(":").map(Number);
+    const date = new Date();
+    date.setHours(h, m, 0, 0);
+    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  };
+  return `${fmt(slot.windowStart)} – ${fmt(slot.windowEnd)}`;
+}
+
+function SlotCell({
+  day,
+  slot,
+  jobs,
+  settings,
+  navigate,
+}: {
+  day: Date;
+  slot: DailySlot;
+  jobs: Job[];
+  settings: ReturnType<typeof loadPricingSettings>;
+  navigate: (to: string) => void;
+}) {
+  const isPast = startOfDay(day).getTime() < startOfDay(new Date()).getTime();
+  const overbooked = jobs.length > 1;
+
+  if (jobs.length === 0) {
+    if (isPast) {
+      return (
+        <div className="flex min-h-28 items-center justify-center border-r border-border p-2 text-xs text-muted-foreground/60 last:border-r-0">
+          Open
+        </div>
+      );
+    }
+    return (
+      <div className="min-h-28 border-r border-border p-2 last:border-r-0">
+        <button
+          onClick={() => navigate(newJobHrefForSlot(day, slot))}
+          className="flex h-full min-h-24 w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border text-xs font-medium text-muted-foreground transition-colors hover:border-primary/60 hover:bg-primary/5 hover:text-primary"
+          title={`Book the ${slot.label} slot on ${dayHeaderFmt.format(day)}`}
+        >
+          <Plus className="size-4" />
+          Open · Book
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "min-h-28 space-y-2 border-r border-border p-2 last:border-r-0",
+        overbooked && "bg-amber-50/60 dark:bg-amber-950/20"
+      )}
+    >
+      {overbooked && (
+        <div className="flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="size-3" />
+          {jobs.length} jobs in one slot
+        </div>
+      )}
+      {jobs.map(job => (
+        <JobSlotCard
+          key={job.id}
+          job={job}
+          settings={settings}
+          navigate={navigate}
+        />
+      ))}
     </div>
   );
 }
@@ -451,16 +601,18 @@ function MonthGrid({
   weeks,
   month,
   jobs,
+  settings,
   onSelectDay,
   navigate,
 }: {
   weeks: Date[][];
   month: number;
   jobs: Job[];
+  settings: ReturnType<typeof loadPricingSettings>;
   onSelectDay: (day: Date) => void;
   navigate: (to: string) => void;
 }) {
-  const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   return (
     <div className="overflow-x-auto">
       <div className="min-w-[840px]">
@@ -481,6 +633,7 @@ function MonthGrid({
           >
             {week.map(day => {
               const dayJobs = jobsForDay(jobs, day);
+              const board = buildDayBoard(jobs, day, settings.vehicles);
               const inMonth = day.getMonth() === month;
               const isToday = sameDay(day, new Date());
               return (
@@ -492,18 +645,47 @@ function MonthGrid({
                     isToday && "bg-primary/5"
                   )}
                 >
-                  <button
-                    onClick={() => onSelectDay(day)}
-                    className={cn(
-                      "flex size-6 items-center justify-center rounded-full text-xs font-semibold transition-colors hover:bg-muted",
-                      isToday &&
-                        "bg-primary text-primary-foreground hover:bg-primary",
-                      !inMonth && "text-muted-foreground"
+                  <div className="flex items-center justify-between gap-1">
+                    <button
+                      onClick={() => onSelectDay(day)}
+                      className={cn(
+                        "flex size-6 items-center justify-center rounded-full text-xs font-semibold transition-colors hover:bg-muted",
+                        isToday &&
+                          "bg-primary text-primary-foreground hover:bg-primary",
+                        !inMonth && "text-muted-foreground"
+                      )}
+                      title="Open day"
+                    >
+                      {day.getDate()}
+                    </button>
+                    {(board.booked > 0 || board.unslotted.length > 0) && (
+                      <span
+                        className={cn(
+                          "rounded-full px-1.5 text-[10px] font-semibold",
+                          board.booked >= SLOTS_PER_DAY
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground"
+                        )}
+                        title={`${board.booked} of ${SLOTS_PER_DAY} slots booked`}
+                      >
+                        {board.booked}/{SLOTS_PER_DAY}
+                      </span>
                     )}
-                    title="Open day"
-                  >
-                    {day.getDate()}
-                  </button>
+                  </div>
+                  <div className="mt-1 flex gap-0.5">
+                    {DAILY_SLOTS.map(slot => (
+                      <span
+                        key={slot.key}
+                        title={`${slot.label}: ${board.bySlot[slot.key].length ? "booked" : "open"}`}
+                        className={cn(
+                          "h-1 flex-1 rounded-full",
+                          board.bySlot[slot.key].length
+                            ? "bg-primary"
+                            : "bg-border"
+                        )}
+                      />
+                    ))}
+                  </div>
                   <div className="mt-1 space-y-1">
                     {dayJobs.slice(0, 3).map(job => (
                       <button
