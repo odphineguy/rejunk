@@ -22,9 +22,25 @@ store **stops and crew on the ticket itself** so they survive across browsers an
 driver screens around that. Junk removal stays supported — it just becomes one service type instead of
 the default assumption.
 
-This is also the core of replacing Housecall Pro. An HCP job is: customer, address(es), arrival window,
-assigned employees, line items, notes, status. Rejunk's ticket needs to be at least that, plus the two
-things HCP can't do for us: vehicle-aware slots and the driver flow the crew actually likes.
+**Design rule (Abe, Sep 12): "If I wanted a duplicate of HCP I'd just keep using HCP."** Rejunk must be
+different and better, not a re-skin. HCP is a generic home-services job ledger; every choice below should
+be something HCP structurally can't do because it doesn't know what a mover, a van, a box truck, or a
+Thumbtack thread is:
+
+- **Slot-first, not form-first.** A ticket is booked by picking a half-day and a vehicle on the calendar;
+  HCP starts from a blank job form and a clock time.
+- **Capacity in movers, not appointments.** Booking is blocked by who's on shift and what the job needs
+  (2 / 3 / 4 movers, truck vs van), enforced from the ops safety rules. HCP will happily double-book you.
+- **The ticket writes itself from the conversation.** Addresses, gate codes, stairs, items, TVs, photos,
+  and the quote tier come out of the Thumbtack thread (D11). HCP makes Abe copy-paste them.
+- **The ticket knows what kind of move it is** (`movingKind`) and shapes the crew, time, price tier,
+  payment terms, and the driver screen from that. HCP has one generic job type.
+- **The driver screen is built for a move**: pickup → delivery, items to wrap and reassemble, one-tap
+  status strip, messaging. Drivers hate HCP's; that's why this app exists.
+- **The calendar feeds the quoting agent** (D10), so what David tells customers is always what dispatch
+  sees. HCP can't talk to David.
+
+Anything in this spec that is merely "HCP but ours" should be cut or deferred.
 
 ## Read first
 
@@ -433,12 +449,14 @@ Each phase ships on its own; `pnpm check` clean; commit locally, push on Abe's w
 
 ## Open questions for Abe
 
-1. **Per-unit rows later** — when the fleet grows, should the calendar show a row per truck (BOX-01,
-   BOX-02) as HCP does, or per class? Spec assumes per class now, per unit later.
+1. **Per-unit rows later** — when the fleet grows, does the calendar need a row per truck (BOX-01,
+   BOX-02), or does "per class + mover capacity" (answer 5) stay enough? Spec assumes per class; per-unit
+   rows only if a real scheduling conflict shows it's needed — not because HCP does it.
 2. **Thumbtack attachment links** — do `thumbtack.com/attachment/...` URLs expire? (Spec assumes yes and
    copies files at ingest; if they're permanent, skip the copy.)
-3. **Deposit** — when Rejunk owns booking, is the $50 deposit collected through Stripe on a Rejunk page,
-   or does HCP's booking page stay for a while with the ticket created from the HCP webhook?
+3. ~~**Deposit**~~ — **answered Sep 12:** Stripe is not set up; **HCP's booking page and $50 deposit stay
+   for now.** Tickets are created from the HCP webhook + Thumbtack thread (D11). A Rejunk booking page is a
+   later spec, and only if it can be better than HCP's — not a copy.
 4. **Employees table** — fine to create `app_employees` now (additive), or wait for the driver-phase
    migrations to be reconciled? Spec says now.
 5. **Who's on shift** — for crew capacity (answer 5 above) the app needs a simple "who's working today"
