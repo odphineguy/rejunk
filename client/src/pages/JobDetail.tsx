@@ -64,6 +64,15 @@ function minutes(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? `${Math.round(value)} min` : "Unavailable";
 }
 
+/** ISO timestamp → value for a <input type="datetime-local"> in the browser's local time (not UTC). */
+function toLocalDateTimeInput(value?: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function formatDate(value?: string) {
   if (!value) return "Unscheduled";
   return new Intl.DateTimeFormat("en-US", {
@@ -427,13 +436,13 @@ export default function JobDetail() {
               <EditableField
                 label="Scheduled start"
                 type="datetime-local"
-                value={job.scheduledStart ? job.scheduledStart.slice(0, 16) : ""}
+                value={toLocalDateTimeInput(job.scheduledStart)}
                 onChange={(value) => applyUpdates({ scheduledStart: value ? new Date(value).toISOString() : undefined, status: value && job.status === "open" ? "scheduled" : job.status })}
               />
               <EditableField
                 label="Scheduled end"
                 type="datetime-local"
-                value={job.scheduledEnd ? job.scheduledEnd.slice(0, 16) : ""}
+                value={toLocalDateTimeInput(job.scheduledEnd)}
                 onChange={(value) => applyUpdates({ scheduledEnd: value ? new Date(value).toISOString() : undefined })}
               />
               <EditableField label="Material" value={job.materialName ?? ""} onChange={(value) => applyUpdates({ materialName: value })} />
