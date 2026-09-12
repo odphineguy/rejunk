@@ -117,7 +117,7 @@ export function jobSlotKey(job: Job, vehicles: Vehicle[]): SlotKey | undefined {
   return `${period}_${vehicleClass}`;
 }
 
-/** First active vehicle matching a slot's class — used to prefill a booking. */
+/** First active FLEET vehicle matching a slot's class — used to prefill a booking. Never a pricing template. */
 export function defaultVehicleForSlot(
   slot: DailySlot,
   vehicles: Vehicle[]
@@ -125,6 +125,7 @@ export function defaultVehicleForSlot(
   return vehicles.find(
     vehicle =>
       vehicle.isActive &&
+      !vehicle.isTemplate &&
       vehicleClassForType(vehicle.vehicleType) === slot.vehicleClass
   );
 }
@@ -200,13 +201,9 @@ export function moveJobToSlot(
   if (jobVehicleClass(job, vehicles) !== slot.vehicleClass) {
     const vehicle = defaultVehicleForSlot(slot, vehicles);
     if (vehicle) {
+      // vehicleId is the single source of truth; vehicleName is a display mirror.
       updates.vehicleId = vehicle.id;
       updates.vehicleName = vehicle.vehicleName;
-      updates.assignment = {
-        ...job.assignment,
-        vehicleId: vehicle.id,
-        vehicleName: vehicle.vehicleName,
-      };
     }
   }
   return updates;

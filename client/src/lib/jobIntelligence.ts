@@ -9,7 +9,8 @@ export type JobWarningCode =
   | "pricing_stale"
   | "missing_receipt"
   | "completed_unpaid"
-  | "no_crew_assigned";
+  | "no_crew_assigned"
+  | "crew_short";
 
 export interface JobWarning {
   code: JobWarningCode;
@@ -94,8 +95,10 @@ export function getJobWarnings(job: Job): JobWarning[] {
   if (job.status === "completed" && job.paymentStatus !== "paid" && job.paymentStatus !== "refunded") {
     warnings.push({ code: "completed_unpaid", label: "Completed but Unpaid", severity: "critical" });
   }
-  if (!job.assignment?.crewLead && !job.assignment?.crewMembers?.length) {
+  if ((job.crew?.length ?? 0) === 0) {
     warnings.push({ code: "no_crew_assigned", label: "No Crew Assigned", severity: "info" });
+  } else if ((job.crew?.length ?? 0) < (job.requiredCrew ?? 1)) {
+    warnings.push({ code: "crew_short", label: `Crew Short (${job.crew.length} of ${job.requiredCrew})`, severity: "warning" });
   }
 
   return warnings;

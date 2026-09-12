@@ -21,10 +21,12 @@ import {
   serviceTypeOptions,
   type DispatchAssignmentInput,
 } from "@/lib/dispatchOperations";
+import { fleetVehicles, vehicleUnitCode } from "@/lib/fleet";
+import { crewFromRoles, defaultStopsFor, deliveryKindLabels, deliveryKinds, isFullDayMove, movingKindLabels, movingKinds, requiredCrewFor } from "@/lib/jobShape";
 import { defaultVehicleForSlot, getSlot } from "@/lib/scheduleSlots";
 import { loadPricingSettings } from "@/utils/pricingStorage";
 import type { CustomerJobStopType, JobItem, JobStop } from "@/types/driver";
-import type { JobLeadSource, JobPriority, JobServiceType } from "@/types/jobs";
+import type { CanonicalJobServiceType, DeliveryKind, JobLeadSource, JobPriority, MovingKind } from "@/types/jobs";
 
 const stopTypes: CustomerJobStopType[] = ["pickup", "delivery", "service", "material_pickup", "other"];
 const priorities: JobPriority[] = ["low", "normal", "high", "urgent"];
@@ -39,8 +41,8 @@ function newStop(order: number): JobStop {
     id: uid("stop"),
     jobId: "",
     stopOrder: order,
-    stopType: order === 1 ? "pickup" : "delivery",
-    name: order === 1 ? "Primary service stop" : `Stop ${order}`,
+    stopType: "other",
+    name: `Stop ${order}`,
     state: "AZ",
     status: "pending",
     createdAt: now,
@@ -71,7 +73,8 @@ export default function NewJob() {
   const { isOwner } = useStaffSession();
   const [, navigate] = useLocation();
   const employees = useMemo(() => employeeOptions(), []);
-  const vehicles = useMemo(() => loadPricingSettings().vehicles.filter((vehicle) => vehicle.isActive), []);
+  // Fleet units only (SPR-01 … BOX-01) — never the pricing templates.
+  const vehicles = useMemo(() => fleetVehicles(loadPricingSettings().vehicles), []);
   // Prefill from the Schedule page ("Open · Book" on a slot): /jobs/new?date=YYYY-MM-DD&slot=am_van
   const prefill = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -84,7 +87,10 @@ export default function NewJob() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [leadSource, setLeadSource] = useState<JobLeadSource>("phone");
-  const [serviceType, setServiceType] = useState<JobServiceType>("junk_removal");
+  const [serviceType, setServiceType] = useState<CanonicalJobServiceType>("moving");
+  const [movingKind, setMovingKind] = useState<MovingKind>("studio_1br");
+  const [deliveryKind, setDeliveryKind] = useState<DeliveryKind>("van_flat");
+  const [crewOverride, setCrewOverride] = useState("");
   const [jobLabel, setJobLabel] = useState("");
   const [scheduledDate, setScheduledDate] = useState(prefill.date);
   const [windowStart, setWindowStart] = useState(prefill.slot?.windowStart ?? "");
@@ -96,7 +102,9 @@ export default function NewJob() {
   const [quotedAmount, setQuotedAmount] = useState("");
   const [estimatedCost, setEstimatedCost] = useState("");
   const [estimatedProfit, setEstimatedProfit] = useState("");
-  const [stops, setStops] = useState<JobStop[]>(() => [newStop(1)]);
+  const [stops, setStops] = useState<JobStop[]>(() => defaultStopsFor("moving", "studio_1br"));
+  // Stops untouched by the dispatcher follow the service type (pickup + delivery vs one service card).
+  const stopsTouched = useMemo(() => ({ current: false }), []);
   const [items, setItems] = useState<JobItem[]>([]);
   const [assignment, setAssignment] = useState<DispatchAssignmentInput>({
     helperIds: [],
@@ -104,6 +112,15 @@ export default function NewJob() {
     vehicleId: prefill.vehicle?.id,
     vehicleName: prefill.vehicle?.vehicleName,
   });
+
+  const crewFloor = requiredCrewFor({ serviceType, movingKind: serviceType === "moving" ? movingKind : undefined, deliveryKind: serviceType === "delivery" ? deliveryKind : undefined });
+  const requiredCrew = Math.max(crewFloor, Number(crewOverride || 0));
+  const plannedCrew = crewFromRoles(assignment).length;
+
+  const chooseServiceType = (next: CanonicalJobServiceType, nextMovingKind = movingKind) => {
+    setServiceType(next);
+    if (!stopsTouched.current) setStops(defaultStopsFor(next, next === "moving" ? nextMovingKind : undefined));
+  };
 
   const scheduledStart = scheduledDate && windowStart ? new Date(`${scheduledDate}T${windowStart}`).toISOString() : undefined;
   const scheduledEnd = scheduledDate && windowEnd ? new Date(`${scheduledDate}T${windowEnd}`).toISOString() : undefined;
@@ -117,6 +134,10 @@ export default function NewJob() {
       toast.error("At least one stop is required");
       return;
     }
+    if (mode !== "draft" && plannedCrew < requiredCrew) {
+      toast.error(`This job needs ${requiredCrew} on the crew — ${plannedCrew} assigned. Save as a draft or add crew.`);
+      return;
+    }
     const profit = Number(estimatedProfit || 0);
     const quote = Number(quotedAmount || 0);
     const job = await createDispatchJob({
@@ -125,6 +146,9 @@ export default function NewJob() {
       email,
       leadSource,
       serviceType,
+      movingKind: serviceType === "moving" ? movingKind : undefined,
+      deliveryKind: serviceType === "delivery" ? deliveryKind : undefined,
+      requiredCrew,
       jobLabel,
       scheduledStart,
       scheduledEnd,
@@ -145,6 +169,7 @@ export default function NewJob() {
   };
 
   const patchStop = (stopId: string, updates: Partial<JobStop>) => {
+    stopsTouched.current = true;
     setStops((current) => current.map((stop) => stop.id === stopId ? { ...stop, ...updates } : stop));
   };
 
@@ -180,7 +205,27 @@ export default function NewJob() {
               <Field label="Email" value={email} onChange={setEmail} />
               <Field label="Job label/title" value={jobLabel} onChange={setJobLabel} />
               <SelectField label="Lead source" value={leadSource} onValueChange={(value) => setLeadSource(value as JobLeadSource)} options={leadSourceOptions} />
-              <SelectField label="Service type" value={serviceType} onValueChange={(value) => setServiceType(value as JobServiceType)} options={serviceTypeOptions} />
+              <SelectField label="Service type" value={serviceType} onValueChange={(value) => chooseServiceType(value as CanonicalJobServiceType)} options={serviceTypeOptions} />
+              {serviceType === "moving" && (
+                <SelectField
+                  label="Kind of move"
+                  value={movingKind}
+                  onValueChange={(value) => {
+                    const next = value as MovingKind;
+                    setMovingKind(next);
+                    if (!stopsTouched.current) setStops(defaultStopsFor("moving", next));
+                  }}
+                  options={movingKinds.map((value) => ({ value, label: movingKindLabels[value] }))}
+                />
+              )}
+              {serviceType === "delivery" && (
+                <SelectField label="Kind of delivery" value={deliveryKind} onValueChange={(value) => setDeliveryKind(value as DeliveryKind)} options={deliveryKinds.map((value) => ({ value, label: deliveryKindLabels[value] }))} />
+              )}
+              {serviceType === "moving" && isFullDayMove(movingKind) && (
+                <div className="md:col-span-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  This package blocks both halves of the box truck's day (full day).
+                </div>
+              )}
               <Field label="Scheduled date" type="date" value={scheduledDate} onChange={setScheduledDate} />
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Window start" type="time" value={windowStart} onChange={setWindowStart} />
@@ -199,8 +244,8 @@ export default function NewJob() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Customer / Service Stops</CardTitle>
-              <CardDescription>Add ordered customer or service locations. Disposal trips are tracked separately.</CardDescription>
+              <CardTitle>Where</CardTitle>
+              <CardDescription>Moves and deliveries get a Pickup and a Delivery card; assembly and junk get one service location. Stops are saved on the ticket and reach the crew's phones.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {stops.map((stop, index) => (
@@ -208,7 +253,7 @@ export default function NewJob() {
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 font-semibold">
                       <GripVertical className="size-4 text-muted-foreground" />
-                      Service location {index + 1}
+                      {stop.stopType === "pickup" ? "Pickup" : stop.stopType === "delivery" ? "Delivery" : `Service location ${index + 1}`}
                     </div>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" disabled={index === 0} onClick={() => setStops((current) => reorder(current, index, index - 1))}>Up</Button>
@@ -216,7 +261,7 @@ export default function NewJob() {
                       <Button variant="outline" size="sm" onClick={() => setStops((current) => [...current.slice(0, index + 1), { ...stop, id: uid("stop"), name: `${stop.name} copy` }, ...current.slice(index + 1)])}>
                         <Copy className="size-4" />
                       </Button>
-                      <Button variant="outline" size="sm" disabled={stops.length === 1} onClick={() => setStops((current) => current.filter((item) => item.id !== stop.id))}>
+                      <Button variant="outline" size="sm" disabled={stops.length === 1} onClick={() => { stopsTouched.current = true; setStops((current) => current.filter((item) => item.id !== stop.id)); }}>
                         <Trash2 className="size-4 text-destructive" />
                       </Button>
                     </div>
@@ -242,10 +287,11 @@ export default function NewJob() {
                   </div>
                 </div>
               ))}
-              <Button variant="outline" onClick={() => setStops((current) => [...current, newStop(current.length + 1)])}>
+              <Button variant="outline" onClick={() => { stopsTouched.current = true; setStops((current) => [...current, newStop(current.length + 1)]); }}>
                 <Plus className="size-4" />
                 Add Stop
               </Button>
+              {stops.length > 2 && <p className="text-sm text-amber-700">Ops rule: multi-stop jobs are separate schedule blocks — more than two stops usually means two tickets.</p>}
             </CardContent>
           </Card>
 
@@ -294,7 +340,14 @@ export default function NewJob() {
             <CardContent className="space-y-4">
               <SelectField label="Crew lead" value={assignment.crewLeadId ?? "none"} onValueChange={(value) => setAssignment((current) => ({ ...current, crewLeadId: value === "none" ? undefined : value }))} options={[{ value: "none", label: "Unassigned" }, ...employees.map((employee) => ({ value: employee.id, label: employeeLabel(employee) }))]} />
               <SelectField label="Driver" value={assignment.driverId ?? "none"} onValueChange={(value) => setAssignment((current) => ({ ...current, driverId: value === "none" ? undefined : value }))} options={[{ value: "none", label: "Unassigned" }, ...employees.map((employee) => ({ value: employee.id, label: employeeLabel(employee) }))]} />
-              <SelectField label="Vehicle" value={assignment.vehicleId ?? "none"} onValueChange={(value) => setAssignment((current) => ({ ...current, vehicleId: value === "none" ? undefined : value, vehicleName: value === "none" ? undefined : vehicles.find((vehicle) => vehicle.id === value)?.vehicleName }))} options={[{ value: "none", label: "No vehicle" }, ...vehicles.map((vehicle) => ({ value: vehicle.id, label: vehicle.vehicleName }))]} />
+              <SelectField label="Vehicle" value={assignment.vehicleId ?? "none"} onValueChange={(value) => setAssignment((current) => ({ ...current, vehicleId: value === "none" ? undefined : value, vehicleName: value === "none" ? undefined : vehicles.find((vehicle) => vehicle.id === value)?.vehicleName }))} options={[{ value: "none", label: "No vehicle" }, ...vehicles.map((vehicle) => ({ value: vehicle.id, label: `${vehicleUnitCode(vehicle)} · ${vehicle.vehicleName.replace(/^[A-Z]{2,4}-\d{2} · /, "")}` }))]} />
+              <div className="space-y-2">
+                <Label>Required crew (floor {crewFloor})</Label>
+                <Input type="number" min={crewFloor} value={crewOverride || String(crewFloor)} onChange={(event) => setCrewOverride(event.target.value)} />
+                <p className={plannedCrew < requiredCrew ? "text-xs text-amber-700" : "text-xs text-muted-foreground"}>
+                  {plannedCrew} of {requiredCrew} assigned{plannedCrew < requiredCrew ? " — “Save and Assign” needs the full crew" : ""}
+                </p>
+              </div>
               <Field label="Crew sequence" type="number" value={String(assignment.crewSequence ?? 1)} onChange={(value) => setAssignment((current) => ({ ...current, crewSequence: Number(value || 1) }))} />
               <div className="space-y-2">
                 <Label>Helpers</Label>
@@ -309,7 +362,7 @@ export default function NewJob() {
                   ))}
                 </div>
               </div>
-              <Badge variant="secondary">{selectedVehicle?.vehicleName || "No vehicle selected"}</Badge>
+              <Badge variant="secondary">{selectedVehicle ? vehicleUnitCode(selectedVehicle) : "No vehicle selected"}</Badge>
             </CardContent>
           </Card>
 

@@ -181,6 +181,7 @@ export function vehicleFromRow(row: VehicleRow): Vehicle {
     notes: row.notes ?? undefined,
     isDefault: row.is_default,
     isActive: row.is_active,
+    isTemplate: row.is_template ?? false,
   };
 }
 

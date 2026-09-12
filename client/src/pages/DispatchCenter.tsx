@@ -166,7 +166,7 @@ export default function DispatchCenter() {
         if (normalized && !text.includes(normalized)) return false;
         if (statusFilter === "today")
           return sameDay(job.scheduledStart, selectedDate);
-        if (statusFilter === "unassigned") return !job.assignment?.crewLead;
+        if (statusFilter === "unassigned") return (job.crew?.length ?? 0) < (job.requiredCrew ?? 1);
         if (statusFilter === "issues")
           return (
             openIssues(driverJob.issues).length > 0 || job.status === "issue"

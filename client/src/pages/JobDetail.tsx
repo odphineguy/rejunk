@@ -27,6 +27,9 @@ import {
   margin,
 } from "@/lib/jobIntelligence";
 import { syncJobPhotos, toDriverJob } from "@/lib/driverStorage";
+import { employeeNameById } from "@/lib/employeeStorage";
+import { fleetVehicles, vehicleUnitCode } from "@/lib/fleet";
+import { serviceTypeLabel } from "@/lib/jobShape";
 import {
   dispatchResolveIssue,
   employeeLabel,
@@ -119,6 +122,11 @@ export function NewJob() {
       createdAt: now,
       updatedAt: now,
       customerName: "New job",
+      serviceType: "other",
+      requiredCrew: 1,
+      crew: [],
+      stops: [],
+      items: [],
       status: "open",
       paymentStatus: "unpaid",
       quotedAmount: 0,
@@ -447,7 +455,12 @@ export default function JobDetail() {
               />
               <EditableField label="Material" value={job.materialName ?? ""} onChange={(value) => applyUpdates({ materialName: value })} />
               <EditableField label="Facility" value={job.facilityName ?? ""} onChange={(value) => applyUpdates({ facilityName: value })} />
-              <EditableField label="Vehicle" value={job.vehicleName ?? ""} onChange={(value) => applyUpdates({ vehicleName: value })} />
+              <SelectLite
+                label="Vehicle"
+                value={job.vehicleId ?? "none"}
+                onChange={(value) => applyUpdates({ vehicleId: value === "none" ? undefined : value })}
+                options={[{ value: "none", label: "No vehicle" }, ...fleetVehicles(settings.vehicles).map((vehicle) => ({ value: vehicle.id, label: `${vehicleUnitCode(vehicle)} · ${vehicle.vehicleName}` }))]}
+              />
               <EditableField label="Cubic yards" type="number" value={String(job.cubicYards ?? "")} onChange={(value) => applyUpdates({ cubicYards: fieldNumber(value) })} />
             </CardContent>
           </Card>
@@ -836,7 +849,8 @@ export default function JobDetail() {
                 <DetailRow label="Scheduled" value={formatDate(job.scheduledStart)} />
                 <DetailRow label="Material" value={job.materialName || job.materialType?.replaceAll("_", " ") || "Not set"} />
                 <DetailRow label="Facility" value={job.facilityName || "Not selected"} />
-                <DetailRow label="Crew lead" value={job.assignment?.crewLead || "Unassigned"} />
+                <DetailRow label="Service" value={serviceTypeLabel(job)} />
+                <DetailRow label="Crew" value={job.crew.length ? `${job.crew.map((member) => employeeNameById(member.employeeId, member.employeeId)).join(", ")} (${job.crew.length} of ${job.requiredCrew})` : `Unassigned (needs ${job.requiredCrew})`} />
               </div>
             </CardContent>
           </Card>)}
@@ -943,32 +957,41 @@ function TextAreaField({ label, value, onChange }: { label: string; value: strin
 
 function AssignmentEditor({ job, onSaved }: { job: Job; onSaved: () => void }) {
   const employees = employeeOptions();
-  const [crewLeadId, setCrewLeadId] = useState("none");
-  const [driverId, setDriverId] = useState("none");
-  const [helperIds, setHelperIds] = useState<string[]>([]);
-  const [vehicleName, setVehicleName] = useState(job.vehicleName ?? job.assignment?.vehicleName ?? "");
+  const vehicles = fleetVehicles(loadPricingSettings().vehicles);
+  // Initialize from the ticket's crew so editing never resets what dispatch already set.
+  const lead = job.crew.find((member) => member.role === "lead");
+  const driver = job.crew.find((member) => member.role === "driver");
+  const [crewLeadId, setCrewLeadId] = useState(lead?.employeeId ?? "none");
+  const [driverId, setDriverId] = useState(driver?.employeeId ?? "none");
+  const [helperIds, setHelperIds] = useState<string[]>(job.crew.filter((member) => member.role === "helper").map((member) => member.employeeId));
+  const [vehicleId, setVehicleId] = useState(job.vehicleId ?? "none");
   const [crewSequence, setCrewSequence] = useState(String(job.crewSequence ?? 1));
+
+  const planned = new Set([crewLeadId, driverId, ...helperIds].filter((value) => value && value !== "none")).size;
 
   const save = async () => {
     const assignment: DispatchAssignmentInput = {
       crewLeadId: crewLeadId === "none" ? undefined : crewLeadId,
       driverId: driverId === "none" ? undefined : driverId,
       helperIds,
-      vehicleName,
+      vehicleId: vehicleId === "none" ? undefined : vehicleId,
       crewSequence: Number(crewSequence || 1),
     };
     await saveDispatchOperationalPlan(job.id, { assignment, activityMessage: "Dispatch updated crew assignment." });
-    toast.success("Assignment updated");
+    toast.success(planned < job.requiredCrew ? `Assignment saved — crew is short (${planned} of ${job.requiredCrew})` : "Assignment updated");
     onSaved();
   };
 
   return (
     <div className="rounded-lg border border-border p-4">
-      <div className="mb-3 font-semibold">Assignment</div>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="font-semibold">Crew & Vehicle</div>
+        <span className={planned < job.requiredCrew ? "text-sm text-amber-700" : "text-sm text-muted-foreground"}>{planned} of {job.requiredCrew} required</span>
+      </div>
       <div className="grid gap-4 md:grid-cols-2">
         <SelectLite label="Crew lead" value={crewLeadId} onChange={setCrewLeadId} options={[{ value: "none", label: "Unassigned" }, ...employees.map((employee) => ({ value: employee.id, label: employeeLabel(employee) }))]} />
         <SelectLite label="Driver" value={driverId} onChange={setDriverId} options={[{ value: "none", label: "Unassigned" }, ...employees.map((employee) => ({ value: employee.id, label: employeeLabel(employee) }))]} />
-        <EditableField label="Vehicle" value={vehicleName} onChange={setVehicleName} />
+        <SelectLite label="Vehicle" value={vehicleId} onChange={setVehicleId} options={[{ value: "none", label: "No vehicle" }, ...vehicles.map((vehicle) => ({ value: vehicle.id, label: `${vehicleUnitCode(vehicle)} · ${vehicle.vehicleName}` }))]} />
         <EditableField label="Crew sequence" type="number" value={crewSequence} onChange={setCrewSequence} />
         <div className="space-y-2 md:col-span-2">
           <Label>Helpers</Label>
@@ -983,6 +1006,7 @@ function AssignmentEditor({ job, onSaved }: { job: Job; onSaved: () => void }) {
                 {employeeLabel(employee)}
               </label>
             ))}
+            {employees.length === 0 && <p className="text-sm text-muted-foreground">No active employees yet — add them on the Employees page.</p>}
           </div>
         </div>
       </div>

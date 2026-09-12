@@ -1,6 +1,8 @@
 # Job Ticket Redesign — Spec
 
-**Owner:** Abe · **Date:** Sep 12, 2026 · **Status:** proposed, not started
+**Owner:** Abe · **Date:** Sep 12, 2026 · **Status:** phase 0 shipped (migration live); phase 1 app-side shipped,
+its SQL (`20260912000002_ticket_shape.sql`) written and awaiting approval — see DECISIONS.md 2026-09-12 for
+the deviations. Phases 2–6 not started.
 **Scope:** how a job ("ticket") is created, stored, assigned, listed, and shown to drivers.
 **Out of scope:** pricing math (see `MOVING_ESTIMATOR_V19_SPEC.md`), the public website, payments/invoices,
 Thumbtack auto-replies.

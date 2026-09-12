@@ -35,6 +35,45 @@ export type Database = {
         }
         Relationships: []
       }
+      app_employees: {
+        Row: {
+          id: string
+          tenant_id: string
+          first_name: string
+          last_name: string
+          role: string
+          status: string
+          field_tech: boolean
+          data: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          tenant_id?: string
+          first_name: string
+          last_name: string
+          role?: string
+          status?: string
+          field_tech?: boolean
+          data: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          first_name?: string
+          last_name?: string
+          role?: string
+          status?: string
+          field_tech?: boolean
+          data?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       app_contact_overrides: {
         Row: {
           created_at: string
@@ -1494,6 +1533,7 @@ export type Database = {
           id: string
           is_active: boolean
           is_default: boolean
+          is_template: boolean
           max_payload_lbs: number
           mileage_cost: number | null
           mpg_loaded: number | null
@@ -1516,6 +1556,7 @@ export type Database = {
           id: string
           is_active?: boolean
           is_default?: boolean
+          is_template?: boolean
           max_payload_lbs?: number
           mileage_cost?: number | null
           mpg_loaded?: number | null
@@ -1538,6 +1579,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_default?: boolean
+          is_template?: boolean
           max_payload_lbs?: number
           mileage_cost?: number | null
           mpg_loaded?: number | null

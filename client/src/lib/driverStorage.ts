@@ -1,6 +1,7 @@
 import { findOrCreateJobThread, sendMessage as sendThreadMessage } from "@/lib/dispatchMessageStorage";
 import { getStoredDriverSession } from "@/lib/driverSession";
 import { getEmployees, employeeName } from "@/lib/employeeStorage";
+import { normalizeJob, serviceTypeLabel } from "@/lib/jobShape";
 import { getJobs, updateJob } from "@/lib/jobStorage";
 import { canTransitionJobStatus, statusActivityMessage, toDriverStatus } from "@/lib/jobStatus";
 import { ensureSession, isDriverDatabaseContext, supabase } from "@/lib/supabase";
@@ -80,6 +81,23 @@ function id(prefix: string) {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+/**
+ * Push one stop / item / disposal-trip change onto the ticket. Until migration
+ * 20260912000002 (driver_update_ticket_row) is applied the call fails; the
+ * optimistic overlay on this phone stays, so the driver isn't blocked.
+ */
+async function patchTicketRow(jobId: string, collection: "stops" | "items" | "disposalEvents", rowId: string, patch: Record<string, unknown>) {
+  if (!supabase || !(await ensureSession())) return;
+  const { error } = await (supabase as any).rpc("driver_update_ticket_row", { target_job_id: jobId, collection, row_id: rowId, patch });
+  if (error) {
+    if (/driver_update_ticket_row/.test(String(error.message))) {
+      console.warn("[driverStorage] ticket-row RPC not available yet; kept local overlay.", error.message);
+      return;
+    }
+    throw new Error(error.message);
+  }
+}
+
 function fullAddress(job: Pick<Job, "address" | "city" | "state" | "zip">) {
   return [job.address, job.city, job.state, job.zip].filter(Boolean).join(", ");
 }
@@ -119,107 +137,65 @@ function driverProfileFromEmployee(employee: EmployeeRecord): DriverProfile {
 
 function isJobAssignedToDriver(job: Job, driver: DriverProfile | null) {
   if (!driver) return false;
+  if (job.crew?.length) return job.crew.some((member) => member.employeeId === driver.employeeId || member.employeeId === driver.id);
   const names = [job.assignment?.crewLead, ...(job.assignment?.crewMembers ?? [])].filter(Boolean).map((name) => String(name).toLowerCase());
   if (names.length === 0) return true;
   const driverName = driver.displayName.toLowerCase();
   return names.some((name) => driverName.includes(name) || name.includes(driverName) || name.includes(driver.id.toLowerCase()));
 }
 
-function defaultStopForJob(job: Job): JobStop {
-  const now = new Date().toISOString();
-  return {
-    id: `stop-${job.id}-service`,
-    jobId: job.id,
-    stopOrder: 1,
-    stopType: job.facilityId ? "pickup" : "service",
-    name: job.jobLabel || job.customerName,
-    address: job.address,
-    city: job.city,
-    state: job.state ?? "AZ",
-    zip: job.zip,
-    contactName: job.customerName,
-    contactPhone: job.phone,
-    arrivalWindowStart: job.scheduledStart,
-    arrivalWindowEnd: job.scheduledEnd,
-    instructions: job.notes,
-    status: toDriverStatus(job.status) === "completed" ? "completed" : "pending",
-    createdAt: job.createdAt ?? now,
-    updatedAt: job.updatedAt ?? now,
-  };
-}
+/**
+ * Stops / items / disposal trips come from the ticket itself (`jobs.data`).
+ * The local operational cache only carries what the driver did on this phone
+ * (activity, photos, messages, issues) plus optimistic stop/item status
+ * updates that overlay the ticket until the next server read.
+ */
+function operationalRows(job: Job, cache: OperationalCache) {
+  const byId = <T extends { id: string }>(rows: T[]) => new Map(rows.map((row) => [row.id, row]));
+  const cachedStops = byId(cache.stops.filter((stop) => stop.jobId === job.id));
+  const cachedItems = byId(cache.items.filter((item) => item.jobId === job.id));
+  const cachedDisposal = byId((cache.disposalEvents ?? []).filter((event) => event.jobId === job.id));
+  const newer = (ticket: { updatedAt: string }, local: { updatedAt: string } | undefined) =>
+    local && new Date(local.updatedAt).getTime() > new Date(ticket.updatedAt).getTime() ? local : ticket;
 
-function defaultDisposalStopForJob(job: Job): JobStop | null {
-  return null;
-}
+  const stops = (job.stops ?? []).map((stop) => newer(stop, cachedStops.get(stop.id)) as JobStop);
+  const items = (job.items ?? []).map((item) => newer(item, cachedItems.get(item.id)) as JobItem);
+  const disposalEvents = (job.disposalEvents ?? []).map((event) => newer(event, cachedDisposal.get(event.id)) as JobDisposalEvent);
 
-function defaultDisposalEventForJob(job: Job): JobDisposalEvent | null {
-  if (!job.facilityName && !job.facilityId) return null;
-  const now = new Date().toISOString();
   return {
-    id: `disposal-${job.id}-1`,
-    jobId: job.id,
-    facilityId: job.facilityId,
-    facilityName: job.facilityName,
-    materialType: job.materialName ?? job.materialType,
-    sequenceNumber: 1,
-    status: "planned",
-    planned: true,
-    notes: "Dispatch-planned disposal trip. Facility may be reassigned by dispatch.",
-    createdAt: job.createdAt ?? now,
-    updatedAt: job.updatedAt ?? now,
-  };
-}
-
-function defaultItemForJob(job: Job, stopId: string): JobItem {
-  const now = new Date().toISOString();
-  return {
-    id: `item-${job.id}-primary`,
-    jobId: job.id,
-    stopId,
-    name: job.materialName || job.jobLabel || "Assigned items",
-    quantity: 1,
-    category: job.materialType,
-    estimatedWeightLbs: job.estimatedWeightLbs,
-    oversized: (job.cubicYards ?? 0) >= 8,
-    fragile: false,
-    heavy: (job.estimatedWeightLbs ?? 0) >= 700,
-    disassemblyRequired: false,
-    reassemblyRequired: false,
-    instructions: job.notes,
-    status: toDriverStatus(job.status) === "completed" ? "completed" : "pending",
-    createdAt: job.createdAt ?? now,
-    updatedAt: job.updatedAt ?? now,
-  };
-}
-
-function ensureOperationalRows(job: Job, cache: OperationalCache) {
-  const existingStops = cache.stops.filter((stop) => stop.jobId === job.id);
-  const stops = existingStops.length > 0 ? existingStops : [defaultStopForJob(job), defaultDisposalStopForJob(job)].filter(Boolean) as JobStop[];
-  const existingItems = cache.items.filter((item) => item.jobId === job.id);
-  const items = existingItems.length > 0 ? existingItems : [defaultItemForJob(job, stops[0].id)];
-  const existingDisposalEvents = (cache.disposalEvents ?? []).filter((event) => event.jobId === job.id);
-  const defaultDisposal = defaultDisposalEventForJob(job);
-  const disposalEvents = existingDisposalEvents.length > 0 ? existingDisposalEvents : defaultDisposal ? [defaultDisposal] : [];
-  return {
-    stops: stops.sort((a, b) => a.stopOrder - b.stopOrder),
+    stops: [...stops].sort((a, b) => a.stopOrder - b.stopOrder),
     items,
     activity: cache.activity.filter((activity) => activity.jobId === job.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     photos: cache.photos.filter((photo) => photo.jobId === job.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    disposalEvents: disposalEvents.sort((a, b) => a.sequenceNumber - b.sequenceNumber),
+    disposalEvents: [...disposalEvents].sort((a, b) => a.sequenceNumber - b.sequenceNumber),
     messages: cache.messages.filter((message) => message.jobId === job.id).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
     issues: cache.issues.filter((issue) => issue.jobId === job.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
   };
 }
 
-export function toDriverJob(job: Job, cache = readJson(OPERATIONAL_CACHE_KEY, emptyOperationalCache()), driver?: DriverProfile | null): DriverJob {
-  const rows = ensureOperationalRows(job, cache);
-  const crewNames = [job.assignment?.crewLead, ...(job.assignment?.crewMembers ?? [])].filter(Boolean) as string[];
-  const assignedCrew: DriverProfile[] = crewNames.map((name, index) => ({
-    id: `crew-${job.id}-${index}`,
-    displayName: name,
-    role: "driver" as const,
-    status: "active" as const,
-  }));
+type CrewWithNames = Array<{ employeeId: string; role: string; name?: string }>;
+
+export function toDriverJob(rawJob: Job, cache = readJson(OPERATIONAL_CACHE_KEY, emptyOperationalCache()), driver?: DriverProfile | null): DriverJob {
+  const job = normalizeJob(rawJob);
+  const rows = operationalRows(job, cache);
+  // Crew names: the driver RPC resolves them server-side (`name`); the office
+  // resolves from its employee list; legacy tickets fall back to stored names.
+  const employees = getEmployees();
+  const crew = (job.crew ?? []) as CrewWithNames;
+  const assignedCrew: DriverProfile[] = crew.map((member) => {
+    const employee = employees.find((item) => item.id === member.employeeId);
+    return {
+      id: member.employeeId,
+      employeeId: member.employeeId,
+      displayName: member.name || (employee ? employeeName(employee) : driver?.employeeId === member.employeeId ? driver.displayName : "Crew"),
+      role: member.role === "lead" ? "dispatcher" : "driver",
+      status: "active" as const,
+    };
+  });
+  if (assignedCrew.length === 0) {
+    const legacyNames = [job.assignment?.crewLead, ...(job.assignment?.crewMembers ?? [])].filter(Boolean) as string[];
+    legacyNames.forEach((name, index) => assignedCrew.push({ id: `crew-${job.id}-${index}`, displayName: name, role: "driver", status: "active" }));
+  }
   if (driver && assignedCrew.length === 0) assignedCrew.push(driver);
 
   return {
@@ -235,15 +211,18 @@ export function toDriverJob(job: Job, cache = readJson(OPERATIONAL_CACHE_KEY, em
     scheduledStart: job.scheduledStart,
     scheduledEnd: job.scheduledEnd,
     status: job.status,
-    vehicleId: job.vehicleId ?? job.assignment?.vehicleId,
-    vehicleName: job.vehicleName ?? job.assignment?.vehicleName,
+    vehicleId: job.vehicleId,
+    vehicleName: job.vehicleName,
     assignment: job.assignment,
     notes: job.notes,
     internalNotes: job.internalNotes,
     materialName: job.materialName,
     materialType: job.materialType,
     updatedAt: job.updatedAt,
-    serviceType: job.materialName || job.jobLabel || "Junk removal",
+    serviceType: serviceTypeLabel(job),
+    serviceTypeKey: job.serviceType,
+    movingKind: job.movingKind,
+    requiredCrew: job.requiredCrew,
     instructionsChanged: rows.activity.some((entry) => entry.eventType === "scope_change"),
     assignedCrew,
     ...rows,
@@ -274,11 +253,11 @@ export async function loadDriverToday(): Promise<DriverTodayData> {
     if (!error && Array.isArray(data)) {
       const remoteJobs = data.map((row: { job: Job; stops?: JobStop[]; items?: JobItem[]; activity?: JobActivity[]; photos?: JobPhoto[]; disposalEvents?: JobDisposalEvent[]; messages?: JobMessage[]; issues?: JobIssue[] }) => {
         const mergedCache: OperationalCache = {
-          stops: row.stops ?? cache.stops ?? [],
-          items: row.items ?? cache.items ?? [],
+          stops: cache.stops ?? [],
+          items: cache.items ?? [],
           activity: row.activity ?? cache.activity ?? [],
           photos: row.photos ?? cache.photos ?? [],
-          disposalEvents: row.disposalEvents ?? cache.disposalEvents ?? [],
+          disposalEvents: cache.disposalEvents ?? [],
           messages: row.messages ?? cache.messages ?? [],
           issues: row.issues ?? cache.issues ?? [],
         };
@@ -351,6 +330,7 @@ export async function updateStopStatus(stop: JobStop, status: JobStopStatus) {
   if (blocking && status === "completed") throw new Error("A blocking issue requires dispatch resolution before completing this stop.");
   const now = new Date().toISOString();
   const updated = { ...stop, status, arrivedAt: status === "arrived" ? now : stop.arrivedAt, completedAt: status === "completed" ? now : stop.completedAt, updatedAt: now };
+  // Optimistic overlay on this phone; the ticket is updated through the RPC.
   upsertOperational("stops", updated);
   upsertOperational("activity", {
     id: id("activity"),
@@ -360,26 +340,11 @@ export async function updateStopStatus(stop: JobStop, status: JobStopStatus) {
     createdAt: now,
   });
 
-  if (supabase && await ensureSession()) {
-    await (supabase as any).from("job_stops").upsert({
-      id: updated.id,
-      job_id: updated.jobId,
-      stop_order: updated.stopOrder,
-      stop_type: updated.stopType,
-      name: updated.name,
-      address: updated.address ?? null,
-      city: updated.city ?? null,
-      state: updated.state ?? null,
-      zip: updated.zip ?? null,
-      contact_name: updated.contactName ?? null,
-      contact_phone: updated.contactPhone ?? null,
-      arrival_window_start: updated.arrivalWindowStart ?? null,
-      arrival_window_end: updated.arrivalWindowEnd ?? null,
-      instructions: updated.instructions ?? null,
-      status: updated.status,
-      arrived_at: updated.arrivedAt ?? null,
-      completed_at: updated.completedAt ?? null,
-    });
+  if (supabase) {
+    await patchTicketRow(stop.jobId, "stops", stop.id, { status: updated.status, arrivedAt: updated.arrivedAt ?? null, completedAt: updated.completedAt ?? null });
+  } else {
+    const job = getJobs().find((item) => item.id === stop.jobId);
+    if (job) updateJob(job.id, { stops: job.stops.map((item) => (item.id === stop.id ? updated : item)) });
   }
 }
 
@@ -395,24 +360,11 @@ export async function updateItemStatus(item: JobItem, status: JobItemStatus) {
     createdAt: now,
   });
 
-  if (supabase && await ensureSession()) {
-    await (supabase as any).from("job_items").upsert({
-      id: updated.id,
-      job_id: updated.jobId,
-      stop_id: updated.stopId ?? null,
-      name: updated.name,
-      quantity: updated.quantity,
-      category: updated.category ?? null,
-      estimated_weight_lbs: updated.estimatedWeightLbs ?? null,
-      oversized: updated.oversized,
-      fragile: updated.fragile,
-      heavy: updated.heavy,
-      disassembly_required: updated.disassemblyRequired,
-      reassembly_required: updated.reassemblyRequired,
-      destination_stop_id: updated.destinationStopId ?? null,
-      instructions: updated.instructions ?? null,
-      status: updated.status,
-    });
+  if (supabase) {
+    await patchTicketRow(item.jobId, "items", item.id, { status: updated.status });
+  } else {
+    const job = getJobs().find((entry) => entry.id === item.jobId);
+    if (job) updateJob(job.id, { items: job.items.map((entry) => (entry.id === item.id ? updated : entry)) });
   }
 }
 
@@ -698,20 +650,15 @@ export async function updateDisposalEventStatus(event: JobDisposalEvent, status:
   });
   window.dispatchEvent(new Event("driver-data-updated"));
 
-  if (supabase && await ensureSession()) {
-    await (supabase as any).rpc("driver_update_disposal_event_status", {
-      target_event_id: event.id,
-      next_status: status,
-      note: `Disposal Trip ${event.sequenceNumber} marked ${status.replaceAll("_", " ")}.`,
-    });
-  }
+  await patchTicketRow(event.jobId, "disposalEvents", event.id, {
+    status: updated.status,
+    arrivedAt: updated.arrivedAt ?? null,
+    unloadingStartedAt: updated.unloadingStartedAt ?? null,
+    unloadingCompletedAt: updated.unloadingCompletedAt ?? null,
+    departedAt: updated.departedAt ?? null,
+  });
 }
 
-/**
- * Driver diverts a disposal trip to a different facility (closed, load
- * rejected, ...). Updates the local disposal event and notes it in the
- * activity log; dispatch sees the change via the shared jobs/driver data.
- */
 export type DriverFacility = { id: string; facilityName: string; address?: string; city?: string };
 export async function loadDriverFacilities(): Promise<DriverFacility[]> {
   if (!supabase) return loadPricingSettings().disposalFacilities.filter(f => f.isActive);
@@ -750,12 +697,7 @@ export async function updateDisposalEventFacility(event: JobDisposalEvent, facil
   });
   window.dispatchEvent(new Event("driver-data-updated"));
 
-  if (supabase && await ensureSession()) {
-    await (supabase as any)
-      .from("job_disposal_events")
-      .update({ facility_id: facility.id, facility_name: facility.facilityName })
-      .eq("id", event.id);
-  }
+  await patchTicketRow(event.jobId, "disposalEvents", event.id, { facilityId: facility.id, facilityName: facility.facilityName, facilityAddress: updated.facilityAddress ?? null });
 }
 
 // ---------------------------------------------------------------------------

@@ -1,9 +1,10 @@
 import { addClientNote, findClientByContact } from "@/lib/clientStorage";
 import { employeeName, getEmployees } from "@/lib/employeeStorage";
+import { crewFromRoles, requiredCrewFor, serviceTypeLabels } from "@/lib/jobShape";
 import { getJobs, saveJob, updateJob } from "@/lib/jobStorage";
 import { ensureSession, supabase } from "@/lib/supabase";
 import type { EmployeeRecord } from "@/types/employees";
-import type { Job, JobLeadSource, JobPriority, JobServiceType } from "@/types/jobs";
+import type { CanonicalJobServiceType, DeliveryKind, Job, JobCrewMember, JobLeadSource, JobPriority, JobServiceType, MovingKind } from "@/types/jobs";
 import type {
   AddedScopeReviewStatus,
   JobActivity,
@@ -37,7 +38,9 @@ export type DispatchAssignmentInput = {
   crewLeadId?: string;
   driverId?: string;
   helperIds: string[];
+  /** Fleet unit id (spr-01 … box-01). */
   vehicleId?: string;
+  /** @deprecated display only — resolved from `vehicleId` on save. */
   vehicleName?: string;
   crewSequence?: number;
 };
@@ -47,7 +50,12 @@ export type DispatchJobInput = {
   phone?: string;
   email?: string;
   leadSource?: JobLeadSource;
-  serviceType?: JobServiceType;
+  serviceType: JobServiceType;
+  movingKind?: MovingKind;
+  deliveryKind?: DeliveryKind;
+  /** Dispatcher may raise the safety floor, never lower it. */
+  requiredCrew?: number;
+  clientId?: string;
   jobLabel?: string;
   scheduledStart?: string;
   scheduledEnd?: string;
@@ -96,16 +104,6 @@ function id(prefix: string) {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function employeeById(employeeId?: string) {
-  if (!employeeId) return undefined;
-  return getEmployees().find((employee) => employee.id === employeeId);
-}
-
-function employeeDisplay(employeeId?: string) {
-  const employee = employeeById(employeeId);
-  return employee ? employeeName(employee) : undefined;
-}
-
 function cache() {
   return readJson(OPERATIONAL_CACHE_KEY, emptyOperationalCache());
 }
@@ -131,42 +129,30 @@ export function getDispatchOperationalCache() {
 export function getDispatchJobView(job: Job) {
   const current = cache();
   return {
-    assignments: (current.assignments ?? []).filter((assignment) => assignment.jobId === job.id),
-    stops: current.stops.filter((stop) => stop.jobId === job.id).sort((a, b) => a.stopOrder - b.stopOrder),
-    items: current.items.filter((item) => item.jobId === job.id),
+    assignments: [] as JobAssignmentRecord[],
+    stops: [...(job.stops ?? [])].sort((a, b) => a.stopOrder - b.stopOrder),
+    items: job.items ?? [],
     activity: current.activity.filter((entry) => entry.jobId === job.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     photos: current.photos.filter((photo) => photo.jobId === job.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    disposalEvents: (current.disposalEvents ?? []).filter((event) => event.jobId === job.id).sort((a, b) => a.sequenceNumber - b.sequenceNumber),
+    disposalEvents: [...(job.disposalEvents ?? [])].sort((a, b) => a.sequenceNumber - b.sequenceNumber),
     messages: current.messages.filter((message) => message.jobId === job.id).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
     issues: current.issues.filter((issue) => issue.jobId === job.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
   };
 }
 
-function assignmentRecords(jobId: string, assignment: DispatchAssignmentInput): JobAssignmentRecord[] {
-  const now = new Date().toISOString();
-  const records: JobAssignmentRecord[] = [];
-  if (assignment.crewLeadId) records.push({ id: id("assignment"), jobId, employeeId: assignment.crewLeadId, role: "crew_lead", createdAt: now });
-  if (assignment.driverId && assignment.driverId !== assignment.crewLeadId) records.push({ id: id("assignment"), jobId, employeeId: assignment.driverId, role: "driver", createdAt: now });
-  for (const helperId of assignment.helperIds.filter(Boolean)) {
-    if (helperId !== assignment.crewLeadId && helperId !== assignment.driverId) records.push({ id: id("assignment"), jobId, employeeId: helperId, role: "helper", createdAt: now });
-  }
-  return records;
+export function crewFromAssignmentInput(assignment: DispatchAssignmentInput): JobCrewMember[] {
+  return crewFromRoles(assignment);
 }
 
-function legacyAssignment(assignment: DispatchAssignmentInput) {
-  const helperNames = assignment.helperIds.map(employeeDisplay).filter(Boolean) as string[];
-  return {
-    crewLead: employeeDisplay(assignment.crewLeadId) || employeeDisplay(assignment.driverId),
-    crewMembers: helperNames,
-    employeeIds: Array.from(new Set([assignment.crewLeadId, assignment.driverId, ...assignment.helperIds].filter((id): id is string => Boolean(id)))),
-    vehicleId: assignment.vehicleId,
-    vehicleName: assignment.vehicleName,
-  };
-}
-
+/**
+ * Create a ticket from the New Job form. Stops, items, crew and vehicle live ON
+ * the job record (`jobs.data`) — nothing is written to the dead `job_stops` /
+ * `job_items` tables or the per-browser operational blob any more.
+ */
 export async function createDispatchJob(input: DispatchJobInput, mode: "draft" | "assign" = "assign") {
   const now = new Date().toISOString();
-  const firstStop = input.stops[0];
+  const crew = crewFromAssignmentInput(input.assignment);
+  const requiredCrew = Math.max(requiredCrewFor(input), input.requiredCrew ?? 0);
   const job = saveJob({
     id: "",
     jobNumber: "",
@@ -177,21 +163,23 @@ export async function createDispatchJob(input: DispatchJobInput, mode: "draft" |
     jobLabel: input.jobLabel,
     phone: input.phone,
     email: input.email,
-    address: firstStop?.address,
-    city: firstStop?.city,
-    state: firstStop?.state,
-    zip: firstStop?.zip,
     scheduledStart: input.scheduledStart,
     scheduledEnd: input.scheduledEnd,
     status: mode === "draft" ? "open" : "assigned",
     paymentStatus: "unpaid",
     leadSource: input.leadSource,
+    clientId: input.clientId,
     serviceType: input.serviceType,
+    movingKind: input.movingKind,
+    deliveryKind: input.deliveryKind,
+    requiredCrew,
+    crew,
+    stops: input.stops,
+    items: input.items,
     priority: input.priority ?? "normal",
     estimatedDurationMinutes: input.estimatedDurationMinutes,
     crewSequence: input.assignment.crewSequence,
     vehicleId: input.assignment.vehicleId,
-    vehicleName: input.assignment.vehicleName,
     quotedAmount: input.quotedAmount ?? 0,
     estimatedCost: input.estimatedCost,
     estimatedProfit: input.estimatedProfit,
@@ -199,20 +187,21 @@ export async function createDispatchJob(input: DispatchJobInput, mode: "draft" |
     actuals: { chargedAmount: input.quotedAmount ?? 0 },
     notes: input.notes,
     internalNotes: input.internalNotes,
-    assignment: legacyAssignment(input.assignment),
   });
 
-  await saveDispatchOperationalPlan(job.id, {
-    stops: input.stops,
-    items: input.items,
-    disposalEvents: plannedDisposalEvents(job),
-    assignment: input.assignment,
-    activityMessage: mode === "draft" ? "Dispatch saved job draft." : "Dispatch created and assigned job.",
-  });
+  if (job.facilityId || job.facilityName) {
+    updateJob(job.id, { disposalEvents: plannedDisposalEvents(job) });
+  }
+  appendActivity(job.id, mode === "draft" ? "Dispatch saved job draft." : "Dispatch created and assigned job.", mode === "draft" ? "scope_change" : "assignment_changed");
 
   return job;
 }
 
+/**
+ * Update the operational plan of an existing ticket. Stops / items / crew /
+ * vehicle / disposal trips are written onto the job record; only the activity
+ * log still lives in the local operational cache.
+ */
 export async function saveDispatchOperationalPlan(
   jobId: string,
   input: {
@@ -225,118 +214,29 @@ export async function saveDispatchOperationalPlan(
   },
 ) {
   const now = new Date().toISOString();
-  const next = cache();
-
-  if (input.stops) {
-    next.stops = [
-      ...input.stops.map((stop, index) => ({ ...stop, id: stop.id || id("stop"), jobId, stopOrder: index + 1, updatedAt: now, createdAt: stop.createdAt || now })),
-      ...next.stops.filter((stop) => stop.jobId !== jobId),
-    ];
-  }
-
-  if (input.items) {
-    next.items = [
-      ...input.items.map((item) => ({ ...item, id: item.id || id("item"), jobId, updatedAt: now, createdAt: item.createdAt || now })),
-      ...next.items.filter((item) => item.jobId !== jobId),
-    ];
-  }
-
-  if (input.disposalEvents) {
-    next.disposalEvents = [
-      ...input.disposalEvents.map((event, index) => ({ ...event, id: event.id || id("disposal"), jobId, sequenceNumber: index + 1, updatedAt: now, createdAt: event.createdAt || now })),
-      ...(next.disposalEvents ?? []).filter((event) => event.jobId !== jobId),
-    ];
-  }
-
-  if (input.assignment) {
-    const records = assignmentRecords(jobId, input.assignment);
-    next.assignments = [...records, ...(next.assignments ?? []).filter((assignment) => assignment.jobId !== jobId)];
-    const currentJob = getJobs().find((job) => job.id === jobId);
-    if (currentJob) {
-      updateJob(jobId, {
-        status: currentJob.status === "open" ? "assigned" : currentJob.status,
-        vehicleId: input.assignment.vehicleId,
-        vehicleName: input.assignment.vehicleName,
-        crewSequence: input.assignment.crewSequence,
-        assignment: legacyAssignment(input.assignment),
-      });
+  const currentJob = getJobs().find((job) => job.id === jobId);
+  if (currentJob) {
+    const updates: Partial<Job> = {};
+    if (input.stops) {
+      updates.stops = input.stops.map((stop, index) => ({ ...stop, id: stop.id || id("stop"), jobId, stopOrder: index + 1, updatedAt: now, createdAt: stop.createdAt || now }));
     }
+    if (input.items) {
+      updates.items = input.items.map((item) => ({ ...item, id: item.id || id("item"), jobId, updatedAt: now, createdAt: item.createdAt || now }));
+    }
+    if (input.disposalEvents) {
+      updates.disposalEvents = input.disposalEvents.map((event, index) => ({ ...event, id: event.id || id("disposal"), jobId, sequenceNumber: index + 1, updatedAt: now, createdAt: event.createdAt || now }));
+    }
+    if (input.assignment) {
+      updates.crew = crewFromAssignmentInput(input.assignment);
+      updates.vehicleId = input.assignment.vehicleId;
+      updates.crewSequence = input.assignment.crewSequence;
+      if (currentJob.status === "open" && updates.crew.length > 0) updates.status = "assigned";
+    }
+    if (Object.keys(updates).length > 0) updateJob(jobId, updates);
   }
 
   const eventType: JobActivity["eventType"] = input.instructionUpdate ? "scope_change" : input.assignment ? "assignment_changed" : "scope_change";
-  next.activity = [
-    {
-      id: id("activity"),
-      jobId,
-      eventType,
-      message: input.instructionUpdate || input.activityMessage || "Dispatch updated operational plan.",
-      createdAt: now,
-    },
-    ...next.activity,
-  ];
-  writeCache(next);
-
-  if (supabase && await ensureSession()) {
-    if (input.stops?.length) {
-      await (supabase as any).from("job_stops").upsert(input.stops.map((stop, index) => ({
-        id: stop.id,
-        job_id: jobId,
-        stop_order: index + 1,
-        stop_type: stop.stopType,
-        name: stop.name,
-        address: stop.address ?? null,
-        city: stop.city ?? null,
-        state: stop.state ?? null,
-        zip: stop.zip ?? null,
-        contact_name: stop.contactName ?? null,
-        contact_phone: stop.contactPhone ?? null,
-        arrival_window_start: stop.arrivalWindowStart ?? null,
-        arrival_window_end: stop.arrivalWindowEnd ?? null,
-        instructions: stop.instructions ?? null,
-        status: stop.status,
-      })));
-    }
-    if (input.items?.length) {
-      await (supabase as any).from("job_items").upsert(input.items.map((item) => ({
-        id: item.id,
-        job_id: jobId,
-        stop_id: item.stopId ?? null,
-        name: item.name,
-        quantity: item.quantity,
-        category: item.category ?? null,
-        estimated_weight_lbs: item.estimatedWeightLbs ?? null,
-        oversized: item.oversized,
-        fragile: item.fragile,
-        heavy: item.heavy,
-        disassembly_required: item.disassemblyRequired,
-        reassembly_required: item.reassemblyRequired,
-        destination_stop_id: item.destinationStopId ?? null,
-        instructions: item.instructions ?? null,
-        status: item.status,
-      })));
-    }
-    if (input.disposalEvents?.length) {
-      await (supabase as any).from("job_disposal_events").upsert(input.disposalEvents.map((event, index) => ({
-        id: event.id,
-        job_id: jobId,
-        facility_id: event.facilityId ?? null,
-        facility_name: event.facilityName ?? null,
-        facility_address: event.facilityAddress ?? null,
-        material_type: event.materialType ?? null,
-        sequence_number: index + 1,
-        status: event.status,
-        planned: event.planned,
-        gross_weight_lbs: event.grossWeightLbs ?? null,
-        tare_weight_lbs: event.tareWeightLbs ?? null,
-        net_weight_lbs: event.netWeightLbs ?? null,
-        net_weight_tons: event.netWeightTons ?? null,
-        disposal_cost: event.disposalCost ?? null,
-        receipt_number: event.receiptNumber ?? null,
-        scale_ticket_number: event.scaleTicketNumber ?? null,
-        notes: event.notes ?? null,
-      })));
-    }
-  }
+  appendActivity(jobId, input.instructionUpdate || input.activityMessage || "Dispatch updated operational plan.", eventType);
 }
 
 function plannedDisposalEvents(job: Job): JobDisposalEvent[] {
@@ -392,11 +292,12 @@ export async function saveServiceStopCoordinates(input: {
   longitude?: number;
   clear?: boolean;
 }) {
-  const next = cache();
+  const job = getJobs().find((item) => item.id === input.jobId);
+  if (!job) return false;
   const stop =
     input.stopId
-      ? next.stops.find((item) => item.id === input.stopId)
-      : next.stops.filter((item) => item.jobId === input.jobId && item.stopType !== "disposal").sort((a, b) => a.stopOrder - b.stopOrder)[0];
+      ? job.stops.find((item) => item.id === input.stopId)
+      : job.stops.filter((item) => item.stopType !== "disposal").sort((a, b) => a.stopOrder - b.stopOrder)[0];
   if (!stop) return false;
 
   const updated: JobStop = {
@@ -405,26 +306,13 @@ export async function saveServiceStopCoordinates(input: {
     longitude: input.clear ? undefined : input.longitude,
     updatedAt: new Date().toISOString(),
   };
-  next.stops = [updated, ...next.stops.filter((item) => item.id !== stop.id)];
-  next.activity = [
-    {
-      id: id("activity"),
-      jobId: input.jobId,
-      eventType: "scope_change",
-      message: input.clear ? "Dispatch cleared service location coordinates." : "Dispatch geocoded service location.",
-      metadata: { stopId: stop.id, latitude: updated.latitude, longitude: updated.longitude },
-      createdAt: new Date().toISOString(),
-    },
-    ...next.activity,
-  ];
-  writeCache(next);
-
-  if (supabase && await ensureSession()) {
-    await (supabase as any)
-      .from("job_stops")
-      .update({ latitude: updated.latitude ?? null, longitude: updated.longitude ?? null })
-      .eq("id", stop.id);
-  }
+  updateJob(job.id, { stops: job.stops.map((item) => (item.id === stop.id ? updated : item)) });
+  appendActivity(
+    input.jobId,
+    input.clear ? "Dispatch cleared service location coordinates." : "Dispatch geocoded service location.",
+    "scope_change",
+    { stopId: stop.id, latitude: updated.latitude, longitude: updated.longitude },
+  );
   return true;
 }
 
@@ -515,18 +403,9 @@ export function employeeLabel(employee?: EmployeeRecord) {
   return employee ? `${employeeName(employee)} · ${employee.role}` : "";
 }
 
-export const serviceTypeOptions: Array<{ value: JobServiceType; label: string }> = [
-  { value: "junk_removal", label: "Junk removal" },
-  { value: "moving", label: "Moving" },
-  { value: "labor_only", label: "Labor only" },
-  { value: "furniture_assembly", label: "Furniture assembly" },
-  { value: "appliance_moving", label: "Appliance moving" },
-  { value: "heavy_material_hauling", label: "Heavy material hauling" },
-  { value: "delivery", label: "Delivery" },
-  { value: "demolition", label: "Demolition" },
-  { value: "specialty_moving", label: "Specialty moving" },
-  { value: "other", label: "Other" },
-];
+export const serviceTypeOptions: Array<{ value: CanonicalJobServiceType; label: string }> = (
+  ["moving", "delivery", "assembly_handyman", "junk_removal", "other"] as CanonicalJobServiceType[]
+).map((value) => ({ value, label: serviceTypeLabels[value] }));
 
 export const leadSourceOptions: Array<{ value: JobLeadSource; label: string }> = [
   { value: "thumbtack", label: "Thumbtack" },

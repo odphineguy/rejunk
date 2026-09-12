@@ -1,4 +1,4 @@
-import type { Job, DriverJobStatus } from "@/types/jobs";
+import type { Job, DriverJobStatus, JobServiceType, MovingKind } from "@/types/jobs";
 
 export type EmployeeAppRole = "admin" | "dispatcher" | "driver";
 
@@ -235,7 +235,11 @@ export type DriverJob = Pick<
   | "materialType"
   | "updatedAt"
 > & {
+  /** Display label ("Moving · 2BR package"); `serviceTypeKey` is the canonical key. */
   serviceType?: string;
+  serviceTypeKey?: JobServiceType;
+  movingKind?: MovingKind;
+  requiredCrew?: number;
   stops: JobStop[];
   items: JobItem[];
   activity: JobActivity[];

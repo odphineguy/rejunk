@@ -23,6 +23,7 @@ import {
 } from "@/lib/driverStorage";
 import { toDriverStatus } from "@/lib/jobStatus";
 import { jobOperationalMetrics, pluralize } from "@/lib/operationalMetrics";
+import { fleetVehicles } from "@/lib/fleet";
 import { loadPricingSettings } from "@/utils/pricingStorage";
 import { cn } from "@/lib/utils";
 import type { DriverJob, DriverTodayData, DriverWorkdayStatus, VehicleDowntimeReason } from "@/types/driver";
@@ -120,7 +121,7 @@ export default function DriverHome() {
   const [downtimeReason, setDowntimeReason] = useState<VehicleDowntimeReason>("mechanical");
   const [, setClockTick] = useState(0);
 
-  const vehicles = useMemo(() => loadPricingSettings().vehicles.filter((vehicle) => vehicle.isActive !== false), []);
+  const vehicles = useMemo(() => fleetVehicles(loadPricingSettings().vehicles), []);
 
   const refresh = async () => setToday(await loadDriverToday());
 

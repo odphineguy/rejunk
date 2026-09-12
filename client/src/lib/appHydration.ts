@@ -12,6 +12,7 @@ import { hydratePayments } from "@/lib/paymentStorage";
  */
 
 import { hydrateClients } from "@/lib/clientStorage";
+import { hydrateEmployees } from "@/lib/employeeStorage";
 import { hydrateJobs } from "@/lib/jobStorage";
 import { hydrateThumbtackLeads } from "@/lib/leadsStorage";
 import { hydratePricebook } from "@/lib/pricebookStorage";
@@ -29,6 +30,7 @@ async function hydrateOffice() {
     hydrateJobs(),
     hydratePricebook(),
     hydrateClients(),
+    hydrateEmployees(),
     hydratePayments(),
     hydrateSettings(),
     hydrateThumbtackLeads(),

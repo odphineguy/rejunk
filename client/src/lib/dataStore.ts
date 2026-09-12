@@ -21,6 +21,7 @@ import type {
 } from "@/types/pricing";
 import type { Job } from "@/types/jobs";
 import type { ClientRecord } from "@/types/clients";
+import type { EmployeeRecord } from "@/types/employees";
 import type {
   PricebookCategory,
   PricebookCrewSize,
@@ -40,6 +41,7 @@ type DefaultsRow = Tables["pricing_defaults"]["Row"];
 type EstimateRow = Tables["saved_estimates"]["Row"];
 type JobRow = Tables["jobs"]["Row"];
 type ClientRow = Tables["clients"]["Row"];
+type EmployeeRow = Tables["app_employees"]["Row"];
 
 // ---------------------------------------------------------------------------
 // Row -> domain mappers
@@ -100,6 +102,7 @@ function vehicleToRow(v: Vehicle): Tables["vehicles"]["Insert"] {
     notes: v.notes ?? null,
     is_default: v.isDefault,
     is_active: v.isActive,
+    is_template: v.isTemplate ?? false,
   };
 }
 
@@ -432,6 +435,58 @@ export async function deleteClientRemote(id: string): Promise<void> {
   const ok = await ensureSession();
   if (!ok) return;
   const { error } = await supabase.from("clients").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Employees (full EmployeeRecord snapshot in `app_employees.data`, tenant-scoped;
+// RLS lets any bound office login read/write — see migration
+// 20260912000001_app_employees_fleet). Drivers never read this table.
+// ---------------------------------------------------------------------------
+
+export async function loadEmployeesRemote(): Promise<EmployeeRecord[] | null> {
+  if (!supabase) return null;
+  const ok = await ensureSession();
+  if (!ok) return null;
+
+  const { data, error } = await supabase
+    .from("app_employees")
+    .select("*")
+    .eq("tenant_id", APP_TENANT_ID);
+  if (error) {
+    console.error("[dataStore] Failed to load employees:", error.message);
+    return null;
+  }
+  return (data ?? []).map((row: EmployeeRow) => ({
+    ...(row.data as unknown as EmployeeRecord),
+    id: row.id,
+  }));
+}
+
+export async function upsertEmployeeRemote(employee: EmployeeRecord): Promise<void> {
+  if (!supabase) return;
+  const ok = await ensureSession();
+  if (!ok) return;
+
+  const { error } = await supabase.from("app_employees").upsert({
+    id: employee.id,
+    tenant_id: APP_TENANT_ID,
+    first_name: employee.firstName ?? "",
+    last_name: employee.lastName ?? "",
+    role: employee.role,
+    status: employee.status,
+    field_tech: Boolean(employee.fieldTech),
+    data: employee as unknown as Database["public"]["Tables"]["app_employees"]["Insert"]["data"],
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw error;
+}
+
+export async function deleteEmployeeRemote(id: string): Promise<void> {
+  if (!supabase) return;
+  const ok = await ensureSession();
+  if (!ok) return;
+  const { error } = await supabase.from("app_employees").delete().eq("id", id).eq("tenant_id", APP_TENANT_ID);
   if (error) throw error;
 }
 

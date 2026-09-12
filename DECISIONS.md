@@ -10,6 +10,51 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
 
 ---
 
+## 2026-09-12 — Ticket redesign phases 0 + 1: service-type-first tickets, stops/crew ON the job, employees on Supabase
+
+**Decision**
+Executed `JOB_TICKET_REDESIGN_SPEC.md` phase 0 (D3 employees → `app_employees`, D4 fleet-only
+pickers via `vehicles.is_template`) and phase 1 (D1 service type required with five canonical values +
+read aliases, D2 stops / items / crew / vehicle / disposal trips stored inside `jobs.data`, a read-side
+`normalizeJob()` + write-side `prepareJobForWrite()` adapter in `lib/jobShape.ts`, crew safety floors
+and the Phoenix weekend rule, the New Job form writing the new shape, the Job detail assignment editor
+rebuilt so it no longer wipes `vehicleId`, and the driver payload built from the ticket instead of
+junk heuristics). Migration `20260912000001` is live; `20260912000002` (driver allowlist + crew-based
+authorization + office projection + `driver_update_ticket_row`) is written but awaits Abe's approval.
+
+**Deviations from the spec (repo wins, said out loud)**
+1. **Junk fields stay flat** (`materialType`, `facilityId`, `actuals`, …) instead of nesting under
+   `junk: {…}`. Dozens of readers (Jobs list, Job detail cards, recommendations, receipts) depend on the
+   flat names and the office/owner projections allowlist them by name; nesting is a phase-4 change when
+   those cards are made junk-only.
+2. **`vehicleName` is kept as a derived display mirror** of `vehicleId` (resolved from the fleet list on
+   save) rather than deleted — the calendar, Dispatch Center and driver cards read it, and it costs
+   nothing once it's always derived.
+3. **A derived legacy `assignment` blob is still written** alongside `crew` as a transitional bridge:
+   the live `assigned_job()` (every driver RPC + photo storage policy) and `office_job()` only
+   understand the old blob until migration `20260912000002` lands. Remove after.
+4. **Templates get `is_template`, not `is_active = false`.** Setting them inactive would also hide them
+   from the Estimate Builder and the recommendation engine (which filter on `isActive`), and the dump
+   trailer has no fleet twin. The flag keeps pricing untouched and lets tickets filter.
+5. **Driver stop / item / disposal updates go through one RPC** (`driver_update_ticket_row` with an
+   allowlisted patch per collection) instead of three, and fail soft while the RPC doesn't exist yet.
+6. **`defaultJobs.ts` deleted** — nothing imported it since the demo-seed promotion was removed
+   (2026-06-12); it would only have had to be rewritten into the new shape.
+
+**Rejected**
+- A SQL migration rewriting the seven live job blobs — the read-side adapter makes it unnecessary, and
+  the blobs are fake anyway (Abe, Sep 12).
+- Letting drivers read `app_employees` for crew names — names are resolved inside `get_driver_today`
+  instead, so the driver transport keeps zero table access.
+
+**Constraints / Open risks**
+- Office-role users are degraded until `20260912000002` is applied (see CLAUDE.md migrations).
+- Phase 3 (slot-first New Job form), 4 (Jobs list / Job detail by service type), 5 (driver UI for
+  moves) and 2 (booking → ticket, the differentiator) are still open. Spec open questions 1, 2, 4, 5
+  remain; 4 was answered by doing it (table created now).
+
+---
+
 ## 2026-09-04 — Direct customers (booked by hand / found by Sam) get Client rows and a Source
 
 **Decision**

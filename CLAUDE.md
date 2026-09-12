@@ -81,8 +81,25 @@ Two distinct persistence patterns coexist:
    - localStorage (keys `junk_estimator_*`) is now only a **warm cache / offline fallback**, plus a
      one-time demo-seed promotion into an empty DB (e.g. `hydrateJobs`).
 2. **localStorage-only modules** (newer ops features, not yet on Supabase):
-   `employeeStorage.ts`, `eventStorage.ts`, `invoiceStorage.ts`, `paymentStorage.ts`.
-   Same `*-updated` window-event convention, but no remote sync.
+   `eventStorage.ts`, `invoiceStorage.ts`. Same `*-updated` window-event convention, but no remote sync.
+   (`employeeStorage.ts` moved to Supabase on 2026-09-12 — table `app_employees`, snapshot pattern,
+   hydrated by `appHydration.ts`, event `employees-updated`; drivers never read it. `paymentStorage.ts`
+   is owner-only `app_payments`.)
+   **Ticket shape (JOB_TICKET_REDESIGN_SPEC, 2026-09-12):** a job is service-type-first. `Job` carries
+   `serviceType` (five canonical values: moving / delivery / assembly_handyman / junk_removal / other;
+   old values are read-only aliases), `movingKind` / `deliveryKind`, `requiredCrew` (safety floor from
+   `lib/jobShape.ts`), `crew[] {employeeId, role}`, `stops[]`, `items[]`, `disposalEvents[]`, `dayType`
+   (Phoenix weekend rule), `paymentTerms`, `quote`, `leadRef`, `clientId`, all inside `jobs.data`.
+   `address/city/state/zip` and `vehicleName` are **derived display mirrors** (from `stops[0]` and the
+   fleet list). Every blob passes through `normalizeJob()` on read and `prepareJobForWrite()` on save
+   (`lib/jobShape.ts`) — no SQL migration for the blob. The old per-browser operational blob and the
+   never-applied `job_stops` / `job_items` tables are no longer written; only activity / photos /
+   messages / issues stay in `rejunk_driver_operational_cache_v1`. **Transitional bridge:** a derived
+   legacy `assignment` (employeeIds + names + vehicle) is still written next to `crew` until migration
+   `20260912000002_ticket_shape` is applied — remove it in `prepareJobForWrite()` after that. Vehicle
+   pickers use `lib/fleet.ts` `fleetVehicles()` (real units only; the four pricing templates carry
+   `vehicles.is_template = true`). The junk fields (material / facility / weights / actuals) are still
+   flat on the job (the spec's `junk: {…}` nesting is deferred to phase 4).
    **Read-only pipeline views** (2026-09-04): `lib/leadsStorage.ts` hydrates the last 60 days of Thumbtack
    leads from the `app_leads_v` view (one row per negotiation; `kind` = lead until booked, then client;
    status new/quoted/escalated/booked/lost; repeat count per phone; relay-number flag) and loads a
@@ -328,6 +345,25 @@ per-email limiter stays only as a backstop for emails that don't exist.
 server-only `app_contact_overrides` table for real Housecall Pro phone/email matches keyed to Thumbtack
 negotiations. RLS is enabled and `anon`/`authenticated` have no table privileges. Active office users
 receive those fields only through the staff-token-validated `contacts` action on `/api/staff`.
+
+`20260912000001_app_employees_fleet.sql` **IS applied to rejunk-prod** (2026-09-12, ticket redesign
+phase 0). Additive: `app_employees` (RLS: any bound office login, tenant `progressive`; explicit
+restrictive policy because new tables don't inherit the 2026-09-10 loop), `vehicles.is_template`
+(true on the four pricing templates), and `business_rows` office projection of vehicles gains
+`is_template`. Applied through the Supabase MCP.
+
+`20260912000002_ticket_shape.sql` is **ON DISK, NOT YET APPLIED** (2026-09-12, phase 1 — the MCP apply was
+blocked pending Abe's approval because it replaces security functions). It adds
+`app_private.job_has_employee()` (crew ids → legacy employeeIds → legacy names), rewires
+`assigned_job()` and `driver_create_thread()` through it, widens the `get_driver_today` allowlist
+(serviceType, movingKind, stops, items, crew **with names resolved from `app_employees`**,
+disposalEvents minus disposalCost, requiredCrew, dayType, paymentTerms — still no money), widens the
+office projection `app_private.office_job()` the same way (disposalEvents stay owner-only), and adds
+`driver_update_ticket_row(job, collection, row_id, patch)` for drivers ticking stops / items /
+disposal trips. **Until it is applied:** drivers get the flat address as one synthesized stop and see
+"Moving" but not the second stop; office logins can't see or save `crew` / `stops` (originals survive
+office saves); driver stop/item ticks stay on the phone only (the RPC call degrades gracefully).
+Apply it via the SQL editor or MCP as `ticket_shape`, then delete the `assignment` bridge.
 
 ## Deployment
 

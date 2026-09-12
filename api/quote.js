@@ -419,7 +419,8 @@ function vehicleFromRow(row) {
     heavyMaterialSuitable,
     notes: row.notes ?? void 0,
     isDefault: row.is_default,
-    isActive: row.is_active
+    isActive: row.is_active,
+    isTemplate: row.is_template ?? false
   };
 }
 function materialFromRow(row) {

@@ -125,6 +125,13 @@ export interface Vehicle {
   notes?: string;
   isDefault: boolean;
   isActive: boolean;
+  /**
+   * Generic pricing template (Ford Transit, ProMaster, Box Truck w/ Liftgate,
+   * 14K Dump Trailer) as opposed to a real fleet unit (SPR-01 … BOX-01).
+   * Pricing keeps reading templates by id; tickets and the calendar only ever
+   * offer fleet units (JOB_TICKET_REDESIGN_SPEC D4).
+   */
+  isTemplate?: boolean;
 }
 
 export interface MaterialPricingRule {
