@@ -312,6 +312,52 @@ assembly-tech line. That is the first concrete thing that lets Progressive turn 
 off Rejunk's calendar, and a booking page + $50 deposit (later phase, Stripe) writes the ticket David
 already scoped. Keep it read-only and tenant-scoped; the pipeline repo consumes it.
 
+### D11. Booking → ticket, automatically (the differentiator)
+
+**Today (Abe, Sep 12):** a Thumbtack booking creates an HCP job, then Abe opens the Thumbtack thread and
+hand-copies addresses, gate codes, key details, and images into the HCP job order. "75% manual."
+Everything needed to do that automatically is already in the shared database:
+
+- `negotiation_job_map` links a Thumbtack `negotiation_id` to the HCP `hcp_job_id` (populated by HCP's
+  native Thumbtack import). `hcp_appointments` carries the appointment date, totals, and status via the
+  HCP webhook. `thumbtack_messages` holds the full thread (`direction`, `text`, `sent_at`) — the same
+  thread David wrote, so it contains the quote tier, crew size, addresses, stairs, TV count, and any
+  `[TV-INSTALL]` / `[ESCALATE]` decisions.
+- **Verify in the pipeline repo:** whether Thumbtack image attachments are captured (a URL or storage
+  object per message). The app's `ThumbtackMessage` type has text only. If images aren't stored yet, the
+  pipeline needs to save them (bucket `thumbtack-media`) before this phase can attach photos to tickets.
+
+**Flow**
+
+1. **Trigger:** a new row in `negotiation_job_map` with an `hcp_job_id`, or an `hcp_appointments` insert
+   whose customer matches a Thumbtack lead. (Later, when Rejunk owns booking: the booking page itself.)
+2. **Gather:** the negotiation's messages, the lead row (name, phone, category), the HCP appointment
+   (date/time, total), and any images.
+3. **Extract** with one Claude call (server-side, service role, model `claude-sonnet-5`, structured JSON
+   output) from the thread: pickup and delivery addresses, gate codes / access notes per address, floors
+   and flights, elevator, parking, item list, wall-mounted TVs, piano type, third-party pickup, the quote
+   tier and price David stated, day type, crew size, special instructions, and a short "what the customer
+   said" summary. Each field carries a confidence and the message it came from. Never invent; leave
+   blank with `needs_review`.
+4. **Create** a ticket in `jobs.data` with `serviceType`/`movingKind` from the tier, `stops` from the
+   addresses, `crew` empty but `requiredCrew` set, `paymentTerms`, `tvInstall`, `leadRef` (negotiation +
+   HCP job ids), the photos attached (reuse the `job-photos` bucket), `quote.source = "david"`, status
+   `needs_review`, and the appointment's date + half-day pre-selected as the slot.
+5. **Review:** a "New from Thumbtack" queue on Jobs (and a Dashboard tile). Dispatch opens the ticket,
+   sees each extracted field next to the sentence it came from, fixes anything, assigns crew and vehicle,
+   and clicks **Book it**. Nothing goes to a driver before that click.
+6. **Idempotent** on `hcp_job_id`; re-running updates `needs_review` fields, never overwrites
+   dispatcher edits.
+
+**Where it runs:** the pipeline repo already owns the HCP + Thumbtack webhooks and the service-role key,
+so the extraction job belongs there (a queue worker), writing the ticket into `jobs` for tenant
+`progressive`. The app side is the review UI and the `needs_review` status. Keep the extraction prompt
+in the pipeline repo next to David's prompt so the two stay in step.
+
+**Acceptance:** for the last 20 real bookings, the auto-created ticket needs zero edits on addresses and
+gate codes in ≥ 16, and never a wrong address. Time from booking to a driver-ready ticket: under 2 minutes
+of dispatcher review.
+
 ## Phases
 
 **Phase 0 — Employees to Supabase (D3), fleet cleanup (D4).** Migration + hydration. Acceptance: crew
@@ -323,15 +369,19 @@ tables or the localStorage operational blob. `get_driver_today` allowlist migrat
 sample jobs load, re-save, and reload with stops/crew intact on a second browser; a moving job shows
 "Moving" on the driver phone with two stops.
 
-**Phase 2 — New Job form (D5) + estimate handoff (D6).** Acceptance: booking a 2BR move takes < 1 minute,
+**Phase 2 — Booking → ticket (D11).** The highest-value phase; needs only phase 1's ticket shape and the
+`needs_review` status. Pipeline-side worker + app-side review queue. If image capture is missing in the
+pipeline, ship text-only first and add photos when the bucket exists.
+
+**Phase 3 — New Job form (D5) + estimate handoff (D6).** Acceptance: booking a 2BR move takes < 1 minute,
 lands in PM Box Truck with 2 movers, blocks "Book it" with 1 mover, and the same job created from an
 estimate carries pickup/delivery/items.
 
-**Phase 3 — Jobs list, Job detail, Dispatch Center (D7).** Fix the assignment editor bugs here.
+**Phase 4 — Jobs list, Job detail, Dispatch Center (D7).** Fix the assignment editor bugs here.
 
-**Phase 4 — Driver app (D8), calendar extras (D9).**
+**Phase 5 — Driver app (D8), calendar extras (D9).**
 
-**Phase 5 — Availability feed for David (D10).** Read-only RPC + a test that renders one week exactly in
+**Phase 6 — Availability feed for David (D10).** Read-only RPC + a test that renders one week exactly in
 the `[CALENDAR]` format. Booking page + deposit is a separate spec.
 
 Each phase ships on its own; `pnpm check` clean; commit locally, push on Abe's word.
@@ -353,22 +403,27 @@ Each phase ships on its own; `pnpm check` clean; commit locally, push on Abe's w
    ("your mover", never "crew"). Truck moves are 2 / 3 / 4 by tier; labor-only and piano are 2.
 3. **Junk removal** — not sold on Thumbtack at all (Lugg referral). Keep the disposal flow but demote it
    to a minor service type; don't spend design effort on it.
+4. **Assembly tech = Abe** (99% of the time), separate from the moving crew. The Assembly row is Abe's
+   own track: one job per day, and it never consumes a mover or a truck slot. Model it as a
+   `capacityKind: "person"` row (employee-bound), not a vehicle row.
+5. **Workers are the constraint, not vans.** "We have more vans than workers." Capacity per half-day is
+   therefore **available movers**, and the vehicle is chosen per job — van preferred (cheaper to run,
+   lower-value jobs), box truck when the job needs it. So the calendar rows stay by vehicle class (that's
+   how jobs are *placed*), but the number that limits booking is crew: `booked movers / available movers`
+   per half-day, shown in the day header, with the van line's `u` = number of van-capable workers on
+   shift that day, not the number of vans. Vehicle rows never go "full" on their own except BOX-01 (one
+   truck).
 
 ## Open questions for Abe
 
-1. **Assembly tech** — is that a specific person (and a specific van) separate from the moving crew? If
-   the same driver and van also do van-flat deliveries, the Assembly row and the Van AM/PM rows compete
-   for the same vehicle and the calendar should show that.
-2. **Van capacity** — David's VAN line shows `n/u`. Is `u` the count of active vans (5 today: SPR-01/02/
-   03/04/06) or the number of van *drivers* available that day? The calendar today shows one van slot per
-   half-day; the spec makes capacity a number per row.
-3. **Per-unit rows later** — when the fleet grows, should the calendar show a row per truck (BOX-01,
+1. **Per-unit rows later** — when the fleet grows, should the calendar show a row per truck (BOX-01,
    BOX-02) as HCP does, or per class? Spec assumes per class now, per unit later.
-4. **Lead → ticket** — David scopes the job in chat and the customer books on HCP. Should a booked
-   Thumbtack negotiation (`app_leads_v` status `booked`) auto-create a draft ticket in Rejunk with the
-   quote tier, addresses, crew, and TV-install add-on pre-filled? `CREATE_ESTIMATE_FROM_LEAD_SPEC.md`
-   covers lead → estimate; this would be lead → ticket. Spec assumes yes, in phase 2.
-5. **Deposit** — when Rejunk owns booking, is the $50 deposit collected through Stripe on a Rejunk page,
+2. **Thumbtack images** — does the pipeline store message attachments today? (D11 depends on it for
+   photos; text-only works without it.)
+3. **Deposit** — when Rejunk owns booking, is the $50 deposit collected through Stripe on a Rejunk page,
    or does HCP's booking page stay for a while with the ticket created from the HCP webhook?
-6. **Employees table** — fine to create `app_employees` now (additive), or wait for the driver-phase
+4. **Employees table** — fine to create `app_employees` now (additive), or wait for the driver-phase
    migrations to be reconciled? Spec says now.
+5. **Who's on shift** — for crew capacity (answer 5 above) the app needs a simple "who's working today"
+   input. A per-day roster on the Schedule page (tap names) or the driver app clock-in? Spec assumes a
+   roster on Schedule, editable by dispatch.
