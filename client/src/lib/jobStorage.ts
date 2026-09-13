@@ -1,7 +1,6 @@
 import {currentStaffIdentity} from "@/lib/financialCache";
 import { actualChargedAmount, actualProfit, actualTotalCost } from "@/lib/jobIntelligence";
 import { deleteJobRemote, loadJobsRemote, upsertJobRemote } from "@/lib/dataStore";
-import { getEmployees } from "@/lib/employeeStorage";
 import { defaultStopsFor, normalizeJob, prepareJobForWrite, requiredCrewFor } from "@/lib/jobShape";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { loadPricingSettings } from "@/utils/pricingStorage";
@@ -120,7 +119,7 @@ export function saveJob(job: Job): Job {
   };
   // Write-side shape: stops → address mirror, vehicleId → vehicleName mirror,
   // legacy `assignment` / `crewSize` dropped.
-  const nextJob = prepareJobForWrite(withIds, loadPricingSettings().vehicles, getEmployees());
+  const nextJob = prepareJobForWrite(withIds, loadPricingSettings().vehicles);
   cachedJobs = normalizeJobs([nextJob, ...cachedJobs.filter((item) => item.id !== nextJob.id)]);
   writeJson(JOBS_KEY, cachedJobs);
   void upsertJobRemote(nextJob).catch(reportRemoteError("job save"));

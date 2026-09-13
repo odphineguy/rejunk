@@ -91,7 +91,7 @@ language sql stable security definer set search_path='' as $$
                                    where employee_id=c->>'employeeId' and status='activated' limit 1) act on true),
         'disposalEvents',(select coalesce(jsonb_agg(d - 'disposalCost' order by ord),'[]'::jsonb)
                 from jsonb_array_elements(case when jsonb_typeof(j.data->'disposalEvents')='array' then j.data->'disposalEvents' else '[]'::jsonb end) with ordinality t(d,ord)))
-   ), '[]'::jsonb)
+   )), '[]'::jsonb)
  from public.jobs j cross join lateral (
    select jsonb_object_agg(key,value) as data from jsonb_each(j.data)
    where key=any(array['jobNumber','customerName','jobLabel','phone','address','city','state','zip',

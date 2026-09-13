@@ -19,8 +19,7 @@ read aliases, D2 stops / items / crew / vehicle / disposal trips stored inside `
 `normalizeJob()` + write-side `prepareJobForWrite()` adapter in `lib/jobShape.ts`, crew safety floors
 and the Phoenix weekend rule, the New Job form writing the new shape, the Job detail assignment editor
 rebuilt so it no longer wipes `vehicleId`, and the driver payload built from the ticket instead of
-junk heuristics). Migration `20260912000001` is live; `20260912000002` (driver allowlist + crew-based
-authorization + office projection + `driver_update_ticket_row`) is written but awaits Abe's approval.
+junk heuristics). Both migrations (`20260912000001`, `20260912000002`) are live on rejunk-prod.
 
 **Deviations from the spec (repo wins, said out loud)**
 1. **Junk fields stay flat** (`materialType`, `facilityId`, `actuals`, …) instead of nesting under
@@ -30,9 +29,9 @@ authorization + office projection + `driver_update_ticket_row`) is written but a
 2. **`vehicleName` is kept as a derived display mirror** of `vehicleId` (resolved from the fleet list on
    save) rather than deleted — the calendar, Dispatch Center and driver cards read it, and it costs
    nothing once it's always derived.
-3. **A derived legacy `assignment` blob is still written** alongside `crew` as a transitional bridge:
-   the live `assigned_job()` (every driver RPC + photo storage policy) and `office_job()` only
-   understand the old blob until migration `20260912000002` lands. Remove after.
+3. **The legacy `assignment` blob is read-only.** A derived copy was briefly written as a bridge
+   while migration `20260912000002` awaited approval; it was removed the same day once the migration
+   landed (`assigned_job()` now reads `crew[]` first).
 4. **Templates get `is_template`, not `is_active = false`.** Setting them inactive would also hide them
    from the Estimate Builder and the recommendation engine (which filter on `isActive`), and the dump
    trailer has no fleet twin. The flag keeps pricing untouched and lets tickets filter.
@@ -48,7 +47,6 @@ authorization + office projection + `driver_update_ticket_row`) is written but a
   instead, so the driver transport keeps zero table access.
 
 **Constraints / Open risks**
-- Office-role users are degraded until `20260912000002` is applied (see CLAUDE.md migrations).
 - Phase 3 (slot-first New Job form), 4 (Jobs list / Job detail by service type), 5 (driver UI for
   moves) and 2 (booking → ticket, the differentiator) are still open. Spec open questions 1, 2, 4, 5
   remain; 4 was answered by doing it (table created now).

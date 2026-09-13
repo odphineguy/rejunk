@@ -94,9 +94,8 @@ Two distinct persistence patterns coexist:
    fleet list). Every blob passes through `normalizeJob()` on read and `prepareJobForWrite()` on save
    (`lib/jobShape.ts`) — no SQL migration for the blob. The old per-browser operational blob and the
    never-applied `job_stops` / `job_items` tables are no longer written; only activity / photos /
-   messages / issues stay in `rejunk_driver_operational_cache_v1`. **Transitional bridge:** a derived
-   legacy `assignment` (employeeIds + names + vehicle) is still written next to `crew` until migration
-   `20260912000002_ticket_shape` is applied — remove it in `prepareJobForWrite()` after that. Vehicle
+   messages / issues stay in `rejunk_driver_operational_cache_v1`. The legacy `assignment` blob is
+   tolerated on read (old tickets) and never written. Vehicle
    pickers use `lib/fleet.ts` `fleetVehicles()` (real units only; the four pricing templates carry
    `vehicles.is_template = true`). The junk fields (material / facility / weights / actuals) are still
    flat on the job (the spec's `junk: {…}` nesting is deferred to phase 4).
@@ -352,18 +351,14 @@ restrictive policy because new tables don't inherit the 2026-09-10 loop), `vehic
 (true on the four pricing templates), and `business_rows` office projection of vehicles gains
 `is_template`. Applied through the Supabase MCP.
 
-`20260912000002_ticket_shape.sql` is **ON DISK, NOT YET APPLIED** (2026-09-12, phase 1 — the MCP apply was
-blocked pending Abe's approval because it replaces security functions). It adds
-`app_private.job_has_employee()` (crew ids → legacy employeeIds → legacy names), rewires
-`assigned_job()` and `driver_create_thread()` through it, widens the `get_driver_today` allowlist
-(serviceType, movingKind, stops, items, crew **with names resolved from `app_employees`**,
+`20260912000002_ticket_shape.sql` **IS applied to rejunk-prod** (2026-09-12, phase 1, via the Supabase MCP
+after Abe approved it). It adds `app_private.job_has_employee()` (crew ids → legacy employeeIds → legacy
+names), rewires `assigned_job()` and `driver_create_thread()` through it, widens the `get_driver_today`
+allowlist (serviceType, movingKind, stops, items, crew **with names resolved from `app_employees`**,
 disposalEvents minus disposalCost, requiredCrew, dayType, paymentTerms — still no money), widens the
 office projection `app_private.office_job()` the same way (disposalEvents stay owner-only), and adds
 `driver_update_ticket_row(job, collection, row_id, patch)` for drivers ticking stops / items /
-disposal trips. **Until it is applied:** drivers get the flat address as one synthesized stop and see
-"Moving" but not the second stop; office logins can't see or save `crew` / `stops` (originals survive
-office saves); driver stop/item ticks stay on the phone only (the RPC call degrades gracefully).
-Apply it via the SQL editor or MCP as `ticket_shape`, then delete the `assignment` bridge.
+disposal trips. The client no longer writes the legacy `assignment` blob at all.
 
 ## Deployment
 

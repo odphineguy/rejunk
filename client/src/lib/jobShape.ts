@@ -19,7 +19,6 @@ import type {
   JobServiceType,
   MovingKind,
 } from "@/types/jobs";
-import type { EmployeeRecord } from "@/types/employees";
 import type { Vehicle } from "@/types/pricing";
 
 // ---------------------------------------------------------------------------
@@ -327,42 +326,21 @@ export function normalizeJob(raw: RawJob): Job {
 
 /**
  * Normalize, derive the mirrors (address from stops[0], vehicleName from the
- * fleet list), and drop `crewSize`. `vehicles` / `employees` are optional —
- * when absent the existing display mirrors are kept as-is.
- *
- * TRANSITIONAL BRIDGE: a derived legacy `assignment` (employeeIds + names +
- * vehicle) is still written alongside `crew` until the phase-1 SQL
- * (migration 20260912000002_ticket_shape) is applied — the live
- * `assigned_job()` / `office_job()` functions only understand the old blob.
- * Remove the mirror once that migration is live.
+ * fleet list), and drop the legacy `assignment` / `crewSize` duplicates.
+ * `crew[]` + `vehicleId` are the single source of truth; the database
+ * (migration 20260912000002_ticket_shape) reads crew ids first and only falls
+ * back to `assignment` on old blobs that were never re-saved.
  */
-export function prepareJobForWrite(input: RawJob, vehicles?: Vehicle[], employees?: EmployeeRecord[]): Job {
+export function prepareJobForWrite(input: RawJob, vehicles?: Vehicle[]): Job {
   const job = normalizeJob(input);
   const vehicle = job.vehicleId && vehicles ? vehicles.find((candidate) => candidate.id === job.vehicleId) : undefined;
   const vehicleName = vehicle?.vehicleName ?? (job.vehicleId ? job.vehicleName : undefined);
   const { assignment: _assignment, crewSize: _crewSize, ...rest } = job;
+  void _assignment;
   void _crewSize;
-  const nameOf = (employeeId: string) => {
-    const employee = employees?.find((candidate) => candidate.id === employeeId);
-    return employee ? [employee.firstName, employee.lastName].filter(Boolean).join(" ").trim() : undefined;
-  };
-  const legacyNames = job.crew.map((member) => nameOf(member.employeeId));
-  const assignment =
-    job.crew.length > 0
-      ? {
-          employeeIds: job.crew.map((member) => member.employeeId),
-          crewLead: legacyNames[0] ?? _assignment?.crewLead,
-          crewMembers: legacyNames.slice(1).filter((name): name is string => Boolean(name)),
-          vehicleId: job.vehicleId,
-          vehicleName,
-        }
-      : job.vehicleId
-        ? { vehicleId: job.vehicleId, vehicleName }
-        : undefined;
   return {
     ...rest,
     vehicleName,
-    assignment,
     // Re-stamp day type from the (possibly new) schedule so a reschedule keeps the quote tier right.
     dayType: phoenixDayType(job.scheduledStart) ?? job.dayType,
   };
