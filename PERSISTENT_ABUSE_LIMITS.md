@@ -1,7 +1,8 @@
 # Persistent abuse limits
 
 Database migration `20260914100450_persistent_abuse_limits.sql` is applied to
-rejunk-prod. AI app deployment follows the migration.
+rejunk-prod. App commit c49ad46 is deployed; Vercel deployment
+`dpl_K8ZZKN6U9f4xDUVhGYMQYWrB3w11` is READY with the production aliases.
 
 ## Allowances
 
@@ -69,6 +70,11 @@ helpers have no browser EXECUTE privileges.
   read/update counters. Temporary counters and bindings were rolled back.
 - Security advisors report no ERROR-level findings. The new private table
   intentionally has RLS with no browser policy, reported as informational.
+
+Live HTTP checks confirmed browser reservation calls are denied (401/42501),
+malformed AI requests return 400, and office requests without a token return 401.
+A successful paid AI analysis and an end-to-end HTTP 429 were not exercised against
+production; those server paths were covered by mocks plus live database reservations.
 
 ## Remaining boundaries
 

@@ -227,5 +227,7 @@ checks passed. AI reservations and dashboard request/report-day quotas now have
 private rolling counters. Local concurrency, actual database restart, expiry,
 identity-rotation, fail-closed AI and financial-access regressions passed, as did
 typecheck/build. See PERSISTENT_ABUSE_LIMITS.md for limits and precise boundaries.
-AI app deployment is pending; report limits already operate in the database.
+App commit c49ad46 is deployed (Vercel dpl_K8ZZKN6U9f4xDUVhGYMQYWrB3w11 READY,
+production aliases assigned). AI malformed/unauthenticated HTTP checks returned
+400/401; direct anonymous limiter calls are denied. Persistent abuse limits are live.
 No OpenAI credits or business-record writes were used in verification.
