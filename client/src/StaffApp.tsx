@@ -62,6 +62,7 @@ function StaffRouter() {
       <Route path={"/map"} component={Home} />
       <Route path={"/estimate-builder"} component={isOwner ? EstimateBuilder : OfficeEstimateBuilder} />
       <Route path={"/jobs/new"} component={NewJob} />
+      <Route path={"/jobs/:jobId/analytics"} component={JobDetail} />
       <Route path={"/jobs/:jobId"} component={JobDetail} />
       <Route path={"/jobs"} component={Jobs} />
       <Route path={"/dispatch"} component={DispatchCenter} />

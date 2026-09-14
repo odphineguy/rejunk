@@ -10,6 +10,31 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
 
 ---
 
+## 2026-09-14 — Job page does one thing; analytics parked on /jobs/:id/analytics
+
+**Decision**
+Abe, after the phase-4 first pass: "The job tab should only do 1 thing. Create the job. I don't want
+to see anything about analytics… mapping… Financial summary? Update job? Remove 90% of the UI. Create an
+analytics section where all this crap can be parked." The job page (`/jobs/:id`) is now five cards —
+customer, when & what truck, stops & items, crew & vehicle, notes — plus a Status sidebar (status,
+quoted price, Schedule / Analytics / Duplicate / Delete). Everything else moved to
+`/jobs/:id/analytics` (same component, second route): Field activity (stops/items progress, photos,
+issues, activity log), Dispatch tools (map-pin repair, instruction update, crew message, issue
+resolution), Quoted vs Actual, Actual Costs (& receipt), Facility Check, Vehicle Comparison, Financial
+Summary and payment status. The Google Maps route lookups and recommendation snapshot only run on the
+analytics page now. The no-op "Save" button is gone (fields already save on change).
+
+**Rejected**
+- A separate top-level Analytics page in the sidebar — the numbers are per job; a per-job page keeps
+  the link one click away and needs no new navigation. Revisit if Abe wants cross-job reports.
+- Deleting the junk/receipt tooling — parked, not removed.
+
+**Constraints / Open risks**
+- Same rule now applies to Dispatch Center and the driver screens: strip, don't add.
+- Not browser-tested this session; `pnpm check` + `pnpm build` clean.
+
+---
+
 ## 2026-09-14 — Ticket redesign phase 4 (first pass): junk is one service type, not the default screen
 
 **Decision**

@@ -2,7 +2,7 @@ import { isOwner as currentUserIsOwner } from "@/lib/staffSession";
 import { useStaffSession } from "@/hooks/useStaffSession";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useRoute } from "wouter";
-import { ArrowLeft, CalendarClock, CopyPlus, Download, MessageSquare, Receipt, Save, Send, Trash2 } from "lucide-react";
+import { ArrowLeft, BarChart3, CalendarClock, CopyPlus, Download, MessageSquare, Receipt, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { JobStatusBadge, JobWarningBadge, PaymentStatusBadge, jobStatusLabels, paymentStatusLabels } from "@/components/JobBadges";
@@ -163,7 +163,11 @@ export function NewJob() {
 
 export default function JobDetail() {
   const { isOwner } = useStaffSession();
-  const [, params] = useRoute("/jobs/:jobId");
+  const [, ticketParams] = useRoute("/jobs/:jobId");
+  const [analyticsMatch, analyticsParams] = useRoute("/jobs/:jobId/analytics");
+  // The ticket page does one thing: the job. Money, routing math and field activity live on /analytics.
+  const analytics = Boolean(analyticsMatch);
+  const params = analyticsMatch ? analyticsParams : ticketParams;
   const [, navigate] = useLocation();
   const [settings, setSettings] = useState(() => loadPricingSettings());
   const [job, setJob] = useState<Job | null>(() => getJobs().find((item) => item.id === params?.jobId) ?? null);
@@ -250,14 +254,14 @@ export default function JobDetail() {
       marginVariance: actualMarginValue - estimatedMarginValue,
     };
   }, [job]);
-  const facilityCheck = useMemo(() => (job && junk ? getFacilityCheck(job, settings) : null), [job, junk, settings]);
+  const facilityCheck = useMemo(() => (job && junk && analytics ? getFacilityCheck(job, settings) : null), [analytics, job, junk, settings]);
   const routeRecommendationInput = useMemo(() => {
-    if (!job || !junk) return null;
+    if (!job || !junk || !analytics) return null;
     return {
       ...recommendationInputFromJob(job, settings),
       routeEstimates: { ...routeEstimatesFromJob(job), ...routeEstimates },
     };
-  }, [job, junk, routeEstimates, settings]);
+  }, [analytics, job, junk, routeEstimates, settings]);
   const routeRecommendation = useMemo(
     () => (routeRecommendationInput ? buildBestRecommendation(routeRecommendationInput, settings) : null),
     [routeRecommendationInput, settings],
@@ -288,7 +292,7 @@ export default function JobDetail() {
   }, [recommendedVehicleComparison, selectedVehicleComparison]);
 
   useEffect(() => {
-    if (!job || !junk) return;
+    if (!job || !junk || !analytics) return;
     const jobAddress = [job.address, job.city, job.state, job.zip].filter(Boolean).join(", ");
     if (!jobAddress.trim()) {
       setRouteEstimates(routeEstimatesFromJob(job));
@@ -311,7 +315,7 @@ export default function JobDetail() {
     return () => {
       canceled = true;
     };
-  }, [job?.address, job?.city, job?.state, job?.zip, junk, settings.disposalFacilities]);
+  }, [analytics, job?.address, job?.city, job?.state, job?.zip, junk, settings.disposalFacilities]);
 
   useEffect(() => {
     if (!job || !routeRecommendation?.recommendation) return;
@@ -406,18 +410,19 @@ export default function JobDetail() {
   return (
     <OperationsShell
       title={`${job.jobNumber} · ${job.customerName}`}
-      eyebrow="Job detail"
+      eyebrow={analytics ? "Job analytics & activity" : "Job"}
       actions={
         <Button asChild variant="outline">
-          <Link href="/jobs">
+          <Link href={analytics ? `/jobs/${job.id}` : "/jobs"}>
             <ArrowLeft className="size-4" />
-            Jobs
+            {analytics ? "Back to job" : "Jobs"}
           </Link>
         </Button>
       }
     >
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="space-y-6">
+          {!analytics && (
           <Card>
             <CardHeader>
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -450,7 +455,9 @@ export default function JobDetail() {
               <EditableField label="Email" value={job.email ?? ""} onChange={(value) => applyUpdates({ email: value })} />
             </CardContent>
           </Card>
+          )}
 
+          {!analytics && (
           <Card>
             <CardHeader>
               <CardTitle>When & what truck</CardTitle>
@@ -494,8 +501,9 @@ export default function JobDetail() {
               </div>
             </CardContent>
           </Card>
+          )}
 
-          {driverJob && (
+          {!analytics && driverJob && (
             <Card>
               <CardHeader>
                 <CardTitle>{customerStops(driverJob.stops).length > 1 ? "Stops & items" : "Where & items"}</CardTitle>
@@ -507,13 +515,13 @@ export default function JobDetail() {
             </Card>
           )}
 
-          {driverJob && (
+          {analytics && driverJob && (
             <Card>
               <CardHeader>
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
-                    <CardTitle>Driver Operations</CardTitle>
-                    <CardDescription>Field submissions, stops, items, photos, issues, and job activity.</CardDescription>
+                    <CardTitle>Field activity</CardTitle>
+                    <CardDescription>What the crew reported: stop and item progress, photos, issues, and the activity log.</CardDescription>
                   </div>
                   <Badge variant="outline">{driverJob.activity.length} activity events</Badge>
                 </div>
@@ -632,14 +640,26 @@ export default function JobDetail() {
             </Card>
           )}
 
-          {driverJob && (
+          {!analytics && (
             <Card>
               <CardHeader>
-                <CardTitle>Dispatch Control</CardTitle>
-                <CardDescription>Crew and vehicle, instructions, crew messaging, and exception resolution.</CardDescription>
+                <CardTitle>Crew & vehicle</CardTitle>
+                <CardDescription>Who is going and in what. Names come from the Employees page.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AssignmentEditor job={job} onSaved={() => setJob(getJobs().find((item) => item.id === job.id) ?? job)} />
+              </CardContent>
+            </Card>
+          )}
+
+          {analytics && driverJob && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Dispatch tools</CardTitle>
+                <CardDescription>Fix the map pin, publish an instruction update, message the crew, resolve driver issues.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <AssignmentEditor job={job} onSaved={() => setJob(getJobs().find((item) => item.id === job.id) ?? job)} />
+
 
                 <LocationRepairPanel job={job} locationStatus={locationStatus} onSaved={() => setJob(getJobs().find((item) => item.id === job.id) ?? job)} />
 
@@ -673,7 +693,7 @@ export default function JobDetail() {
             </Card>
           )}
 
-          {isOwner && (<Card>
+          {analytics && isOwner && (<Card>
             <CardHeader>
               <CardTitle>Quoted vs Actual</CardTitle>
               <CardDescription>Compare the saved estimate against the final job economics.</CardDescription>
@@ -696,7 +716,7 @@ export default function JobDetail() {
             </CardContent>
           </Card>)}
 
-          {isOwner && (<Card>
+          {analytics && isOwner && (<Card>
             <CardHeader>
               <CardTitle>{junk ? "Actual Costs & Receipt" : "Actual Costs"}</CardTitle>
               <CardDescription>{junk ? "Track final costs, dump receipt details, and scale-ticket data." : "What the job really cost and what was charged."}</CardDescription>
@@ -749,7 +769,7 @@ export default function JobDetail() {
             </CardContent>
           </Card>)}
 
-          {isOwner && facilityCheck && (
+          {analytics && isOwner && facilityCheck && (
             <Card>
               <CardHeader>
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -802,7 +822,7 @@ export default function JobDetail() {
             </Card>
           )}
 
-          {isOwner && routeRecommendation && (
+          {analytics && isOwner && routeRecommendation && (
             <Card>
               <CardHeader>
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -856,6 +876,7 @@ export default function JobDetail() {
             </Card>
           )}
 
+          {!analytics && (
           <Card>
             <CardHeader>
               <CardTitle>Notes</CardTitle>
@@ -866,13 +887,14 @@ export default function JobDetail() {
               <TextAreaField label="Internal notes" value={job.internalNotes ?? ""} onChange={(value) => applyUpdates({ internalNotes: value })} />
             </CardContent>
           </Card>
+          )}
         </div>
 
         <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
-          {!isOwner && <Card><CardHeader><CardTitle>Customer quote</CardTitle></CardHeader>
+          {analytics && !isOwner && <Card><CardHeader><CardTitle>Customer quote</CardTitle></CardHeader>
             <CardContent><p className="text-2xl font-bold">{money(job.quotedAmount)}</p></CardContent>
           </Card>}
-          {isOwner && (<Card className="border-primary/30">
+          {analytics && isOwner && (<Card className="border-primary/30">
             <CardHeader>
               <CardTitle>Financial Summary</CardTitle>
               <CardDescription>{job.sourceEstimateId ? "Linked to saved estimate" : "Manual job record"}</CardDescription>
@@ -898,10 +920,9 @@ export default function JobDetail() {
             </CardContent>
           </Card>)}
 
-          <Card>
+          {!analytics && (<Card>
             <CardHeader>
-              <CardTitle>Update Job</CardTitle>
-              <CardDescription>Update the job status and schedule.</CardDescription>
+              <CardTitle>Status</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -919,7 +940,37 @@ export default function JobDetail() {
                   </SelectContent>
                 </Select>
               </div>
-              {isOwner && (<div className="space-y-2">
+              <EditableField label="Quoted price" type="number" value={String(job.quotedAmount ?? "")} onChange={(value) => applyUpdates({ quotedAmount: fieldNumber(value) ?? 0 })} />
+              <div className="grid gap-2">
+                <Button variant="outline" asChild>
+                  <Link href="/schedule">
+                    <CalendarClock className="size-4" />
+                    Schedule
+                  </Link>
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link href={`/jobs/${job.id}/analytics`}>
+                    <BarChart3 className="size-4" />
+                    Analytics & activity
+                  </Link>
+                </Button>
+                <Button variant="ghost" onClick={copyJob}>
+                  <CopyPlus className="size-4" />
+                  Duplicate
+                </Button>
+                <Button variant="destructive" onClick={removeJob}>
+                  <Trash2 className="size-4" />
+                  Delete job
+                </Button>
+              </div>
+            </CardContent>
+          </Card>)}
+          {analytics && isOwner && (<Card>
+            <CardHeader>
+              <CardTitle>Payment</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
                 <Label>Payment status</Label>
                 <Select value={job.paymentStatus} onValueChange={(value) => applyUpdates({ paymentStatus: value as PaymentStatus })}>
                   <SelectTrigger className="w-full">
@@ -933,35 +984,15 @@ export default function JobDetail() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>)}
-              <div className="grid grid-cols-2 gap-2">
-                <Button onClick={() => toast.success("Job saved")}>
-                  <Save className="size-4" />
-                  Save
-                </Button>
-                <Button variant="outline" onClick={copyJob}>
-                  <CopyPlus className="size-4" />
-                  Duplicate
-                </Button>
-                <Button variant="outline" asChild>
-                  <Link href="/schedule">
-                    <CalendarClock className="size-4" />
-                    Schedule
-                  </Link>
-                </Button>
-                {isOwner && junk && (<Button variant="outline" asChild>
-                  <a href={job.actuals?.dumpReceiptUrl || "#"} onClick={(event) => !job.actuals?.dumpReceiptUrl && event.preventDefault()}>
-                    <Receipt className="size-4" />
-                    Receipt
-                  </a>
-                </Button>)}
-                <Button variant="destructive" className="col-span-2" onClick={removeJob}>
-                  <Trash2 className="size-4" />
-                  Delete Job
-                </Button>
               </div>
+              {junk && (<Button variant="outline" className="w-full" asChild>
+                <a href={job.actuals?.dumpReceiptUrl || "#"} onClick={(event) => !job.actuals?.dumpReceiptUrl && event.preventDefault()}>
+                  <Receipt className="size-4" />
+                  Receipt
+                </a>
+              </Button>)}
             </CardContent>
-          </Card>
+          </Card>)}
         </aside>
       </div>
     </OperationsShell>
