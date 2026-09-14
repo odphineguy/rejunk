@@ -94,8 +94,7 @@ function TermsPage() {
         <H2>Company Identity</H2>
         <p className="mt-3">
           {LEGAL_DISCLOSURE} References to "{BRAND_NAME}", "Progressive", "we",
-          "us", and "our" mean {LEGAL_OPERATOR} doing business through the{" "}
-          {BRAND_NAME} brand. By booking, paying a deposit, or allowing our crew
+          "us", and "our" mean {LEGAL_OPERATOR}. By booking, paying a deposit, or allowing our crew
           to begin work, you agree to these terms.
         </p>
       </section>
@@ -130,7 +129,7 @@ function TermsPage() {
           items={[
             "A $50 deposit is due at booking and is credited to your final invoice. Labor-only jobs and pickups from a seller, store, or other third party are paid in full at booking.",
             "The remaining balance is due at completion, before the crew departs. We accept credit and debit cards, Zelle, Cash App, Apple Pay, Venmo, and cash. We do not accept checks, money orders, or PayPal.",
-            "Cancel or reschedule at least 48 hours before your scheduled start for a full deposit refund or transfer. Cancellations inside 48 hours forfeit the deposit.",
+            "Cancel or reschedule at least 24 hours before your scheduled start for a full deposit refund or transfer. Cancellations inside 24 hours forfeit the deposit.",
             "If we must cancel because of weather, safety, or equipment failure, your deposit is refunded in full.",
             "Unpaid balances may be referred to collections after 30 days.",
           ]}
@@ -258,8 +257,7 @@ function TermsPage() {
         <p className="mt-3">
           By requesting a quote, submitting a form, calling or texting us,
           booking a service, or otherwise providing your mobile number, you
-          agree to receive service-related text messages from {BRAND_NAME}, a
-          service brand operated by {LEGAL_OPERATOR}. Messages may include quote
+          agree to receive service-related text messages from {LEGAL_OPERATOR}. Messages may include quote
           responses, scheduling, appointment reminders, dispatch updates,
           arrival or ETA updates, service follow-up, invoice or payment
           reminders, and customer support. Service-related text messages may be
@@ -319,8 +317,7 @@ function PrivacyPage() {
         </h2>
         <p className="mt-3">
           {LEGAL_DISCLOSURE} References to "{BRAND_NAME}", "Progressive", "we",
-          "us", and "our" mean {LEGAL_OPERATOR} doing business through the{" "}
-          {BRAND_NAME} brand.
+          "us", and "our" mean {LEGAL_OPERATOR}.
         </p>
       </section>
 

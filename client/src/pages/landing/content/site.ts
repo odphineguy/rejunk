@@ -38,8 +38,8 @@ export const FACEBOOK_URL =
 export const THUMBTACK_PROFILE_URL =
   "https://www.thumbtack.com/az/chandler/moving-companies/progressive-transportation-services/service/580274029751476226";
 export const BRAND_NAME = "Progressive Transportation Services";
-export const LEGAL_OPERATOR = "Saguaro Transportation Services";
-export const LEGAL_DISCLOSURE = `${BRAND_NAME} is a service brand operated by ${LEGAL_OPERATOR}.`;
+export const LEGAL_OPERATOR = "Progressive Transportation Services LLC";
+export const LEGAL_DISCLOSURE = `${BRAND_NAME} is operated by ${LEGAL_OPERATOR}.`;
 
 export const NAV_ITEMS = [
   { label: "Junk Removal", href: "/junk-removal" },
