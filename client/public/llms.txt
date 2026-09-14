@@ -1,6 +1,6 @@
 # Progressive Transportation Services
 
-> Progressive Transportation Services is a junk removal, moving and delivery, piano moving, and furniture assembly company based in Arizona. It is a service brand operated by Saguaro Transportation Services.
+> Progressive Transportation Services is a junk removal, moving and delivery, piano moving, and furniture assembly company based in Arizona. It is operated by Progressive Transportation Services LLC.
 
 Customers can book online or request an estimate. Junk-removal photo estimates are preliminary ballpark estimates; the crew confirms a clear price before work begins. The business serves Phoenix, Chandler, Gilbert, Mesa, Tempe, Scottsdale, and nearby communities.
 
@@ -28,5 +28,5 @@ Contact: (480) 351-0291. USDOT 4421119. MC-1763629.
 ## Optional
 
 - [Home](https://www.progressive-junk.xyz/): Service overview, coverage area, customer reviews, and common questions.
-- [Terms of Service](https://www.progressive-junk.xyz/terms): Customer terms and messaging terms.
-- [Privacy Policy](https://www.progressive-junk.xyz/privacy): Website lead, communication, and privacy practices.
+- [Terms of Service](https://www.progressive-junk.xyz/terms): Pricing, deposits and 24-hour cancellation, liability for goods ($0.60/lb released value; third-party insurance for full value), 7-day claims, home damage, what is not covered, junk removal and assembly terms, SMS terms, Arizona governing law.
+- [Privacy Policy](https://www.progressive-junk.xyz/privacy): Information collected, photo and AI-estimate processing, SMS practices, sharing, and contact.

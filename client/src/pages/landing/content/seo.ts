@@ -73,14 +73,14 @@ export const SEO_ROUTES = [
   {
     path: "/terms",
     meta: PAGE_META.terms,
-    lastModified: "2026-06-17",
+    lastModified: "2026-09-14",
     changeFrequency: "yearly",
     priority: "0.3",
   },
   {
     path: "/privacy",
     meta: PAGE_META.privacy,
-    lastModified: "2026-06-17",
+    lastModified: "2026-09-14",
     changeFrequency: "yearly",
     priority: "0.3",
   },
