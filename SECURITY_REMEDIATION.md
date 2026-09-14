@@ -215,4 +215,7 @@ Disposable PostgreSQL tests, mocked driver endpoint role tests, pnpm check and p
 build passed. The migration is applied live; a transaction-local real office-session
 check confirmed employee reads work, all employee mutations are denied, and business
 settings are hidden. Checks were rolled back and changed no business records.
-App rollout is in progress; includes the earlier calendar badge fix (399c4c8).
+App commit 38492da is deployed: Vercel dpl_2VhKisFBzx2XdGLpCdHoPCV1weNk
+is READY with rejunk.vercel.app and progressive-junk.xyz aliases assigned. Includes
+the earlier calendar badge fix (399c4c8). Reload existing tabs for the new UI.
+Live post-deployment owner/office browser acceptance remains a user check.
