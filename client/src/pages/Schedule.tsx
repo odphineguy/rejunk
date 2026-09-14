@@ -37,6 +37,7 @@ import {
   type DailySlot,
   type SlotKey,
 } from "@/lib/scheduleSlots";
+import { isJunkService, serviceTypeLabel } from "@/lib/jobShape";
 import { cn } from "@/lib/utils";
 import { loadPricingSettings } from "@/utils/pricingStorage";
 import type { Job } from "@/types/jobs";
@@ -48,6 +49,14 @@ const currency = new Intl.NumberFormat("en-US", {
   currency: "USD",
   maximumFractionDigits: 0,
 });
+
+/** Calendar card line 2: the service for most jobs, the material for junk removal. */
+function jobCardLabel(job: Job) {
+  if (isJunkService(job.serviceType)) {
+    return job.materialName || job.materialType?.replaceAll("_", " ") || "Material not set";
+  }
+  return serviceTypeLabel(job);
+}
 
 function money(value: number | undefined) {
   return currency.format(Number.isFinite(value) ? Number(value) : 0);
@@ -421,9 +430,7 @@ function JobSlotCard({
         </div>
       </div>
       <div className="mt-2 truncate text-xs">
-        {job.materialName ||
-          job.materialType?.replaceAll("_", " ") ||
-          "Material not set"}
+        {jobCardLabel(job)}
       </div>
       <div className="truncate text-xs text-muted-foreground">
         {job.vehicleName || job.assignment?.vehicleName || "No vehicle"}
@@ -886,9 +893,7 @@ function Agenda({
                           .filter(Boolean)
                           .join(", ") || "No address"}
                         {" · "}
-                        {job.materialName ||
-                          job.materialType?.replaceAll("_", " ") ||
-                          "Material not set"}
+                        {jobCardLabel(job)}
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-1">
