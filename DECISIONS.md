@@ -10,6 +10,49 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
 
 ---
 
+## 2026-09-14 — Ticket redesign phase 3: slot-first New Job form + estimate handoff
+
+**Decision**
+`/jobs/new` is now the guided, slot-first form from `JOB_TICKET_REDESIGN_SPEC.md` D5: What (five
+service buttons + move / delivery kind chips) → Who (type-ahead over Clients and Thumbtack leads, links
+`clientId` / `leadRef`) → Where (Pickup + Delivery or one Service card, flights / elevator / parking per
+stop, optional crew checklist) → When (a one-day slot board reusing the calendar's `buildDayBoard`:
+AM/PM Box, AM/PM Van, plus an Assembly-tech row capped at one job a day; day-type tag; same-day /
+Sunday / after-6 reminders) → Crew (safety floor, raise-only, first pick is lead) → Price ("From
+estimate" copies a saved estimate onto the ticket) → Notes. Two buttons: **Save draft** (status `open`)
+and **Book it** (status `scheduled`; needs address + slot + vehicle + full crew). D6: one helper,
+`ticketFieldsFromEstimate()` in `lib/jobStorage.ts`, feeds both `createJobFromEstimate()` and the
+form — stops (with stair flights), Pricebook lines as the crew's item checklist, crew floor, fleet
+unit, quote range, moving distance.
+
+**Deviations from the spec (repo wins, said out loud)**
+1. **2BR = 3 movers, full day.** The spec's phase-3 acceptance line says "PM Box with 2 movers", but its
+   own D1 table and `requiredCrewFor()` say 2BR is 3 movers and blocks both truck halves. The form
+   follows D1: a full-day package can only start in the AM slot and the PM box slot shows "blocked".
+   The calendar now renders full-day moves in both halves too (`buildDayBoard` moved to
+   `lib/scheduleSlots.ts` so both screens agree).
+2. **Taken slots can't be picked** (the button is disabled with the other customer's name) instead of a
+   double-book warning — "capacity in movers, not appointments" is the point of the redesign. Moving the
+   other job still happens on the Schedule.
+3. **`assigned` is no longer written by the form.** Booked = scheduled with crew. Old tickets and the
+   driver mapping (`scheduled → assigned`) are untouched.
+4. **Labor-only books a slot but no vehicle**, so it lands in the calendar's "Needs a slot" bucket
+   (the slot key needs a vehicle class). Fine for now; a crew-only track is a calendar change.
+5. **Per-stop access fields** (`flights`, `elevator`, `parkingNotes`) were added to `JobStop` — they ride
+   inside `stops[]`, which the office and driver projections already pass through whole.
+
+**Rejected**
+- A wizard / multi-page flow — all seven sections on one page, in order, as the spec asks.
+- Writing `moving` details from the v19 estimator — it hasn't landed (types only, untracked); the ticket
+  gets stair flights + distance from the Pricebook snapshot and the rest stays deferred.
+
+**Constraints / Open risks**
+- Browser-verified only as far as the login gate (no PIN in this session); `pnpm check` + `pnpm build`
+  clean. Abe's acceptance run: book a 2BR move in under a minute, confirm it blocks with 2 of 3 movers.
+- Phases 2, 4, 5, 6 still open. Phase 4 should retire the "assigned" status tab on the Jobs list.
+
+---
+
 ## 2026-09-12 — Ticket redesign phases 0 + 1: service-type-first tickets, stops/crew ON the job, employees on Supabase
 
 **Decision**

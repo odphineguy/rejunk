@@ -88,6 +88,10 @@ export interface JobStop {
   contactPhone?: string;
   arrivalWindowStart?: string;
   arrivalWindowEnd?: string;
+  /** Flights of stairs the crew carries through at this stop (0 = ground / elevator). */
+  flights?: number;
+  elevator?: boolean;
+  parkingNotes?: string;
   instructions?: string;
   status: JobStopStatus;
   arrivedAt?: string;

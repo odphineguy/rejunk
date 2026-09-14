@@ -4,9 +4,10 @@ import { deleteJobRemote, loadJobsRemote, upsertJobRemote } from "@/lib/dataStor
 import { defaultStopsFor, normalizeJob, prepareJobForWrite, requiredCrewFor } from "@/lib/jobShape";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { loadPricingSettings } from "@/utils/pricingStorage";
-import type { JobStop } from "@/types/driver";
-import type { Job, JobServiceType, MovingKind } from "@/types/jobs";
+import type { JobItem, JobStop } from "@/types/driver";
+import type { Job, JobQuote, JobServiceType, MovingDetails, MovingKind } from "@/types/jobs";
 import type { SavedEstimate } from "@/types/pricing";
+import type { StairFloor } from "@/types/service";
 
 const JOBS_KEY = "junk_estimator_jobs_v1";
 
@@ -183,17 +184,128 @@ function movingKindFromEstimate(estimate: SavedEstimate): MovingKind | undefined
   return "hourly_2";
 }
 
+const stairFlights: Record<StairFloor, number> = { none: 0, "2nd": 1, "3rd": 2, above_3rd: 3 };
+
 function stopsFromEstimate(estimate: SavedEstimate, serviceType: JobServiceType, movingKind: MovingKind | undefined): JobStop[] {
   const stops = defaultStopsFor(serviceType, movingKind);
   const pickup = parseEstimateLocation(estimate.jobAddress);
+  const service = estimate.service;
   if (stops[0]) {
-    stops[0] = { ...stops[0], address: estimate.jobAddress, city: pickup.city, zip: pickup.zip, contactName: estimate.customerName };
+    const floor = service?.pickupStairFloor ?? service?.stairFloor;
+    stops[0] = {
+      ...stops[0],
+      address: estimate.jobAddress,
+      city: pickup.city,
+      zip: pickup.zip,
+      contactName: estimate.customerName,
+      flights: floor ? stairFlights[floor] : undefined,
+    };
   }
   if (stops[1]) {
     const delivery = parseEstimateLocation(estimate.deliveryAddress);
-    stops[1] = { ...stops[1], address: estimate.deliveryAddress, city: delivery.city, zip: delivery.zip, contactName: estimate.customerName };
+    const floor = service?.deliveryStairFloor;
+    stops[1] = {
+      ...stops[1],
+      address: estimate.deliveryAddress,
+      city: delivery.city,
+      zip: delivery.zip,
+      contactName: estimate.customerName,
+      flights: floor ? stairFlights[floor] : undefined,
+    };
   }
   return stops;
+}
+
+/** Pricebook lines (assembly items, moved pieces) become the crew's checklist — never prices. */
+function itemsFromEstimate(estimate: SavedEstimate, stops: JobStop[]): JobItem[] {
+  const lines = estimate.service?.lineItems ?? [];
+  const now = new Date().toISOString();
+  const pickup = stops[0];
+  const delivery = stops.find((stop) => stop.stopType === "delivery");
+  return lines
+    .filter((line) => line.itemType !== "Fee" && line.priceUnit !== "hourly" && line.priceUnit !== "per_mile" && line.priceUnit !== "per_30min")
+    .map((line, index) => ({
+      id: `item-${estimate.id}-${index + 1}`,
+      jobId: "",
+      stopId: pickup?.id,
+      destinationStopId: delivery?.id,
+      name: line.name,
+      quantity: Math.max(1, Math.round(line.quantity || 1)),
+      category: line.itemType,
+      oversized: false,
+      fragile: false,
+      heavy: (line.crewSize ?? 1) >= 2,
+      disassemblyRequired: false,
+      reassemblyRequired: estimate.mode === "service",
+      status: "pending",
+      createdAt: now,
+      updatedAt: now,
+    }));
+}
+
+function movingDetailsFromEstimate(estimate: SavedEstimate, stops: JobStop[]): MovingDetails | undefined {
+  if (estimate.mode !== "moving") return undefined;
+  const service = estimate.service;
+  return {
+    pickupFlights: stops[0]?.flights,
+    deliveryFlights: stops[1]?.flights,
+    distanceMiles: service?.routeMiles ?? estimate.roundTripMiles,
+  };
+}
+
+/** Everything a ticket inherits from a saved estimate (JOB_TICKET_REDESIGN_SPEC D6). */
+export interface EstimateTicketFields {
+  sourceEstimateId: string;
+  customerName: string;
+  jobLabel?: string;
+  serviceType: JobServiceType;
+  movingKind?: MovingKind;
+  requiredCrew: number;
+  stops: JobStop[];
+  items: JobItem[];
+  /** Fleet unit only — a pricing template never reaches a ticket. */
+  vehicleId?: string;
+  quotedAmount: number;
+  quote: JobQuote;
+  moving?: MovingDetails;
+  estimatedDurationMinutes?: number;
+  notes?: string;
+}
+
+export function ticketFieldsFromEstimate(estimate: SavedEstimate): EstimateTicketFields {
+  const serviceType = serviceTypeFromEstimate(estimate);
+  const movingKind = movingKindFromEstimate(estimate);
+  const stops = stopsFromEstimate(estimate, serviceType, movingKind);
+  const requiredCrew = Math.max(
+    requiredCrewFor({ serviceType, movingKind }),
+    estimate.crewSize ?? estimate.service?.crewSize ?? 0,
+  );
+  // Junk estimates pick a pricing template (e.g. box-truck-liftgate) for cost
+  // math; the ticket wants a fleet unit, so the vehicle is left for dispatch to
+  // pick unless the estimate already chose a real unit.
+  const fleet = loadPricingSettings().vehicles.find((vehicle) => vehicle.id === estimate.vehicleId && !vehicle.isTemplate);
+  const hours = estimate.estimatedHours;
+  return {
+    sourceEstimateId: estimate.id,
+    customerName: estimate.customerName || estimate.jobAddress || "Unnamed job",
+    jobLabel: estimate.loadLabel,
+    serviceType,
+    movingKind,
+    requiredCrew,
+    stops,
+    items: itemsFromEstimate(estimate, stops),
+    vehicleId: fleet?.id,
+    quotedAmount: estimate.finalQuote,
+    quote: {
+      tier: estimate.loadLabel || serviceType,
+      low: estimate.quoteRangeLower ?? estimate.finalQuote,
+      high: estimate.quoteRangeUpper ?? estimate.finalQuote,
+      source: "estimate",
+    },
+    moving: movingDetailsFromEstimate(estimate, stops),
+    estimatedDurationMinutes: hours && hours > 0 ? Math.round(hours * 60) : undefined,
+    notes: estimate.notes,
+  };
 }
 
 export function createJobFromEstimate(estimate: SavedEstimate): Job {
@@ -208,34 +320,25 @@ export function createJobFromEstimate(estimate: SavedEstimate): Job {
   // Moving estimates ride the same Pricebook snapshot as service estimates —
   // neither carries material/volume/facility data.
   const isService = estimate.mode === "service" || estimate.mode === "moving";
-  const serviceType = serviceTypeFromEstimate(estimate);
-  const movingKind = movingKindFromEstimate(estimate);
-  const stops = stopsFromEstimate(estimate, serviceType, movingKind);
-  const requiredCrew = Math.max(
-    requiredCrewFor({ serviceType, movingKind }),
-    estimate.crewSize ?? estimate.service?.crewSize ?? 0,
-  );
-
-  // Junk estimates pick a pricing template (e.g. box-truck-liftgate) for cost
-  // math; the ticket wants a fleet unit, so the vehicle is left for dispatch to
-  // pick unless the estimate already chose a real unit.
-  const fleet = loadPricingSettings().vehicles.find((vehicle) => vehicle.id === estimate.vehicleId && !vehicle.isTemplate);
+  const fields = ticketFieldsFromEstimate(estimate);
 
   return saveJob({
     id: jobId(),
     jobNumber: nextJobNumber(cachedJobs),
     source: "estimate",
-    sourceEstimateId: estimate.id,
+    sourceEstimateId: fields.sourceEstimateId,
     createdAt: now,
     updatedAt: now,
-    customerName: estimate.customerName || estimate.jobAddress || "Unnamed job",
-    jobLabel: estimate.loadLabel,
-    serviceType,
-    movingKind,
-    requiredCrew,
+    customerName: fields.customerName,
+    jobLabel: fields.jobLabel,
+    serviceType: fields.serviceType,
+    movingKind: fields.movingKind,
+    requiredCrew: fields.requiredCrew,
     crew: [],
-    stops,
-    items: [],
+    stops: fields.stops,
+    items: fields.items,
+    moving: fields.moving,
+    estimatedDurationMinutes: fields.estimatedDurationMinutes,
     address: estimate.jobAddress,
     status: "open",
     paymentStatus: "unpaid",
@@ -247,14 +350,9 @@ export function createJobFromEstimate(estimate: SavedEstimate): Job {
     estimatedTons: isService ? undefined : estimate.estimatedTons ?? estimate.estimatedWeightLbs / 2000,
     facilityId: isService ? undefined : estimate.facilityId,
     facilityName: isService ? undefined : estimate.facilityName,
-    vehicleId: fleet?.id,
-    quotedAmount: estimate.finalQuote,
-    quote: {
-      tier: estimate.loadLabel || serviceType,
-      low: estimate.quoteRangeLower ?? estimate.finalQuote,
-      high: estimate.quoteRangeUpper ?? estimate.finalQuote,
-      source: "estimate",
-    },
+    vehicleId: fields.vehicleId,
+    quotedAmount: fields.quotedAmount,
+    quote: fields.quote,
     estimatedCost,
     estimatedProfit,
     estimatedMarginDecimal,
@@ -265,7 +363,7 @@ export function createJobFromEstimate(estimate: SavedEstimate): Job {
     actuals: {
       chargedAmount: estimate.finalQuote,
     },
-    notes: estimate.notes,
+    notes: fields.notes,
   });
 }
 

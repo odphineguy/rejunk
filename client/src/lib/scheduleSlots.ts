@@ -1,4 +1,5 @@
-import type { Job } from "@/types/jobs";
+import { isFullDayMove, normalizeServiceType } from "@/lib/jobShape";
+import type { DeliveryKind, Job, JobServiceType, MovingKind } from "@/types/jobs";
 import type { Vehicle, VehicleType } from "@/types/pricing";
 
 /**
@@ -128,6 +129,125 @@ export function defaultVehicleForSlot(
       !vehicle.isTemplate &&
       vehicleClassForType(vehicle.vehicleType) === slot.vehicleClass
   );
+}
+
+// ---------------------------------------------------------------------------
+// Day board — which jobs sit in which slot on a given day. Shared by the
+// Schedule calendar and the New Job slot picker so both always agree.
+// ---------------------------------------------------------------------------
+
+export function startOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+export function sameDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/** Parse a "YYYY-MM-DD" input value as a local-time date (no UTC shift). */
+export function fromDateInputValue(value: string): Date | undefined {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return undefined;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+export function jobsForDay(jobs: Job[], day: Date) {
+  return jobs
+    .filter(
+      job => job.scheduledStart && sameDay(new Date(job.scheduledStart), day)
+    )
+    .sort(
+      (a, b) =>
+        new Date(a.scheduledStart!).getTime() -
+        new Date(b.scheduledStart!).getTime()
+    );
+}
+
+/** A 2BR / Small House / 4-mover move takes both halves of the box truck's day. */
+export function jobTakesFullDay(job: Pick<Job, "serviceType" | "movingKind">) {
+  return normalizeServiceType(job.serviceType) === "moving" && isFullDayMove(job.movingKind);
+}
+
+/** The assembly tech takes at most one job per day (David's assembly calendar). */
+export const ASSEMBLY_JOBS_PER_DAY = 1;
+
+export interface DayBoard {
+  bySlot: Record<SlotKey, Job[]>;
+  unslotted: Job[];
+  /** How many of the four slots have at least one job. */
+  booked: number;
+  /** Assembly & handyman jobs that day, whatever slot they sit in. */
+  assemblyJobs: Job[];
+}
+
+/**
+ * Sort a day's jobs into the four daily slots (plus a bucket for jobs that don't fit one).
+ * Full-day moves on the box truck occupy BOTH the AM and PM box-truck slots.
+ */
+export function buildDayBoard(jobs: Job[], day: Date, vehicles: Vehicle[]): DayBoard {
+  const bySlot = Object.fromEntries(
+    DAILY_SLOTS.map(slot => [slot.key, [] as Job[]])
+  ) as Record<SlotKey, Job[]>;
+  const unslotted: Job[] = [];
+  const assemblyJobs: Job[] = [];
+  for (const job of jobsForDay(jobs, day)) {
+    if (job.status === "canceled") continue;
+    if (normalizeServiceType(job.serviceType) === "assembly_handyman") assemblyJobs.push(job);
+    const key = jobSlotKey(job, vehicles);
+    if (!key) {
+      unslotted.push(job);
+      continue;
+    }
+    bySlot[key].push(job);
+    if (jobTakesFullDay(job) && key.endsWith("box_truck")) {
+      const other: SlotKey = key === "am_box_truck" ? "pm_box_truck" : "am_box_truck";
+      if (!bySlot[other].includes(job)) bySlot[other].push(job);
+    }
+  }
+  const booked = DAILY_SLOTS.filter(slot => bySlot[slot.key].length > 0).length;
+  return { bySlot, unslotted, booked, assemblyJobs };
+}
+
+/**
+ * Which vehicle class a new ticket books against (rejunk-operations-rules §7 + David's menu).
+ * `undefined` = no vehicle needed (labor-only) or dispatcher's choice (other).
+ */
+export function vehicleClassForService(input: {
+  serviceType: JobServiceType | undefined;
+  movingKind?: MovingKind;
+  deliveryKind?: DeliveryKind;
+}): SlotVehicleClass | undefined {
+  switch (normalizeServiceType(input.serviceType)) {
+    case "moving":
+      return input.movingKind === "labor_only" ? undefined : "box_truck";
+    case "delivery":
+      return "van";
+    case "assembly_handyman":
+      return "van";
+    case "junk_removal":
+      return "van";
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Start / end for a booking in `slot` on `day`. A full-day job starts at the AM
+ * window and ends at the PM window so it blocks both halves.
+ */
+export function slotWindow(day: Date, slot: DailySlot, fullDay = false) {
+  const am = DAILY_SLOTS.find(candidate => candidate.period === "am" && candidate.vehicleClass === slot.vehicleClass) ?? slot;
+  const pm = DAILY_SLOTS.find(candidate => candidate.period === "pm" && candidate.vehicleClass === slot.vehicleClass) ?? slot;
+  const start = withClockTime(day, fullDay ? am.windowStart : slot.windowStart);
+  const end = withClockTime(day, fullDay ? pm.windowEnd : slot.windowEnd);
+  return { start, end };
 }
 
 export function toDateInputValue(date: Date) {

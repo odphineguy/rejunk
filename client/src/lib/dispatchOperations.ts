@@ -4,7 +4,7 @@ import { crewFromRoles, requiredCrewFor, serviceTypeLabels } from "@/lib/jobShap
 import { getJobs, saveJob, updateJob } from "@/lib/jobStorage";
 import { ensureSession, supabase } from "@/lib/supabase";
 import type { EmployeeRecord } from "@/types/employees";
-import type { CanonicalJobServiceType, DeliveryKind, Job, JobCrewMember, JobLeadSource, JobPriority, JobServiceType, MovingKind } from "@/types/jobs";
+import type { CanonicalJobServiceType, DeliveryKind, Job, JobCrewMember, JobLeadRef, JobLeadSource, JobPriority, JobQuote, JobServiceType, MovingDetails, MovingKind } from "@/types/jobs";
 import type {
   AddedScopeReviewStatus,
   JobActivity,
@@ -56,6 +56,12 @@ export type DispatchJobInput = {
   /** Dispatcher may raise the safety floor, never lower it. */
   requiredCrew?: number;
   clientId?: string;
+  leadRef?: JobLeadRef;
+  /** Saved estimate this ticket was built from ("From estimate" on the New Job form). */
+  sourceEstimateId?: string;
+  quote?: JobQuote;
+  moving?: MovingDetails;
+  thirdPartyPickup?: boolean;
   jobLabel?: string;
   scheduledStart?: string;
   scheduledEnd?: string;
@@ -148,15 +154,21 @@ export function crewFromAssignmentInput(assignment: DispatchAssignmentInput): Jo
  * Create a ticket from the New Job form. Stops, items, crew and vehicle live ON
  * the job record (`jobs.data`) — nothing is written to the dead `job_stops` /
  * `job_items` tables or the per-browser operational blob any more.
+ *
+ * `draft` → status `open` (no slot / crew needed). `book` → status `scheduled`:
+ * the job has a slot, a vehicle and its full crew, so it lands on the calendar.
+ * A booked job with crew is assigned by definition — there is no separate
+ * "assigned" step any more (JOB_TICKET_REDESIGN_SPEC D5).
  */
-export async function createDispatchJob(input: DispatchJobInput, mode: "draft" | "assign" = "assign") {
+export async function createDispatchJob(input: DispatchJobInput, mode: "draft" | "book" = "book") {
   const now = new Date().toISOString();
   const crew = crewFromAssignmentInput(input.assignment);
   const requiredCrew = Math.max(requiredCrewFor(input), input.requiredCrew ?? 0);
   const job = saveJob({
     id: "",
     jobNumber: "",
-    source: "manual",
+    source: input.sourceEstimateId ? "estimate" : "manual",
+    sourceEstimateId: input.sourceEstimateId,
     createdAt: now,
     updatedAt: now,
     customerName: input.customerName || "Unnamed customer",
@@ -165,10 +177,14 @@ export async function createDispatchJob(input: DispatchJobInput, mode: "draft" |
     email: input.email,
     scheduledStart: input.scheduledStart,
     scheduledEnd: input.scheduledEnd,
-    status: mode === "draft" ? "open" : "assigned",
+    status: mode === "draft" ? "open" : "scheduled",
     paymentStatus: "unpaid",
     leadSource: input.leadSource,
     clientId: input.clientId,
+    leadRef: input.leadRef,
+    quote: input.quote,
+    moving: input.moving,
+    thirdPartyPickup: input.thirdPartyPickup,
     serviceType: input.serviceType,
     movingKind: input.movingKind,
     deliveryKind: input.deliveryKind,
@@ -192,7 +208,7 @@ export async function createDispatchJob(input: DispatchJobInput, mode: "draft" |
   if (job.facilityId || job.facilityName) {
     updateJob(job.id, { disposalEvents: plannedDisposalEvents(job) });
   }
-  appendActivity(job.id, mode === "draft" ? "Dispatch saved job draft." : "Dispatch created and assigned job.", mode === "draft" ? "scope_change" : "assignment_changed");
+  appendActivity(job.id, mode === "draft" ? "Dispatch saved job draft." : "Dispatch booked the job.", mode === "draft" ? "scope_change" : "assignment_changed");
 
   return job;
 }

@@ -24,7 +24,11 @@ import {
   DAILY_SLOTS,
   DRAG_MIME,
   SLOTS_PER_DAY,
+  buildDayBoard,
   getSlot,
+  jobsForDay,
+  sameDay,
+  startOfDay,
   isJobMovable,
   jobSlotKey,
   moveJobToDay,
@@ -47,12 +51,6 @@ const currency = new Intl.NumberFormat("en-US", {
 
 function money(value: number | undefined) {
   return currency.format(Number.isFinite(value) ? Number(value) : 0);
-}
-
-function startOfDay(date: Date) {
-  const next = new Date(date);
-  next.setHours(0, 0, 0, 0);
-  return next;
 }
 
 /** Weeks run Sunday → Saturday. */
@@ -79,14 +77,6 @@ function addMonths(date: Date, months: number) {
   const next = new Date(date);
   next.setMonth(next.getMonth() + months);
   return next;
-}
-
-function sameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
 }
 
 function timeLabel(value: string) {
@@ -138,30 +128,6 @@ function monthWeeks(date: Date) {
   return weeks;
 }
 
-type Vehicles = ReturnType<typeof loadPricingSettings>["vehicles"];
-
-interface DayBoard {
-  bySlot: Record<SlotKey, Job[]>;
-  unslotted: Job[];
-  booked: number;
-}
-
-/** Sort a day's jobs into the four daily slots (plus a bucket for jobs that don't fit one). */
-function buildDayBoard(jobs: Job[], day: Date, vehicles: Vehicles): DayBoard {
-  const bySlot = Object.fromEntries(
-    DAILY_SLOTS.map(slot => [slot.key, [] as Job[]])
-  ) as Record<SlotKey, Job[]>;
-  const unslotted: Job[] = [];
-  for (const job of jobsForDay(jobs, day)) {
-    if (job.status === "canceled") continue;
-    const key = jobSlotKey(job, vehicles);
-    if (key) bySlot[key].push(job);
-    else unslotted.push(job);
-  }
-  const booked = DAILY_SLOTS.filter(slot => bySlot[slot.key].length > 0).length;
-  return { bySlot, unslotted, booked };
-}
-
 type MoveJob = (jobId: string, day: Date, slot: DailySlot) => void;
 
 function startJobDrag(event: DragEvent, job: Job) {
@@ -200,18 +166,6 @@ function useDropTarget(onDrop: (jobId: string) => void) {
       },
     },
   };
-}
-
-function jobsForDay(jobs: Job[], day: Date) {
-  return jobs
-    .filter(
-      job => job.scheduledStart && sameDay(new Date(job.scheduledStart), day)
-    )
-    .sort(
-      (a, b) =>
-        new Date(a.scheduledStart!).getTime() -
-        new Date(b.scheduledStart!).getTime()
-    );
 }
 
 function upcomingGroups(jobs: Job[], from: Date) {

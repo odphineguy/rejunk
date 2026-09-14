@@ -99,6 +99,12 @@ Two distinct persistence patterns coexist:
    pickers use `lib/fleet.ts` `fleetVehicles()` (real units only; the four pricing templates carry
    `vehicles.is_template = true`). The junk fields (material / facility / weights / actuals) are still
    flat on the job (the spec's `junk: {…}` nesting is deferred to phase 4).
+   **New Job form (phase 3, 2026-09-14):** `/jobs/new` is slot-first — What / Who / Where / When / Crew /
+   Price / Notes on one page; the When step is a one-day slot board built from `buildDayBoard()` (now in
+   `lib/scheduleSlots.ts`, shared with the calendar; full-day moves occupy both box-truck halves, taken
+   slots can't be picked, one assembly job per day). **Save draft** → `open`, **Book it** → `scheduled`
+   (needs address + slot + vehicle + full crew); the form never writes `assigned`. "From estimate" and
+   `createJobFromEstimate()` both go through `ticketFieldsFromEstimate()` (`lib/jobStorage.ts`).
    **Read-only pipeline views** (2026-09-04): `lib/leadsStorage.ts` hydrates the last 60 days of Thumbtack
    leads from the `app_leads_v` view (one row per negotiation; `kind` = lead until booked, then client;
    status new/quoted/escalated/booked/lost; repeat count per phone; relay-number flag) and loads a
