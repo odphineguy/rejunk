@@ -112,6 +112,18 @@ with tempfile.TemporaryDirectory(prefix='rejunk-access-') as temp:
         actor("""select office_save_job('{"id":"from-service","sourceEstimateId":"new-service","quotedAmount":600}')""",5)
         assert sql("select data->>'estimatedCost' from jobs where id='from-service'")=='120.00'
         print('PASS: receipt metadata/files are owner-only for office accounts; server quote snapshots retain owner costs without returning them')
+        run(*cmd,'-f',str(ROOT/'supabase/migrations/20260914042324_owner_employee_management.sql'))
+        assert actor("select count(*) from app_employees",5)=='1'
+        denied("insert into app_employees(id,data) values('office-created','{}')",5)
+        assert actor("with changed as (update app_employees set status='inactive' returning id) select count(*) from changed",5)=='0'
+        assert actor("with changed as (delete from app_employees returning id) select count(*) from changed",5)=='0'
+        actor("insert into app_employees(id,data) values('owner-created','{}')",2)
+        assert actor("with changed as (update app_employees set status='inactive' where id='owner-created' returning id) select count(*) from changed",2)=='1'
+        assert actor("with changed as (delete from app_employees where id='owner-created' returning id) select count(*) from changed",2)=='1'
+        denied("insert into app_settings values('calendar','{}')",5)
+        assert actor("with changed as (update app_settings set value='{}' returning key) select count(*) from changed",5)=='0'
+        print('PASS: office crew reads retained; employee management and business settings writes require owner')
+
         sql("update staff set role='office' where id='00000000-0000-0000-0000-000000000010'")
         assert actor("select count(*) from jobs",2)=='0'
         assert actor("select business_rows('jobs')::text like '%estimatedCost%'",2)=='f'

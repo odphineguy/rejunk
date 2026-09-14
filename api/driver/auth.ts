@@ -222,6 +222,7 @@ async function findPendingActivation(
 async function createActivation(supabase: SupabaseClient, body: Record<string, unknown>): Promise<Result> {
   const caller = await resolveStaffToken(supabase, body.staffToken);
   if (!caller) return STAFF_REQUIRED;
+  if (caller.role !== "owner") return { status: 403, body: { error: "Only an owner can manage driver access." } };
   const employeeId = typeof body.employeeId === "string" ? body.employeeId.trim() : "";
   const employeeName = typeof body.employeeName === "string" ? body.employeeName.trim().slice(0, 120) : "";
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
@@ -254,6 +255,7 @@ async function createActivation(supabase: SupabaseClient, body: Record<string, u
 async function revoke(supabase: SupabaseClient, body: Record<string, unknown>): Promise<Result> {
   const caller = await resolveStaffToken(supabase, body.staffToken);
   if (!caller) return STAFF_REQUIRED;
+  if (caller.role !== "owner") return { status: 403, body: { error: "Only an owner can manage driver access." } };
   const employeeId = typeof body.employeeId === "string" ? body.employeeId.trim() : "";
   if (!employeeId) return { status: 400, body: { error: "An employee id is required." } };
   await revokeEmployee(supabase, employeeId);

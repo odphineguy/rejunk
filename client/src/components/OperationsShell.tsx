@@ -73,12 +73,12 @@ const navGroups = [
       { href: "/invoices", label: "Invoices", icon: FileText },
       { href: "/payments", label: "Payments", icon: Banknote, ownerOnly: true },
       { href: "/pricebook", label: "Pricebook", icon: PackageSearch, ownerOnly: true },
-      { href: "/employees", label: "Employees", icon: BriefcaseBusiness },
+      { href: "/employees", label: "Employees", icon: BriefcaseBusiness, ownerOnly: true },
     ],
   },
   {
     label: "Admin",
-    items: [{ href: "/settings", label: "Settings", icon: Settings }],
+    items: [{ href: "/settings", label: "Settings", icon: Settings, ownerOnly: true }],
   },
 ];
 
@@ -424,6 +424,7 @@ function AccountMenu() {
 }
 
 export function AddNewMenu() {
+  const { isOwner } = useStaffSession();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -433,7 +434,7 @@ export function AddNewMenu() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-52 rounded-lg p-3">
-        {actionItems.map(item => {
+        {actionItems.filter(item => isOwner || item.href !== "/employees/new").map(item => {
           const Icon = item.icon;
           return (
             <DropdownMenuItem
@@ -600,12 +601,12 @@ function GlobalSearch() {
         icon: UsersRound,
         items: clientResults,
       },
-      {
+      ...(isOwnerUser ? [{
         label: "Employees",
         href: "/employees",
         icon: BriefcaseBusiness,
         items: employeeResults,
-      },
+      }] : []),
       {
         label: "Events",
         href: "/events",

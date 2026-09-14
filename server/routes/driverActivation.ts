@@ -26,8 +26,8 @@ driverActivationRouter.post("/activate", async (req, res) => {
     return;
   }
   const staff = await resolveStaffToken(supabase, (req.body ?? {}).staffToken);
-  if (!staff) {
-    res.status(401).json({ error: "Sign in to the office app to send activation emails." });
+  if (!staff || staff.role !== "owner") {
+    res.status(401).json({ error: "Owner access is required to send driver activation emails." });
     return;
   }
   const payload = validateActivationEmailPayload(req.body);

@@ -198,3 +198,21 @@ This follow-up is locally verified, not yet deployed. The real Office Staff
 workflow is still untested (confirmed by the user). Production re-verification
 was blocked by the Supabase connector returning Auth required; reconnect before
 claiming current live verification. No production records or schema were changed.
+
+## Owner employee administration — September 13
+
+User confirmed real Office Staff sign-in and an operational dashboard without financial
+tiles. Full job creation remains unverified because the form is confusing.
+
+Employee management and business settings routes, sidebar entries, employee search
+results and employee quick-create actions now require owner access. Personal profile
+access remains. Staff still read employees for dispatch; migration 20260914042324
+restricts employee INSERT/UPDATE/DELETE to owner. Driver activation creation/revocation
+and activation emails now require owner in shared, Vite, Express and Vercel handlers.
+Business settings writes were already owner-only in the database.
+
+Disposable PostgreSQL tests, mocked driver endpoint role tests, pnpm check and pnpm
+build passed. The migration is applied live; a transaction-local real office-session
+check confirmed employee reads work, all employee mutations are denied, and business
+settings are hidden. Checks were rolled back and changed no business records.
+App rollout is in progress; includes the earlier calendar badge fix (399c4c8).

@@ -70,9 +70,9 @@ function StaffRouter() {
       <Route path={"/clients/new"} component={ClientsLeads} />
       <Route path={"/clients/:clientId"} component={ClientsLeads} />
       <Route path={"/clients"} component={ClientsLeads} />
-      <Route path={"/employees/new"} component={Employees} />
-      <Route path={"/employees/:employeeId"} component={Employees} />
-      <Route path={"/employees"} component={Employees} />
+      <Route path={"/employees/new"}><OwnerOnly><Employees /></OwnerOnly></Route>
+      <Route path={"/employees/:employeeId"}><OwnerOnly><Employees /></OwnerOnly></Route>
+      <Route path={"/employees"}><OwnerOnly><Employees /></OwnerOnly></Route>
       <Route path={"/invoices/new"} component={Invoices} />
       <Route path={"/invoices/:invoiceId"} component={Invoices} />
       <Route path={"/invoices"} component={Invoices} />
@@ -89,24 +89,24 @@ function StaffRouter() {
       <Route path={"/events/new"} component={Events} />
       <Route path={"/events/:eventId"} component={Events} />
       <Route path={"/events"} component={Events} />
-      <Route path={"/settings/company"} component={CompanySettings} />
+      <Route path={"/settings/company"}><OwnerOnly><CompanySettings /></OwnerOnly></Route>
       <Route path={"/settings/profile"} component={ProfileSettings} />
-      <Route path={"/settings/online-booking"} component={OnlineBooking} />
-      <Route path={"/settings/invoices"} component={InvoiceSettings} />
-      <Route path={"/settings/tips"} component={TipSettings} />
-      <Route path={"/settings/tax-rates"} component={TaxRates} />
-      <Route path={"/settings/phone"} component={PhoneSettings} />
-      <Route path={"/settings/phone-numbers"} component={PhoneNumbers} />
-      <Route path={"/settings/jobs"} component={JobSettings} />
-      <Route path={"/settings/sms"} component={SmsNotifications} />
-      <Route path={"/settings/email-templates"} component={EmailTemplates} />
-      <Route path={"/settings/calendar"} component={CalendarSettings} />
+      <Route path={"/settings/online-booking"}><OwnerOnly><OnlineBooking /></OwnerOnly></Route>
+      <Route path={"/settings/invoices"}><OwnerOnly><InvoiceSettings /></OwnerOnly></Route>
+      <Route path={"/settings/tips"}><OwnerOnly><TipSettings /></OwnerOnly></Route>
+      <Route path={"/settings/tax-rates"}><OwnerOnly><TaxRates /></OwnerOnly></Route>
+      <Route path={"/settings/phone"}><OwnerOnly><PhoneSettings /></OwnerOnly></Route>
+      <Route path={"/settings/phone-numbers"}><OwnerOnly><PhoneNumbers /></OwnerOnly></Route>
+      <Route path={"/settings/jobs"}><OwnerOnly><JobSettings /></OwnerOnly></Route>
+      <Route path={"/settings/sms"}><OwnerOnly><SmsNotifications /></OwnerOnly></Route>
+      <Route path={"/settings/email-templates"}><OwnerOnly><EmailTemplates /></OwnerOnly></Route>
+      <Route path={"/settings/calendar"}><OwnerOnly><CalendarSettings /></OwnerOnly></Route>
       <Route path={"/settings/estimates"}><OwnerOnly><EstimateSettings /></OwnerOnly></Route>
-      <Route path={"/settings/contact-form"} component={ContactFormSettings} />
-      <Route path={"/settings/affiliate"} component={AffiliateSettings} />
-      <Route path={"/settings/reviews"} component={ReviewSettings} />
-      <Route path={"/settings/subscription"} component={RejunkSubscription} />
-      <Route path={"/settings"} component={Settings} />
+      <Route path={"/settings/contact-form"}><OwnerOnly><ContactFormSettings /></OwnerOnly></Route>
+      <Route path={"/settings/affiliate"}><OwnerOnly><AffiliateSettings /></OwnerOnly></Route>
+      <Route path={"/settings/reviews"}><OwnerOnly><ReviewSettings /></OwnerOnly></Route>
+      <Route path={"/settings/subscription"}><OwnerOnly><RejunkSubscription /></OwnerOnly></Route>
+      <Route path={"/settings"}><OwnerOnly><Settings /></OwnerOnly></Route>
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

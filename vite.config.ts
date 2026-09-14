@@ -312,9 +312,9 @@ function vitePluginDriverApi(): Plugin {
               const parsed = JSON.parse(body || "{}") as Record<string, unknown>;
               const supabase = getSupabaseAdmin();
               const staff = supabase ? await resolveStaffToken(supabase, parsed.staffToken) : null;
-              if (!staff) {
+              if (!staff || staff.role !== "owner") {
                 res.writeHead(401, { "Content-Type": "application/json" });
-                res.end(JSON.stringify({ error: "Sign in to the office app to send activation emails." }));
+                res.end(JSON.stringify({ error: "Owner access is required to send driver activation emails." }));
                 return;
               }
               const payload = validateActivationEmailPayload(parsed);

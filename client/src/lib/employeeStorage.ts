@@ -1,3 +1,4 @@
+import { isOwner } from "@/lib/staffSession";
 import { deleteEmployeeRemote, loadEmployeesRemote, upsertEmployeeRemote } from "@/lib/dataStore";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import type { EmployeeRecord } from "@/types/employees";
@@ -84,6 +85,7 @@ export function getEmployee(employeeIdToFind: string): EmployeeRecord | null {
 }
 
 export function saveEmployee(employee: Partial<EmployeeRecord> & Pick<EmployeeRecord, "firstName" | "lastName" | "type">): EmployeeRecord {
+  if (!isOwner()) throw new Error("Only an owner can manage employees.");
   const existing = employee.id ? cachedEmployees.find((item) => item.id === employee.id) : undefined;
   const timestamp = new Date().toISOString();
   const saved: EmployeeRecord = {
@@ -109,6 +111,7 @@ export function saveEmployee(employee: Partial<EmployeeRecord> & Pick<EmployeeRe
 }
 
 export function deleteEmployee(employeeIdToDelete: string): EmployeeRecord[] {
+  if (!isOwner()) throw new Error("Only an owner can manage employees.");
   cachedEmployees = cachedEmployees.filter((employee) => employee.id !== employeeIdToDelete);
   persistLocal();
   void deleteEmployeeRemote(employeeIdToDelete).catch(reportRemoteError("employee delete"));

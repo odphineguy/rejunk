@@ -42,8 +42,8 @@ async function isActiveStaffToken(token: unknown): Promise<boolean> {
     .eq("token", token)
     .maybeSingle();
   if (!session || new Date(session.expires_at).getTime() < Date.now()) return false;
-  const { data: staff } = await supabase.from("staff").select("active").eq("id", session.staff_id).maybeSingle();
-  return Boolean(staff?.active);
+  const { data: staff } = await supabase.from("staff").select("active, role").eq("id", session.staff_id).maybeSingle();
+  return Boolean(staff?.active && staff.role === "owner");
 }
 
 // Production sends from dispatch@dispatchai.help via RESEND_FROM (domain
@@ -118,7 +118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const body = typeof req.body === "string" ? safeParse(req.body) : req.body;
   const staffToken = body && typeof body === "object" ? (body as Record<string, unknown>).staffToken : undefined;
   if (!(await isActiveStaffToken(staffToken))) {
-    res.status(401).json({ error: "Sign in to the office app to send activation emails." });
+    res.status(401).json({ error: "Owner access is required to send driver activation emails." });
     return;
   }
   const payload = validateActivationEmailPayload(body);

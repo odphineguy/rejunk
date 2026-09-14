@@ -412,3 +412,11 @@ the existing exception.)
 - Reference docs worth reading before non-trivial work: `DECISIONS.md` (decision trail + rejected
   alternatives), `rejunk-pricebook-v4.md` and `rejunk-operations-rules-v1.md` (pricing/ops source of
   truth), and the `DRIVER_*` / `DISPATCH_*` / `HAUL_OR_CALL_WORKFLOW.md` notes for those features.
+
+### Owner employee administration (September 13, 2026)
+
+Employee administration and business settings routes/navigation require owner access.
+Office staff retain employee reads for dispatch crew selection, but INSERT/UPDATE/DELETE
+on app_employees require owner via migration 20260914042324. Driver access creation,
+revocation and activation emails also require owner in both local and Vercel endpoints.
+Personal profile/PIN access remains available at /settings/profile.
