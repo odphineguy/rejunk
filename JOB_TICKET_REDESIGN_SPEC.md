@@ -1,7 +1,7 @@
 # Job Ticket Redesign — Spec
 
-**Owner:** Abe · **Date:** Sep 12, 2026 · **Status:** phases 0 + 1 shipped 2026-09-12 (both migrations live), phase 3 shipped 2026-09-14 — see
-DECISIONS.md 2026-09-12 / 2026-09-14 for the deviations. Phases 2, 4, 5, 6 not started.
+**Owner:** Abe · **Date:** Sep 12, 2026 · **Status:** phases 0 + 1 shipped 2026-09-12 (both migrations live), phase 3 + phase 4 first pass (Jobs list / Job detail) shipped 2026-09-14 — see
+DECISIONS.md 2026-09-12 / 2026-09-14 for the deviations. Phase 4 Dispatch Center, phases 2, 5, 6 not started.
 **Scope:** how a job ("ticket") is created, stored, assigned, listed, and shown to drivers.
 **Out of scope:** pricing math (see `MOVING_ESTIMATOR_V19_SPEC.md`), the public website, payments/invoices,
 Thumbtack auto-replies.

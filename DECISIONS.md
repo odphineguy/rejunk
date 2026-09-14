@@ -10,6 +10,31 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
 
 ---
 
+## 2026-09-14 — Ticket redesign phase 4 (first pass): junk is one service type, not the default screen
+
+**Decision**
+Abe opened a 2BR move on Job detail and got Facility Check, Vehicle Comparison, Material, Facility and
+a dump-receipt card — "this was a junk removal first app, all its crap is in the way". Job detail now
+leads with the service label, slot, vehicle and crew, then an editable Stops & items card (pickup →
+delivery with stairs / elevator / parking, the same fields as the New Job form). Every junk-only card
+renders only when `serviceType === "junk_removal"`, and the landfill routing engine (Maps route
+estimates + recommendation snapshot) no longer runs for other services. Jobs list gets a Service
+filter and Service / Scheduled (day + slot) / Vehicle / Crew / Where columns; Material and Facility
+columns only appear under the Junk removal filter. "Missing receipt" and facility warnings are junk-only.
+
+**Rejected**
+- Deleting the junk cards outright — direct junk customers still exist; they're gated, not removed.
+- Nesting the junk fields under `junk: {…}` now — still deferred; gating by service type gives the same
+  screen without touching the office/owner projections.
+
+**Constraints / Open risks**
+- Dispatch Center and the driver screens still carry junk assumptions (phase 5). The Jobs list dropped
+  the never-written intermediate status tabs (`assigned`, `arrived`, `loaded`); old `assigned` tickets
+  fold into the Scheduled tab.
+- Not browser-tested this session (no PIN); `pnpm check` + `pnpm build` clean. Commit e5cba26, local.
+
+---
+
 ## 2026-09-14 — Ticket redesign phase 3: slot-first New Job form + estimate handoff
 
 **Decision**
