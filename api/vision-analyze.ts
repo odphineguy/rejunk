@@ -31,12 +31,7 @@ const DEFAULT_TEMPERATURE = 0.3;
 const DEFAULT_MAX_TOKENS = 1500;
 const MAX_TOKENS_CAP = 2500;
 
-// Rate limits (in-memory: per warm instance on Vercel, so a blunt backstop,
-// not a durable quota).
-const PUBLIC_WINDOW_MS = 5 * 60 * 1000;
-const PUBLIC_MAX_PER_IP = 20;
-const STAFF_WINDOW_MS = 5 * 60 * 1000;
-const STAFF_MAX_PER_ACCOUNT = 60;
+// Durable rate limits are enforced by reserve_vision_analysis in Postgres.
 
 interface VisionPayload {
   photos: string[];
@@ -50,6 +45,7 @@ interface VisionPayload {
 interface VisionRunResult {
   status: number;
   body: unknown;
+  retryAfterSeconds?: number;
 }
 
 function validateVisionPayload(body: unknown): VisionPayload | null {
@@ -139,19 +135,6 @@ async function loadVisionConfig(supabase: SupabaseClient): Promise<VisionConfig 
 
 // ------------------------------------------------------------- rate limiting
 
-const rateHits = new Map<string, number[]>();
-function rateLimited(bucket: string, windowMs: number, max: number): boolean {
-  const now = Date.now();
-  const recent = (rateHits.get(bucket) ?? []).filter(t => now - t < windowMs);
-  if (recent.length >= max) {
-    rateHits.set(bucket, recent);
-    return true;
-  }
-  recent.push(now);
-  rateHits.set(bucket, recent);
-  return false;
-}
-
 // ------------------------------------------------------------ request entry
 
 const PUBLIC_LIMIT_MESSAGE =
@@ -172,21 +155,26 @@ async function handleVisionRequest(body: unknown, ip: string): Promise<VisionRun
     return { status: 503, body: { error: "Vision AI is not configured on the server." } };
   }
 
-  if (payload.source === "public") {
-    if (rateLimited(`ip:${ip || "unknown"}`, PUBLIC_WINDOW_MS, PUBLIC_MAX_PER_IP)) {
-      return { status: 429, body: { error: PUBLIC_LIMIT_MESSAGE } };
+  const staffId = payload.source === "public" ? null : await resolveStaffToken(supabase, payload.staffToken);
+  if (payload.source !== "public" && !staffId) {
+    return { status: 401, body: { error: "Please sign in to the office app to use Vision AI." } };
+  }
+  try {
+    const { data, error } = await supabase.rpc("reserve_vision_analysis", {
+      client_ip: ip || "0.0.0.0",
+      staff_id: staffId,
+    });
+    if (error || !data || typeof data.allowed !== "boolean") {
+      return { status: 503, body: { error: "Estimate limits are temporarily unavailable. Please try again later." } };
     }
-  } else {
-    const staffId = await resolveStaffToken(supabase, payload.staffToken);
-    if (!staffId) {
-      return { status: 401, body: { error: "Please sign in to the office app to use Vision AI." } };
+    if (!data.allowed) {
+      return { status: 429, retryAfterSeconds: data.retry_after, body: {
+        error: payload.source === "public" ? PUBLIC_LIMIT_MESSAGE : "Analysis limit reached. Please try again later.",
+        retryAfterSeconds: data.retry_after,
+      } };
     }
-    if (rateLimited(`staff:${staffId}`, STAFF_WINDOW_MS, STAFF_MAX_PER_ACCOUNT)) {
-      return {
-        status: 429,
-        body: { error: "Too many analyses in a short time. Please wait a few minutes and try again." },
-      };
-    }
+  } catch {
+    return { status: 503, body: { error: "Estimate limits are temporarily unavailable. Please try again later." } };
   }
 
   const visionConfig = await loadVisionConfig(supabase);
@@ -332,6 +320,7 @@ type VercelRequest = {
   headers?: Record<string, string | string[] | undefined>;
 };
 type VercelResponse = {
+  setHeader: (name: string, value: string) => void;
   status: (code: number) => VercelResponse;
   json: (body: unknown) => void;
 };
@@ -339,7 +328,7 @@ type VercelResponse = {
 function clientIp(req: VercelRequest): string {
   const xff = req.headers?.["x-forwarded-for"];
   const raw = Array.isArray(xff) ? xff[0] : xff;
-  return raw?.split(",")[0]?.trim() || "unknown";
+  return raw?.split(",")[0]?.trim() || "0.0.0.0";
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -349,6 +338,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const body = typeof req.body === "string" ? safeParse(req.body) : req.body;
   const result = await handleVisionRequest(body, clientIp(req));
+  res.setHeader("Cache-Control", "no-store");
+  if (result.retryAfterSeconds) res.setHeader("Retry-After", String(result.retryAfterSeconds));
   res.status(result.status).json(result.body);
 }
 

@@ -420,3 +420,13 @@ Office staff retain employee reads for dispatch crew selection, but INSERT/UPDAT
 on app_employees require owner via migration 20260914042324. Driver access creation,
 revocation and activation emails also require owner in both local and Vercel endpoints.
 Personal profile/PIN access remains available at /settings/profile.
+
+### Persistent AI/report abuse limits (September 14, 2026)
+
+See PERSISTENT_ABUSE_LIMITS.md. Private rolling-window counters in migration
+20260914100450 enforce AI reservations and dashboard request/report-day budgets.
+AI servers call service-only reserve_vision_analysis before OpenAI and fail closed
+on limiter errors. Keep server/visionAnalyze.ts and api/vision-analyze.ts in sync.
+Dashboard RPCs are VOLATILE and must be called via POST. Staff identity, rather
+than the transport session, keys account limits. Public AI has a separate daily
+ceiling; browser roles cannot access/reset counters. Timeout verification remains open.

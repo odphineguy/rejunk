@@ -508,11 +508,10 @@ function vitePluginVisionApi(): Plugin {
           void (async () => {
             try {
               const { handleVisionRequest } = await import("./server/visionAnalyze");
-              const ip =
-                (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ||
-                req.socket.remoteAddress ||
-                "unknown";
+              const ip = req.socket.remoteAddress || "0.0.0.0";
               const result = await handleVisionRequest(JSON.parse(body || "{}"), ip);
+              res.setHeader("Cache-Control", "no-store");
+              if (result.retryAfterSeconds) res.setHeader("Retry-After", String(result.retryAfterSeconds));
               res.writeHead(result.status, {
                 "Content-Type": "application/json",
               });

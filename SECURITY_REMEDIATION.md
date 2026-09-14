@@ -9,11 +9,11 @@ verified. Other entries distinguish repository changes from deployed verificatio
 | 2. Driver credentials and GPS | Credential fix and own-session GPS/assigned-job policies deployed | Live driver workflow acceptance remains |
 | 3. Profile self-promotion | Applied and verified on rejunk-prod | End-to-end office/driver workflow checks remain |
 | 4. Pipeline reads and tenant authorization | Staff/tenant checks and invoker view deployed | Signed-in UI acceptance remains |
-| 5. Vision abuse | Request authentication and server-owned settings added in `ee6ef3c` | Verify deployed behavior; process-local throttling remains a limitation |
+| 5. Vision abuse | Request authentication and server-owned settings added in `ee6ef3c` | Persistent counters implemented; see September 14 follow-up |
 | 6. Activation email relay | Staff gating and server-built links added in `3ae8e02` | Verify deployed behavior |
 | 7. Office PIN lockout | Durable counter migration added in `4d5449c` | Verify live schema and deployed behavior |
 | 8. Public internal photos | Private storage and signed-link client deployed | Live signed-photo UI acceptance remains |
-| 9. Dashboard resource exhaustion | Authorization and range bounds deployed | Durable request limits and timeout verification remain |
+| 9. Dashboard resource exhaustion | Authorization and range bounds deployed | Persistent limits implemented; timeout verification remains |
 | 10. Fleet data in Git | Still open | Sanitize seed data; assess repository/history exposure separately |
 
 ## Item 3: applied fix
@@ -219,3 +219,13 @@ App commit 38492da is deployed: Vercel dpl_2VhKisFBzx2XdGLpCdHoPCV1weNk
 is READY with rejunk.vercel.app and progressive-junk.xyz aliases assigned. Includes
 the earlier calendar badge fix (399c4c8). Reload existing tabs for the new UI.
 Live post-deployment owner/office browser acceptance remains a user check.
+
+## Persistent abuse limits — September 14
+
+Migration 20260914100450 is applied and live transaction-local denial/permission
+checks passed. AI reservations and dashboard request/report-day quotas now have
+private rolling counters. Local concurrency, actual database restart, expiry,
+identity-rotation, fail-closed AI and financial-access regressions passed, as did
+typecheck/build. See PERSISTENT_ABUSE_LIMITS.md for limits and precise boundaries.
+AI app deployment is pending; report limits already operate in the database.
+No OpenAI credits or business-record writes were used in verification.
