@@ -20,6 +20,10 @@ import {
   jobStatusLabels,
 } from "@/components/JobBadges";
 import { facilityCode, materialCode } from "@/lib/jobCodes";
+import { isJunkService, normalizeServiceType, serviceTypeLabel, serviceTypeLabels } from "@/lib/jobShape";
+import { employeeNameById } from "@/lib/employeeStorage";
+import { fleetVehicles, vehicleUnitCode } from "@/lib/fleet";
+import { getSlot, jobSlotKey } from "@/lib/scheduleSlots";
 import { OperationsShell } from "@/components/OperationsShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,7 +43,7 @@ import { useStaffSession } from "@/hooks/useStaffSession";
 import { getJobWarningsWithFacilityCheck } from "@/lib/jobIntelligence";
 import { deleteJob, getActualFinancials, getJobs } from "@/lib/jobStorage";
 import { loadPricingSettings } from "@/utils/pricingStorage";
-import type { Job, JobStatus } from "@/types/jobs";
+import type { CanonicalJobServiceType, Job, JobStatus } from "@/types/jobs";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -51,18 +55,32 @@ const statusTabs: Array<"all" | JobStatus> = [
   "all",
   "open",
   "scheduled",
-  "on_my_way",
-  "assigned",
   "en_route",
-  "arrived",
   "in_progress",
   "paused",
-  "loaded",
   "delayed",
   "issue",
   "completed",
   "canceled",
 ];
+
+const serviceTabs: Array<"all" | CanonicalJobServiceType> = ["all", "moving", "delivery", "assembly_handyman", "junk_removal", "other"];
+
+function scheduledLabel(job: Job, vehicles: ReturnType<typeof fleetVehicles>) {
+  if (!job.scheduledStart) return "Unscheduled";
+  const day = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" }).format(new Date(job.scheduledStart));
+  const slot = getSlot(jobSlotKey(job, vehicles));
+  return slot ? `${day} · ${slot.shortLabel}` : `${day} · ${formatDate(job.scheduledStart).split(", ").at(-1)}`;
+}
+
+function whereLabel(job: Job) {
+  const stops = job.stops ?? [];
+  const short = (stop: Job["stops"][number] | undefined) => stop?.city || stop?.address || "";
+  if (stops.length >= 2 && stops[1].stopType === "delivery") {
+    return [short(stops[0]), short(stops[1])].filter(Boolean).join(" → ");
+  }
+  return [stops[0]?.address ?? job.address, stops[0]?.city ?? job.city].filter(Boolean).join(", ");
+}
 
 function money(value: number | undefined) {
   return currency.format(Number.isFinite(value) ? Number(value) : 0);
@@ -108,6 +126,7 @@ export default function Jobs() {
   const [settings, setSettings] = useState(() => loadPricingSettings());
   const [query, setQuery] = useState("");
   const [activeStatus, setActiveStatus] = useState<"all" | JobStatus>("all");
+  const [activeService, setActiveService] = useState<"all" | CanonicalJobServiceType>("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { isOwner } = useStaffSession();
 
@@ -134,7 +153,9 @@ export default function Jobs() {
     const normalizedQuery = query.trim().toLowerCase();
     return jobs.filter(job => {
       const matchesStatus =
-        activeStatus === "all" || job.status === activeStatus;
+        activeStatus === "all" || job.status === activeStatus || (activeStatus === "scheduled" && job.status === "assigned");
+      const matchesService =
+        activeService === "all" || normalizeServiceType(job.serviceType) === activeService;
       const searchable = [
         job.jobNumber,
         job.customerName,
@@ -143,16 +164,21 @@ export default function Jobs() {
         job.zip,
         job.materialName,
         job.facilityName,
+        serviceTypeLabel(job),
+        ...(job.stops ?? []).flatMap(stop => [stop.address, stop.city]),
       ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
       return (
         matchesStatus &&
+        matchesService &&
         (!normalizedQuery || searchable.includes(normalizedQuery))
       );
     });
-  }, [activeStatus, jobs, query]);
+  }, [activeService, activeStatus, jobs, query]);
+  const junkView = activeService === "junk_removal";
+  const vehicles = useMemo(() => fleetVehicles(settings.vehicles), [settings.vehicles]);
 
   const counts = useMemo(
     () => ({
@@ -270,20 +296,36 @@ export default function Jobs() {
               <Badge variant="secondary">{filteredJobs.length} jobs</Badge>
             </div>
 
-            <Tabs
-              value={activeStatus}
-              onValueChange={value =>
-                setActiveStatus(value as "all" | JobStatus)
-              }
-            >
-              <TabsList className="h-auto flex-wrap justify-start">
-                {statusTabs.map(status => (
-                  <TabsTrigger key={status} value={status}>
-                    {status === "all" ? "All" : jobStatusLabels[status]}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
+            <div className="flex flex-col gap-3">
+              <Tabs
+                value={activeService}
+                onValueChange={value =>
+                  setActiveService(value as "all" | CanonicalJobServiceType)
+                }
+              >
+                <TabsList className="h-auto flex-wrap justify-start">
+                  {serviceTabs.map(service => (
+                    <TabsTrigger key={service} value={service}>
+                      {service === "all" ? "All services" : serviceTypeLabels[service]}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+              <Tabs
+                value={activeStatus}
+                onValueChange={value =>
+                  setActiveStatus(value as "all" | JobStatus)
+                }
+              >
+                <TabsList className="h-auto flex-wrap justify-start">
+                  {statusTabs.map(status => (
+                    <TabsTrigger key={status} value={status}>
+                      {status === "all" ? "All" : jobStatusLabels[status]}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            </div>
 
             {selectedIds.size > 0 && (
               <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-4 py-2 text-sm">
@@ -328,10 +370,13 @@ export default function Jobs() {
                   </TableHead>
                   <TableHead>ID</TableHead>
                   <TableHead>Customer</TableHead>
+                  <TableHead>Service</TableHead>
                   <TableHead>Scheduled</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Material</TableHead>
-                  <TableHead>Facility</TableHead>
+                  <TableHead>Vehicle</TableHead>
+                  <TableHead>Crew</TableHead>
+                  <TableHead>Where</TableHead>
+                  {junkView && <TableHead>Material</TableHead>}
+                  {junkView && <TableHead>Facility</TableHead>}
                   <TableHead>Status</TableHead>
                   {isOwner && <TableHead>Payment</TableHead>}
                   <TableHead>Warn</TableHead>
@@ -374,41 +419,61 @@ export default function Jobs() {
                           </div>
                         )}
                       </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="whitespace-nowrap">
+                          {serviceTypeLabel(job)}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="whitespace-nowrap">
-                        {formatDate(job.scheduledStart)}
+                        {scheduledLabel(job, vehicles)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {(() => {
+                          const vehicle = vehicles.find(candidate => candidate.id === job.vehicleId);
+                          return vehicle ? vehicleUnitCode(vehicle) : job.vehicleName || "—";
+                        })()}
                       </TableCell>
                       <TableCell
-                        className="max-w-[150px] truncate"
-                        title={
-                          [job.address, job.city, job.zip]
-                            .filter(Boolean)
-                            .join(", ") || "Not provided"
-                        }
+                        className={job.crew.length < job.requiredCrew ? "whitespace-nowrap text-amber-700" : "whitespace-nowrap"}
+                        title={job.crew.map(member => employeeNameById(member.employeeId, member.employeeId)).join(", ")}
                       >
-                        {[job.address, job.city, job.zip]
-                          .filter(Boolean)
-                          .join(", ") || "Not provided"}
+                        {job.crew.length}/{job.requiredCrew}
+                        {job.crew.length > 0 && (
+                          <span className="ml-1 text-xs text-muted-foreground">
+                            {job.crew.map(member => employeeNameById(member.employeeId, "?").split(" ")[0]).join(", ")}
+                          </span>
+                        )}
                       </TableCell>
-                      <TableCell>
-                        <span
-                          className="font-medium"
-                          title={
-                            job.materialName ||
-                            job.materialType?.replaceAll("_", " ") ||
-                            "Not set"
-                          }
-                        >
-                          {materialCode(job.materialType, job.materialName)}
-                        </span>
+                      <TableCell
+                        className="max-w-[200px] truncate"
+                        title={whereLabel(job) || "Not provided"}
+                      >
+                        {whereLabel(job) || "Not provided"}
                       </TableCell>
-                      <TableCell>
-                        <span
-                          className="font-medium"
-                          title={job.facilityName || "Not selected"}
-                        >
-                          {facilityCode(job.facilityId, job.facilityName)}
-                        </span>
-                      </TableCell>
+                      {junkView && (
+                        <TableCell>
+                          <span
+                            className="font-medium"
+                            title={
+                              job.materialName ||
+                              job.materialType?.replaceAll("_", " ") ||
+                              "Not set"
+                            }
+                          >
+                            {materialCode(job.materialType, job.materialName)}
+                          </span>
+                        </TableCell>
+                      )}
+                      {junkView && (
+                        <TableCell>
+                          <span
+                            className="font-medium"
+                            title={job.facilityName || "Not selected"}
+                          >
+                            {facilityCode(job.facilityId, job.facilityName)}
+                          </span>
+                        </TableCell>
+                      )}
                       <TableCell>
                         <JobStatusBadge status={job.status} />
                       </TableCell>
@@ -442,7 +507,7 @@ export default function Jobs() {
                 {filteredJobs.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={isOwner ? 13 : 11}
+                      colSpan={12 + (junkView ? 2 : 0) + (isOwner ? 2 : 0)}
                       className="h-24 text-center text-muted-foreground"
                     >
                       No jobs match the current filters.

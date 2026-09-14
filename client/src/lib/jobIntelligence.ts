@@ -1,3 +1,4 @@
+import { isJunkService } from "@/lib/jobShape";
 import type { Job } from "@/types/jobs";
 import type { DisposalFacility, EstimateWarning, MaterialCategory, PricingSettings } from "@/types/pricing";
 
@@ -89,7 +90,7 @@ export function getJobWarnings(job: Job): JobWarning[] {
   ) {
     warnings.push({ code: "better_facility_available", label: "Better Facility Available", severity: "warning" });
   }
-  if (job.status === "completed" && !hasReceipt(job)) {
+  if (isJunkService(job.serviceType) && job.status === "completed" && !hasReceipt(job)) {
     warnings.push({ code: "missing_receipt", label: "Missing Receipt", severity: "warning" });
   }
   if (job.status === "completed" && job.paymentStatus !== "paid" && job.paymentStatus !== "refunded") {
@@ -106,6 +107,8 @@ export function getJobWarnings(job: Job): JobWarning[] {
 
 export function getJobWarningsWithFacilityCheck(job: Job, settings: PricingSettings): JobWarning[] {
   const warnings = getJobWarnings(job);
+  // Facility checks only mean something on a junk-removal ticket.
+  if (!isJunkService(job.serviceType)) return warnings;
   const existingCodes = new Set(warnings.map((warning) => warning.code));
   const facilityCheck = getFacilityCheck(job, settings);
 
