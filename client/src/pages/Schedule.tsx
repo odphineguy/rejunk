@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { useLocation } from "wouter";
+import { useStaffSession } from "@/hooks/useStaffSession";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -430,7 +431,10 @@ function JobSlotCard({
   navigate: (to: string) => void;
   tone?: "default" | "warning";
 }) {
-  const warnings = getJobWarningsWithFacilityCheck(job, settings);
+  const { isOwner } = useStaffSession();
+  const warnings = getJobWarningsWithFacilityCheck(job, settings).filter(
+    warning => isOwner || !["missing_receipt", "completed_unpaid"].includes(warning.code)
+  );
   const missingReceiptWarning = warnings.find(
     warning => warning.code === "missing_receipt"
   );
@@ -471,12 +475,12 @@ function JobSlotCard({
         {job.vehicleName || job.assignment?.vehicleName || "No vehicle"}
       </div>
       <div className="mt-1 truncate text-xs font-semibold">
-        {money(job.quotedAmount)} · {job.paymentStatus.replaceAll("_", " ")}
+        {money(job.quotedAmount)}{isOwner && ` · ${job.paymentStatus.replaceAll("_", " ")}`}
       </div>
       <div className="mt-2 flex flex-wrap gap-1">
         <JobStatusBadge status={job.status} />
-        <PaymentStatusBadge status={job.paymentStatus} />
-        {missingReceiptWarning && (
+        {isOwner && <PaymentStatusBadge status={job.paymentStatus} />}
+        {isOwner && missingReceiptWarning && (
           <JobWarningBadge warning={missingReceiptWarning} />
         )}
       </div>
@@ -876,6 +880,7 @@ function Agenda({
   settings: ReturnType<typeof loadPricingSettings>;
   navigate: (to: string) => void;
 }) {
+  const { isOwner } = useStaffSession();
   if (groups.length === 0) {
     return (
       <div className="p-10 text-center text-sm text-muted-foreground">
@@ -905,7 +910,10 @@ function Agenda({
             </div>
             <div className="space-y-2">
               {group.jobs.map(job => {
-                const warnings = getJobWarningsWithFacilityCheck(job, settings);
+                const warnings = getJobWarningsWithFacilityCheck(job, settings).filter(
+                  warning =>
+                    isOwner || !["missing_receipt", "completed_unpaid"].includes(warning.code)
+                );
                 return (
                   <button
                     key={job.id}
@@ -931,7 +939,7 @@ function Agenda({
                     </div>
                     <div className="flex flex-wrap items-center gap-1">
                       <JobStatusBadge status={job.status} />
-                      <PaymentStatusBadge status={job.paymentStatus} />
+                      {isOwner && <PaymentStatusBadge status={job.paymentStatus} />}
                       {warnings.slice(0, 1).map(warning => (
                         <JobWarningBadge key={warning.code} warning={warning} />
                       ))}

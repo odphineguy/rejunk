@@ -179,3 +179,22 @@ financial report fields are protected by the server/database role.
 
 The user confirmed normal office-app login and access after the prior anonymous
 access rollout. Driver and Realtime acceptance checks remain open.
+
+## September 13 follow-up — calendar and ticket changes
+
+Reviewed the September 12 employee and ticket migrations after the calendar
+enhancements. The owner-financial regression suite now applies both migrations
+and verifies that office calendar edits preserve hidden job costs, crew IDs
+control driver assignment access, and employee rows require bound staff identity
+and the progressive tenant. These checks passed in disposable PostgreSQL.
+
+Calendar slot and agenda cards now hide payment badges and financial warnings
+for office accounts while retaining customer quote totals. Previously, the
+normalizer's fallback unpaid status could produce misleading unpaid labels when
+the database correctly omitted protected payment data. Owner displays and
+calendar scheduling behavior are retained. Typecheck and production build passed.
+
+This follow-up is locally verified, not yet deployed. The real Office Staff
+workflow is still untested (confirmed by the user). Production re-verification
+was blocked by the Supabase connector returning Auth required; reconnect before
+claiming current live verification. No production records or schema were changed.

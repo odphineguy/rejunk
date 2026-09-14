@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix='rejunk-access-') as temp:
             else: raise AssertionError('Expected denial: '+s)
         run(*cmd,'-f',str(ROOT/'scripts/security/business-access-fixture.sql'))
         run(*cmd,"-f",str(ROOT/"scripts/security/owner-financial-fixture.sql"))
-        for migration in ('20260910042932_bind_business_identity.sql','20260910043256_restrict_business_data.sql','20260910060045_owner_financial_access.sql','20260910060647_enforce_owner_financial_access.sql'):
+        for migration in ('20260910042932_bind_business_identity.sql','20260910043256_restrict_business_data.sql','20260910060045_owner_financial_access.sql','20260910060647_enforce_owner_financial_access.sql','20260912000001_app_employees_fleet.sql','20260912000002_ticket_shape.sql'):
             run(*cmd,'-f',str(ROOT/'supabase/migrations'/migration))
 
         assert actor("select bind_business_identity(repeat('s',64),null)",2)=='t'
@@ -60,6 +60,23 @@ with tempfile.TemporaryDirectory(prefix='rejunk-access-') as temp:
         assert actor("select dashboard_metrics_series('progressive',current_date,2)::text like '%collected%'",5)=='f'
         assert actor("select dashboard_metrics('progressive',current_date)->>'revenue'",2)=='900'
         print('PASS: office reads preserve customer prices and operations; raw financial tables, new fields, and reports are protected')
+        # Calendar/ticket changes must retain operational edits without exposing financial data.
+        actor("""select office_save_job('{"id":"job-a","scheduledStart":"2026-09-14T09:00:00-07:00","vehicleId":"van","crew":[{"employeeId":"driver-a","role":"lead"}],"slot":1,"estimatedCost":0}')""",5)
+        assert sql("select data->>'estimatedCost' from jobs where id='job-a'")=='123'
+        assert actor("select x->'data'->>'scheduledStart' from jsonb_array_elements(business_rows('jobs')) x where x->'data'->>'id'='job-a'",5)=='2026-09-14T09:00:00-07:00'
+        assert actor("select bind_business_identity(null,repeat('d',64))",3)=='t'
+        assert actor("select app_private.assigned_job('job-a')",3)=='t'
+        assert actor("select app_private.assigned_job('job-b')",3)=='f'
+        assert actor("select get_driver_today()::text like '%estimatedCost%'",3)=='f'
+        assert actor("select get_driver_today()::text like '%quotedAmount%'",3)=='f'
+        denied("""select driver_update_ticket_row('job-b','items','x','{"status":"completed"}')""",3)
+        actor("""insert into app_employees(id,data) values('fixture-employee','{"firstName":"Fixture"}')""",5)
+        assert actor("select count(*) from app_employees",5)=='1'
+        assert actor("select count(*) from app_employees",3)=='0'
+        assert actor("select count(*) from app_employees")=='0'
+        denied("insert into app_employees(id,tenant_id,data) values('cross-tenant','other','{}')",5)
+        print('PASS: calendar edits preserve costs; crew assignments restrict drivers; employees require staff and tenant identity')
+
         actor("""select office_save_job('{"id":"job-a","customerName":"Office edited","quotedAmount":1200,"estimatedCost":0,"paymentStatus":"unpaid","actuals":{"disposalCost":0}}')""",5)
         assert sql("select data->>'estimatedCost' from jobs where id='job-a'")=='123'
         assert sql("select data->'actuals'->>'disposalCost' from jobs where id='job-a'")=='99'
