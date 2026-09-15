@@ -51,8 +51,8 @@ export const NAV_ITEMS = [
 
 export const THUMBTACK_PROOF = {
   rating: "5.0",
-  reviews: "30 reviews",
-  hires: "78 times hired",
+  reviews: "35 reviews",
+  hires: "80 times hired",
   badge: "Top Pro",
 } as const;
 

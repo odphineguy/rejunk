@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { Link } from "wouter";
 
 import {
-  LEGAL_UPDATED,
   PRIVACY_SECTIONS,
   TERMS_SECTIONS,
   type LegalSection,
@@ -79,11 +78,9 @@ function Section({ section, first }: { section: LegalSection; first: boolean }) 
 
 function PageShell({
   title,
-  updated,
   children,
 }: {
   title: string;
-  updated: string;
   children: ReactNode;
 }) {
   return (
@@ -102,9 +99,6 @@ function PageShell({
           >
             {title}
           </h1>
-          <p className="mt-3 text-sm" style={{ color: P.inkSoft }}>
-            Last updated: {updated}
-          </p>
           <div
             className="mt-10 space-y-8 text-base leading-7"
             style={{ color: P.inkSoft }}
@@ -120,7 +114,7 @@ function PageShell({
 function TermsPage() {
   usePageMeta(PAGE_META.terms);
   return (
-    <PageShell title="Terms of Service" updated={LEGAL_UPDATED}>
+    <PageShell title="Terms of Service">
       {TERMS_SECTIONS.map((section, index) => (
         <Section key={section.title} section={section} first={index === 0} />
       ))}
@@ -131,7 +125,7 @@ function TermsPage() {
 function PrivacyPage() {
   usePageMeta(PAGE_META.privacy);
   return (
-    <PageShell title="Privacy Policy" updated={LEGAL_UPDATED}>
+    <PageShell title="Privacy Policy">
       {PRIVACY_SECTIONS.map((section, index) => (
         <Section key={section.title} section={section} first={index === 0} />
       ))}

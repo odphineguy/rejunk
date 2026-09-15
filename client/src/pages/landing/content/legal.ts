@@ -25,8 +25,6 @@ export interface LegalSection {
   bullets?: string[];
 }
 
-export const LEGAL_UPDATED = "September 14, 2026";
-
 export const TERMS_SECTIONS: LegalSection[] = [
   {
     title: "Company Identity",
@@ -169,7 +167,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
   {
     title: "Photos and AI Estimates",
     paragraphs: [
-      "Photos you upload for an instant estimate are sent to a third-party AI provider (OpenAI) to identify items and produce a ballpark price. They are used only to prepare your estimate and to follow up on your request.",
+      "Photos you upload for an instant estimate are processed using AI to identify items and produce a ballpark price. They are used only to prepare your estimate and to follow up on your request.",
       "Our crews may take photos on site before, during, and after a job to document item condition, access, and completed work. These photos are used to resolve claims, train our crews, and improve our service. We do not post photos of your home publicly without your permission.",
     ],
   },

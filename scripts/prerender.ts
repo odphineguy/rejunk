@@ -22,7 +22,6 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  LEGAL_UPDATED,
   PRIVACY_SECTIONS,
   TERMS_SECTIONS,
   type LegalSection,
@@ -79,7 +78,7 @@ function legalBody(title: string, sections: LegalSection[]): string {
       return `<section><h2>${escapeHtml(section.title)}</h2>\n${paragraphs}\n${bullets}</section>`;
     })
     .join("\n");
-  return `<main style="max-width:48rem;margin:0 auto;padding:3rem 1.25rem;font-family:system-ui,sans-serif;line-height:1.75;color:#334155"><article><h1>${escapeHtml(title)}</h1><p>Last updated: ${escapeHtml(LEGAL_UPDATED)}</p>\n${body}</article></main>`;
+  return `<main style="max-width:48rem;margin:0 auto;padding:3rem 1.25rem;font-family:system-ui,sans-serif;line-height:1.75;color:#334155"><article><h1>${escapeHtml(title)}</h1>\n${body}</article></main>`;
 }
 
 const STATIC_BODIES: Record<string, string> = {
