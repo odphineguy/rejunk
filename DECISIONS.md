@@ -50,9 +50,10 @@ rows + hourly/extra-mover/stairs/piano-tier rows inserted, the no-external-id "3
   "4–6 base, 6–8 with stairs".
 - Still Abe's call before the first real quote: hours-table defaults, packing defaults (10 boxes per packer-hour,
   $5 per box, $499 playset), extended-travel tiers.
-- `pricebook_items` migration is on disk; applying it through the MCP was blocked by the auto-mode classifier
-  (same as 2026-09-04) — Abe approves it (exit auto mode) or pastes it into the SQL editor. Until then the
-  Pricebook page shows v18 moving rows; the Moving tab is already v19 (it doesn't read the rows).
+- `pricebook_items` migration **applied to rejunk-prod 2026-09-18** through the Supabase MCP after Abe
+  exited auto mode (the classifier blocked the first attempt, same as 2026-09-04). Verified: progressive
+  117 → 130 rows, wellsentry unchanged at 138, every updated row kept its HCP `external_id`, the nine
+  categories now read "Progressive — …".
 - Legacy `ServiceEstimatePanel` keeps its moving branches (not a pure deletion) but is only mounted with
   `mode="service"` now.
 
