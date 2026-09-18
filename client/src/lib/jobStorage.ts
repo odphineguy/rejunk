@@ -5,7 +5,7 @@ import { defaultStopsFor, normalizeJob, prepareJobForWrite, requiredCrewFor } fr
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { loadPricingSettings } from "@/utils/pricingStorage";
 import type { JobItem, JobStop } from "@/types/driver";
-import type { Job, JobQuote, JobServiceType, MovingDetails, MovingKind } from "@/types/jobs";
+import type { DeliveryKind, Job, JobQuote, JobServiceType, MovingDetails, MovingKind } from "@/types/jobs";
 import type { SavedEstimate } from "@/types/pricing";
 import type { StairFloor } from "@/types/service";
 
@@ -169,15 +169,38 @@ export function duplicateJob(jobIdToDuplicate: string): Job | null {
 }
 
 function serviceTypeFromEstimate(estimate: SavedEstimate): JobServiceType {
+  // v19 moving quotes built on the van flat / cargo van options are delivery tickets.
+  const kind = estimate.moving?.result.selected.kind;
+  if (kind === "van_flat" || kind === "cargo_van") return "delivery";
   if (estimate.serviceType) return estimate.serviceType;
   if (estimate.mode === "moving") return "moving";
   if (estimate.mode === "service") return "assembly_handyman";
   return "junk_removal";
 }
 
-/** Best-effort moving sub-kind from a Pricebook moving estimate (crew size drives it). */
+const PACKAGE_KIND: Record<string, MovingKind> = {
+  small_move: "small_move",
+  studio_1br: "studio_1br",
+  "2br": "two_br",
+  small_house: "small_house",
+};
+
+function deliveryKindFromEstimate(estimate: SavedEstimate): DeliveryKind | undefined {
+  const kind = estimate.moving?.result.selected.kind;
+  return kind === "van_flat" || kind === "cargo_van" ? kind : undefined;
+}
+
+/** Moving sub-kind: the v19 snapshot's selected option, else the legacy crew-size guess. */
 function movingKindFromEstimate(estimate: SavedEstimate): MovingKind | undefined {
   if (estimate.mode !== "moving") return undefined;
+  const v19 = estimate.moving?.result;
+  if (v19) {
+    const selected = v19.selected;
+    if (selected.kind === "package" && v19.packageOption) return PACKAGE_KIND[v19.packageOption.key] ?? "hourly_3";
+    if (selected.kind === "labor_only") return "labor_only";
+    if (selected.kind === "hourly") return selected.crew === 4 ? "hourly_4" : selected.crew === 3 ? "hourly_3" : "hourly_2";
+    return undefined; // van flat / cargo van → delivery ticket
+  }
   const crew = estimate.crewSize ?? estimate.service?.crewSize;
   if (crew && crew >= 4) return "hourly_4";
   if (crew === 3) return "hourly_3";
@@ -190,6 +213,7 @@ function stopsFromEstimate(estimate: SavedEstimate, serviceType: JobServiceType,
   const stops = defaultStopsFor(serviceType, movingKind);
   const pickup = parseEstimateLocation(estimate.jobAddress);
   const service = estimate.service;
+  const v19 = estimate.moving?.input;
   if (stops[0]) {
     const floor = service?.pickupStairFloor ?? service?.stairFloor;
     stops[0] = {
@@ -198,7 +222,7 @@ function stopsFromEstimate(estimate: SavedEstimate, serviceType: JobServiceType,
       city: pickup.city,
       zip: pickup.zip,
       contactName: estimate.customerName,
-      flights: floor ? stairFlights[floor] : undefined,
+      flights: v19 ? v19.pickupFlights : floor ? stairFlights[floor] : undefined,
     };
   }
   if (stops[1]) {
@@ -210,7 +234,7 @@ function stopsFromEstimate(estimate: SavedEstimate, serviceType: JobServiceType,
       city: delivery.city,
       zip: delivery.zip,
       contactName: estimate.customerName,
-      flights: floor ? stairFlights[floor] : undefined,
+      flights: v19 ? v19.deliveryFlights : floor ? stairFlights[floor] : undefined,
     };
   }
   return stops;
@@ -222,6 +246,30 @@ function itemsFromEstimate(estimate: SavedEstimate, stops: JobStop[]): JobItem[]
   const now = new Date().toISOString();
   const pickup = stops[0];
   const delivery = stops.find((stop) => stop.stopType === "delivery");
+  // v19 moving quote: the specialty / add-on lines become the crew's checklist (never prices).
+  const v19 = estimate.moving?.result;
+  if (v19) {
+    const checklistKeys = new Set(["piano", "assembly", "tv_mounts", "play_structure", "second_truck"]);
+    return v19.addOnLines
+      .filter((line) => checklistKeys.has(line.key))
+      .map((line, index) => ({
+        id: `item-${estimate.id}-${index + 1}`,
+        jobId: "",
+        stopId: pickup?.id,
+        destinationStopId: delivery?.id,
+        name: line.label,
+        quantity: 1,
+        category: line.key === "assembly" ? "Assembly" : "Specialty",
+        oversized: line.key === "piano" || line.key === "play_structure",
+        fragile: line.key === "piano",
+        heavy: line.key === "piano",
+        disassemblyRequired: line.key === "play_structure",
+        reassemblyRequired: line.key === "assembly" || line.key === "play_structure",
+        status: "pending",
+        createdAt: now,
+        updatedAt: now,
+      }));
+  }
   return lines
     .filter((line) => line.itemType !== "Fee" && line.priceUnit !== "hourly" && line.priceUnit !== "per_mile" && line.priceUnit !== "per_30min")
     .map((line, index) => ({
@@ -246,10 +294,15 @@ function itemsFromEstimate(estimate: SavedEstimate, stops: JobStop[]): JobItem[]
 function movingDetailsFromEstimate(estimate: SavedEstimate, stops: JobStop[]): MovingDetails | undefined {
   if (estimate.mode !== "moving") return undefined;
   const service = estimate.service;
+  const v19 = estimate.moving?.input;
   return {
+    homeSize: v19?.homeSize,
+    stories: v19?.stories,
     pickupFlights: stops[0]?.flights,
     deliveryFlights: stops[1]?.flights,
-    distanceMiles: service?.routeMiles ?? estimate.roundTripMiles,
+    piano: v19 && v19.piano !== "none" ? v19.piano : undefined,
+    packing: v19?.packing.enabled,
+    distanceMiles: v19?.distanceMiles ?? service?.routeMiles ?? estimate.roundTripMiles,
   };
 }
 
@@ -260,6 +313,7 @@ export interface EstimateTicketFields {
   jobLabel?: string;
   serviceType: JobServiceType;
   movingKind?: MovingKind;
+  deliveryKind?: DeliveryKind;
   requiredCrew: number;
   stops: JobStop[];
   items: JobItem[];
@@ -275,9 +329,10 @@ export interface EstimateTicketFields {
 export function ticketFieldsFromEstimate(estimate: SavedEstimate): EstimateTicketFields {
   const serviceType = serviceTypeFromEstimate(estimate);
   const movingKind = movingKindFromEstimate(estimate);
+  const deliveryKind = deliveryKindFromEstimate(estimate);
   const stops = stopsFromEstimate(estimate, serviceType, movingKind);
   const requiredCrew = Math.max(
-    requiredCrewFor({ serviceType, movingKind }),
+    requiredCrewFor({ serviceType, movingKind, deliveryKind }),
     estimate.crewSize ?? estimate.service?.crewSize ?? 0,
   );
   // Junk estimates pick a pricing template (e.g. box-truck-liftgate) for cost
@@ -291,6 +346,7 @@ export function ticketFieldsFromEstimate(estimate: SavedEstimate): EstimateTicke
     jobLabel: estimate.loadLabel,
     serviceType,
     movingKind,
+    deliveryKind,
     requiredCrew,
     stops,
     items: itemsFromEstimate(estimate, stops),
@@ -333,6 +389,7 @@ export function createJobFromEstimate(estimate: SavedEstimate): Job {
     jobLabel: fields.jobLabel,
     serviceType: fields.serviceType,
     movingKind: fields.movingKind,
+    deliveryKind: fields.deliveryKind,
     requiredCrew: fields.requiredCrew,
     crew: [],
     stops: fields.stops,

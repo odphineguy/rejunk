@@ -398,6 +398,8 @@ export interface SavedEstimate {
   // and the real breakdown lives in `service`.
   mode?: import("@/types/service").EstimateMode;
   service?: import("@/types/service").ServiceEstimateSnapshot;
+  /** v19 input-driven moving quote (mode === "moving"). Legacy moving saves carry `service` instead. */
+  moving?: import("@/types/moving").MovingEstimateSnapshot;
   serviceType?: import("@/types/jobs").JobServiceType;
   crewSize?: number;
 }

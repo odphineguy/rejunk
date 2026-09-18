@@ -10,6 +10,7 @@
     "start": "NODE_ENV=production node dist/index.js",
     "preview": "vite preview --host",
     "check": "tsc --noEmit",
+    "test": "vitest run",
     "format": "prettier --write .",
     "build:quote-api": "node scripts/security/build-office-quote.mjs"
   },

@@ -57,6 +57,7 @@ import { buildBestRecommendation } from "@/utils/recommendations";
 import { downloadQuotePdf } from "@/utils/quotePdf";
 import { materialIcon } from "@/lib/materialIcons";
 import { createJobFromEstimate, getJobByEstimateId } from "@/lib/jobStorage";
+import { MovingEstimatePanel } from "@/components/MovingEstimatePanel";
 import { ServiceEstimatePanel } from "@/components/ServiceEstimatePanel";
 import { VisionEstimatePanel } from "@/components/VisionEstimatePanel";
 import { PhotoRequiredBanner } from "@/components/PhotoRequiredBanner";
@@ -944,7 +945,7 @@ export default function EstimateBuilder() {
         </div>
       }
     >
-        {mode !== "vision" && (
+        {mode !== "vision" && mode !== "moving" && (
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Job Info</CardTitle>
@@ -960,32 +961,13 @@ export default function EstimateBuilder() {
                 placeholder="Optional"
               />
             </Field>
-            {mode === "moving" ? (
-              <>
-                <Field label="Pickup address">
-                  <Input
-                    value={jobAddress}
-                    onChange={event => setJobAddress(event.target.value)}
-                    placeholder="Where the crew loads"
-                  />
-                </Field>
-                <Field label="Delivery address">
-                  <Input
-                    value={deliveryAddress}
-                    onChange={event => setDeliveryAddress(event.target.value)}
-                    placeholder="Where the crew unloads"
-                  />
-                </Field>
-              </>
-            ) : (
-              <Field label="Job address">
-                <Input
-                  value={jobAddress}
-                  onChange={event => setJobAddress(event.target.value)}
-                  placeholder="Enter job site address"
-                />
-              </Field>
-            )}
+            <Field label="Job address">
+              <Input
+                value={jobAddress}
+                onChange={event => setJobAddress(event.target.value)}
+                placeholder="Enter job site address"
+              />
+            </Field>
             <div className="md:col-span-2">
               <Field label="Notes">
                 <Textarea
@@ -1003,19 +985,45 @@ export default function EstimateBuilder() {
           <div className="mx-auto max-w-3xl">
             <VisionEstimatePanel />
           </div>
-        ) : mode !== "junk" ? (
+        ) : mode === "moving" ? (
+          <div className="space-y-6">
+            <MovingEstimatePanel
+              customerName={customerName}
+              onCustomerNameChange={setCustomerName}
+              pickupAddress={jobAddress}
+              onPickupAddressChange={setJobAddress}
+              deliveryAddress={deliveryAddress}
+              onDeliveryAddressChange={setDeliveryAddress}
+              notes={notes}
+              onNotesChange={setNotes}
+              loadSeed={serviceLoadSeed}
+              onSaved={() => setSavedEstimates(loadSavedEstimates())}
+            />
+            <div className="xl:max-w-[460px]">
+              <SavedEstimatesPanel
+                savedEstimates={savedEstimates.filter(
+                  estimate => estimate.mode === "moving"
+                )}
+                selectedSavedId={selectedSavedId}
+                setSelectedSavedId={setSelectedSavedId}
+                selectedSavedEstimate={selectedSavedEstimate}
+                selectedEstimateJobId={selectedEstimateJob?.id}
+                onLoad={loadSavedIntoBuilder}
+                onDuplicate={duplicateEstimate}
+                onDelete={removeEstimate}
+                onConvert={convertEstimateToJob}
+              />
+            </div>
+          </div>
+        ) : mode === "service" ? (
           <div className="space-y-6">
             <ServiceEstimatePanel
-              // key resets the panel's line items when switching Moving <-> Assembly.
               key={mode}
-              mode={mode}
+              mode="service"
               customerName={customerName}
               jobAddress={jobAddress}
-              pickupAddress={jobAddress}
-              deliveryAddress={deliveryAddress}
               notes={notes}
               onSaved={() => setSavedEstimates(loadSavedEstimates())}
-              onResetMoving={() => setDeliveryAddress("")}
               loadSeed={serviceLoadSeed}
             />
             <div className="xl:max-w-[460px]">
@@ -1790,7 +1798,11 @@ function SavedEstimatesPanel({
                         variant="outline"
                         className="px-1.5 py-0 text-[10px]"
                       >
-                        {estimate.mode === "moving" ? "Moving" : "Service"}
+                        {estimate.mode === "moving"
+                          ? estimate.moving
+                            ? "Moving · v19"
+                            : "Moving · v18 pricing"
+                          : "Service"}
                       </Badge>
                     )}
                     {estimate.materialName ||

@@ -10,6 +10,54 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
 
 ---
 
+## 2026-09-18 — Moving pricing is v19; the Moving tab is an input-driven quote builder, not an item picker
+
+**Decision**
+Built MOVING_ESTIMATOR_V19_SPEC (Abe, Sep 9). The Moving tab of `/estimate-builder` no longer picks Pricebook
+items from a dropdown. It asks the questions David (the Thumbtack chat agent) asks — home size, stories/stairs,
+miles, move date, piano, assembly add-ons, packing, play structure, second truck, crew — and prices them with a
+pure engine, `utils/movingCalculator.ts`, that reads ONLY the typed rate card `data/movingRates.ts`
+(`MOVING_RATES`, `HOURS_TABLE`, `dayTypeOf`). Every quote computes all three crews (2 / 3 / 4 movers) side by
+side, offers a flat package when the home qualifies (Small Move / Studio-1BR / 2BR / Small House), and emits
+copy-ready customer text that follows David's wording rules: "travel included" on truck jobs and never a trip-fee
+line, "no trip charge" on labor-only, included hours + overage rate on every package, the fourth-mover fallback
+sentence verbatim on every 4-mover quote, "estimate, not fixed" on hourly. The $85 trip fee is baked into truck
+totals and shows only in the internal breakdown. Floors only raise. Warnings never block (escalate = amber).
+`SavedEstimate.moving` (input + result + walkthrough + rates version) is the new snapshot; `SavedEstimate.service`
+stays for legacy v18 moving saves, which load read-only with a "rebuild with v19" banner. Job tickets created from
+a v19 estimate carry crew, flights, distance, home size, piano/packing flags, and the add-on lines as the crew
+checklist; van flat / cargo van quotes become `delivery` tickets. First unit tests in the repo (`pnpm test`,
+vitest, 31 cases incl. the Ee Ee Eng worked example to the cent).
+
+Pricebook rows (`pricebook_items`, tenant `progressive`) move to v19.1 through
+`supabase/migrations/20260910000001_pricebook_v19_moving.sql` — ids and HCP `external_id` preserved, weekend
+rows + hourly/extra-mover/stairs/piano-tier rows inserted, the no-external-id "3 Movers, Per Hour" row deleted,
+"Summit — …" categories renamed "Progressive — …". `defaultPricebook.ts` moving sections carry the same numbers.
+
+**Rejected**
+- Pricing moving from `pricebook_items` names/ids (the v18 way) — the pipeline shares those rows and their ids are
+  HCP-keyed; the engine must not depend on a row existing. The rate card is the single input; rows are display/HCP.
+- A separate `$125` assembly minimum on a move (spec open item 6) — same visit, priced at SKU. Revisit if Abe wants it.
+- Reading `businesses.responder_config.agent_rates` from the browser — forbidden table; the rate card is a mirror
+  (change the pipeline first, then `movingRates.ts`).
+- Making the Distance Matrix a dependency — miles are manual; "Auto-fill" is best-effort and silent on failure.
+
+**Constraints / Open risks**
+- **Spec vs reality:** the spec says the Moving tab pre-fills from `?clientId`; no such code existed anywhere in
+  the builder, so there was nothing to preserve. The spec's first worked-example table omits the $150 extended-travel
+  line it says is added automatically for 60 mi; the engine adds it (bias toward the floor) and the test asserts
+  table values + $150. `HOURS_TABLE` follows the spec (4BR / 4 movers = 5–7), not the pipeline prompt's coarser
+  "4–6 base, 6–8 with stairs".
+- Still Abe's call before the first real quote: hours-table defaults, packing defaults (10 boxes per packer-hour,
+  $5 per box, $499 playset), extended-travel tiers.
+- `pricebook_items` migration is on disk; applying it through the MCP was blocked by the auto-mode classifier
+  (same as 2026-09-04) — Abe approves it (exit auto mode) or pastes it into the SQL editor. Until then the
+  Pricebook page shows v18 moving rows; the Moving tab is already v19 (it doesn't read the rows).
+- Legacy `ServiceEstimatePanel` keeps its moving branches (not a pure deletion) but is only mounted with
+  `mode="service"` now.
+
+---
+
 ## 2026-09-14 — Job page does one thing; analytics parked on /jobs/:id/analytics
 
 **Decision**

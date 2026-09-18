@@ -26,12 +26,12 @@ and `rejunk-pricebook-v4.md` + `rejunk-operations-rules-v1.md` for the authorita
 pnpm dev        # Vite dev server on :3000 (strictPort — MUST stay on 3000; Maps key is referrer-locked to it)
 pnpm build      # vite build → dist/public, then esbuild bundles server/index.ts → dist/index.js
 pnpm start      # NODE_ENV=production node dist/index.js (legacy Express path; see Deployment)
-pnpm check      # tsc --noEmit — the ONLY typecheck/lint gate; run before considering work done
+pnpm check      # tsc --noEmit — the typecheck/lint gate; run before considering work done
+pnpm test       # vitest run — unit tests (moving quote engine)
 pnpm format     # prettier --write .
 ```
 
-Use **pnpm** (not npm). There is **no test runner wired up** — `vitest` is a dependency but there are no
-test files and no `test` script. `pnpm check` is the gate.
+Use **pnpm** (not npm). There is **no test runner beyond `pnpm test`** (vitest; only the moving engine has tests). `pnpm check` is the gate.
 
 > Installing deps on this external volume may need `--store-dir /Users/abemacmini/Library/pnpm/store/v10`
 > due to a pnpm store-location mismatch.
@@ -48,10 +48,22 @@ The Estimate Builder switches on `EstimateMode = "junk" | "service"` (`client/sr
   `EstimateWarning[]` (payload exceeded, heavy material, facility rejects material, stale verification).
   Heavy materials (concrete/tile/brick/dirt/rock, density ≥ 700 lb/yd³) deliberately ignore the volume
   benchmark so they aren't underpriced. Domain types: `client/src/types/pricing.ts` — read first.
-- **Service mode** → `client/src/utils/serviceCalculator.ts` prices flat-rate assembly/handyman/moving
+- **Service mode** → `client/src/utils/serviceCalculator.ts` prices flat-rate assembly/handyman
   work off the **Pricebook** with hard floors ($125 single-worker minimum, $199 two-worker, stair
   surcharges). Types: `client/src/types/service.ts`. Pricebook data: `client/src/types/pricebook.ts`,
   `client/src/data/defaultPricebook.ts`.
+- **Moving mode (v19, 2026-09-18)** → `client/src/utils/movingCalculator.ts` `calculateMovingQuote()` is an
+  input-driven engine (home size, stairs, miles, move date → weekday/weekend, piano, assembly SKUs, packing,
+  play structure, second truck, crew). It reads ONLY the typed rate card `client/src/data/movingRates.ts`
+  (`MOVING_RATES`, `HOURS_TABLE`, `dayTypeOf` — a mirror of the pipeline's `businesses.responder_config.agent_rates`;
+  change the pipeline first, then the file; the browser never reads `businesses`). It always computes 2 / 3 / 4
+  movers, offers a flat package when eligible, bakes the $85 trip fee into truck totals (internal line only —
+  customers hear "travel included"), applies floors upward only, and writes the customer text with David's wording
+  rules (4-mover fallback sentence, "no trip charge" on labor-only, "estimate, not fixed"). UI:
+  `components/MovingEstimatePanel.tsx`. Snapshot: `SavedEstimate.moving` (`types/moving.ts`); legacy v18 moving
+  saves still carry `SavedEstimate.service` and load read-only. Tests: `pnpm test` (vitest,
+  `client/src/utils/__tests__/movingCalculator.test.ts`) — the first tests in the repo. Pricebook rows for
+  progressive are v19.1 via migration `20260910000001_pricebook_v19_moving.sql` (display / HCP sync only).
 
 `recommendations.ts` and `distanceRouting.ts` (under `utils/`) add facility/vehicle recommendation and
 distance logic that feed the builder.
