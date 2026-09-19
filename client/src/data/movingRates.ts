@@ -136,7 +136,14 @@ export const MOVING_RATES = Object.freeze({
   },
   /** Package overage past the included hours, billed in quarter hours. */
   packageOverage: { weekday: 109, weekend: 124 },
-  /** Packages: first flight per address included, then this per extra flight per address. */
+  /**
+   * Stairs fees. Abe (Sep 18, 2026): "I don't charge for stairs" — the app charges $0 for stairs on
+   * every option; stairs still add TIME on hourly jobs (`hoursPerFlight`). The v19 pipeline prompt
+   * still tells customers "+$75 per additional flight" / "+$75 per location for a piano" — those
+   * numbers are kept here (disabled) until David's prompt is reconciled.
+   */
+  chargeStairs: false,
+  /** Packages (only when `chargeStairs`): first flight per address included, then this per extra flight per address. */
   extraFlightOfStairs: 75,
   /** Small Move qualifies up to this many items. */
   smallMoveMaxItems: 8,
@@ -154,7 +161,7 @@ export const MOVING_RATES = Object.freeze({
     large_upright: 349,
     baby_grand: 399,
     grand: 499,
-    /** Per location with stairs / difficult access. */
+    /** Per location with stairs / difficult access — only when `chargeStairs`. */
     stairsPerLocation: 75,
   },
 
@@ -163,9 +170,8 @@ export const MOVING_RATES = Object.freeze({
   packing: {
     /** Per 2 packers, per hour (labor-only rate). */
     ratePer2Packers: { weekday: 109, weekend: 124 },
-    boxesPerPackerHour: 10,
-    perBoxMaterials: 5,
-    perWardrobeBox: 15,
+    /** Abe (Sep 18): packer hours are entered directly (no box count) and materials are one flat amount per job. */
+    defaultMaterialsFlat: 0,
   },
 
   /** Wooden playset / swing set disassemble + reassemble. */

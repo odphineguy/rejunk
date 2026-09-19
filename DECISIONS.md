@@ -10,6 +10,30 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
 
 ---
 
+## 2026-09-18 (evening) — Moving quotes: no stairs charges, no box count, flat materials
+
+**Decision**
+Abe ran the live v19 Moving tab on the Ee Ee Eng job ("came pretty darn close") and named three things the
+app did that he doesn't do in real life. All three removed:
+- **Stairs are never a charge.** `MOVING_RATES.chargeStairs = false`; the package "+$75 per extra flight"
+  and the piano "+$75 per location with stairs" lines are gone from the engine, the UI, the customer text,
+  and the seed pricebook. Stairs still add ½–¾ hour per flight on hourly jobs.
+- **No box count.** Packing is `packers × hours` with the hours typed in directly.
+- **Materials are one flat amount** per job, not per box.
+
+**Rejected**
+- Keeping the stairs fees behind a toggle — Abe's rule for the app is strip, don't add.
+
+**Constraints / Open risks**
+- **David (the Thumbtack agent) still quotes the v19 stairs fees** in `rejunk-webhook-services`
+  (`docs/managed-agent-prompt.template.txt`: "+$75 per additional flight per address", piano "+$75 per
+  location"). The app and David now disagree; the numbers stay in `movingRates.ts` (disabled) until Abe
+  says whether David's prompt drops them too.
+- `MovingPackingInput` changed shape (`hours`, `materials` replace `boxes`, `hoursOverride`,
+  `perBoxMaterials`); v19 saves made before this change (same day, none real) would show 0 packing.
+
+---
+
 ## 2026-09-18 — Moving pricing is v19; the Moving tab is an input-driven quote builder, not an item picker
 
 **Decision**

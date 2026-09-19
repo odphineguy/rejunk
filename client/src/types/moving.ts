@@ -24,12 +24,10 @@ export interface MovingPackingInput {
   /** Drives its own dayType when separateDay. */
   packingDate?: string;
   packers: 2 | 3 | 4;
-  /** From the walkthrough (books / toys → small boxes, count high). */
-  boxes: number;
-  /** Default = boxes / (10 × packers / 2), rounded up to the quarter hour. */
-  hoursOverride?: number;
-  /** Box + paper + tape, all-in. Default $5. */
-  perBoxMaterials: number;
+  /** Packer hours, entered directly (Abe doesn't count boxes). Rounded up to the quarter hour. */
+  hours: number;
+  /** Materials as ONE flat amount for the job (Abe: "I charge a flat rate for materials"). */
+  materials: number;
 }
 
 export interface MovingQuoteInput {
@@ -65,7 +63,7 @@ export interface MovingQuoteInput {
   secondTruck: { requested: boolean; price: number };
   walkthroughDone: boolean;
   piano: PianoType;
-  /** Locations with stairs / difficult access for the piano, +$75 each. */
+  /** Locations with stairs / difficult access for the piano. Charged only when `MOVING_RATES.chargeStairs`. */
   pianoStairLocations: 0 | 1 | 2;
   /** Crane / balcony / spiral / > 2 flights → escalate. */
   pianoAccessUnusual: boolean;

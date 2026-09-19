@@ -129,8 +129,6 @@ export interface PackingBreakdown {
   hours: number;
   ratePerHour: number;
   labor: number;
-  boxes: number;
-  perBox: number;
   materials: number;
 }
 
@@ -138,16 +136,11 @@ export function packingBreakdown(input: MovingQuoteInput, moveDayType: DayType):
   const p = input.packing;
   if (!p?.enabled) return null;
   const packers = p.packers ?? 2;
-  const boxes = Math.max(0, Math.round(p.boxes ?? 0));
   const dayType: DayType =
     p.separateDay && p.packingDate ? dayTypeOf(p.packingDate) : p.separateDay ? "weekday" : moveDayType;
   const teams = packers / 2; // rate is per 2 packers
-  const hours =
-    p.hoursOverride != null && p.hoursOverride > 0
-      ? ceil4(p.hoursOverride)
-      : ceil4(boxes / (R.packing.boxesPerPackerHour * teams));
+  const hours = ceil4(p.hours ?? 0);
   const ratePerHour = R.packing.ratePer2Packers[dayType] * teams;
-  const perBox = p.perBoxMaterials ?? R.packing.perBoxMaterials;
   return {
     dayType,
     dateLabel: p.separateDay && p.packingDate ? shortDateLabel(p.packingDate) : "",
@@ -155,9 +148,7 @@ export function packingBreakdown(input: MovingQuoteInput, moveDayType: DayType):
     hours,
     ratePerHour,
     labor: cents(ratePerHour * hours),
-    boxes,
-    perBox,
-    materials: cents(boxes * perBox),
+    materials: cents(Math.max(0, p.materials ?? 0)),
   };
 }
 
@@ -189,7 +180,7 @@ function buildAddOnLines(input: MovingQuoteInput, dayType: DayType, warnings: Mo
   if (input.piano !== "none") {
     const price = R.piano[input.piano];
     lines.push(flat("piano", `${pianoLabel(input.piano).replace(/^./, c => c.toUpperCase())}`, price, "flat, added on top"));
-    if (input.pianoStairLocations > 0) {
+    if (R.chargeStairs && input.pianoStairLocations > 0) {
       lines.push(
         flat(
           "piano_stairs",
@@ -226,7 +217,7 @@ function buildAddOnLines(input: MovingQuoteInput, dayType: DayType, warnings: Mo
         `${packing.packers} packers, ${packing.hours} hrs × $${packing.ratePerHour}`,
       ),
     );
-    lines.push(flat("packing_materials", "Packing materials", packing.materials, `${packing.boxes} boxes × $${packing.perBox}`));
+    if (packing.materials > 0) lines.push(flat("packing_materials", "Packing materials", packing.materials, "flat"));
     if (!input.packing.separateDay) {
       warnings.push({
         code: "packing_same_day",
@@ -370,7 +361,7 @@ function packageOptionFor(input: MovingQuoteInput, dayType: DayType, addOnsTotal
   };
   const flatPrice = applyFloor(`${pkg.name} package`, pkg.price[dayType], floorByKey[key], floors);
   const extraFlights = Math.max(0, (input.pickupFlights ?? 0) - 1) + Math.max(0, (input.deliveryFlights ?? 0) - 1);
-  const extraFlightsTotal = extraFlights * R.extraFlightOfStairs;
+  const extraFlightsTotal = R.chargeStairs ? extraFlights * R.extraFlightOfStairs : 0;
   return {
     key,
     name: pkg.name,
@@ -473,7 +464,7 @@ function addOnSentences(lines: MovingQuoteLine[], input: MovingQuoteInput): stri
   if (packingLabor) {
     out.push(
       `Packing${packingLabor.label.replace("Packing labor", "")}: ${packingLabor.detail ?? ""}${
-        packingMaterials ? `, plus materials (${packingMaterials.detail ?? ""})` : ""
+        packingMaterials ? `, plus ${dollars(packingMaterials.low)} in materials` : ""
       } — about ${dollars(packingLabor.low + (packingMaterials?.low ?? 0))}.`,
     );
   }
@@ -509,9 +500,9 @@ function packageText(input: MovingQuoteInput, pkg: PackageOption, lines: MovingQ
       pkg.overageRate,
     )}/hr, billed in quarter hours.`,
   ];
-  if (pkg.extraFlights > 0) parts.push(`Additional flights of stairs: ${pkg.extraFlights} × ${dollars(R.extraFlightOfStairs)} = ${dollars(pkg.extraFlightsTotal)}.`);
+  if (pkg.extraFlightsTotal > 0) parts.push(`Additional flights of stairs: ${pkg.extraFlights} × ${dollars(R.extraFlightOfStairs)} = ${dollars(pkg.extraFlightsTotal)}.`);
   parts.push(...addOns);
-  if (pkg.extraFlights > 0 || addOns.length) parts.push(`Total: ${dollars(pkg.total)}.`);
+  if (pkg.extraFlightsTotal > 0 || addOns.length) parts.push(`Total: ${dollars(pkg.total)}.`);
   return parts.join("\n");
 }
 
@@ -603,7 +594,7 @@ export function calculateMovingQuote(input: MovingQuoteInput): MovingQuoteResult
       low: packageOption.flatPrice,
       high: packageOption.flatPrice,
     });
-    if (packageOption.extraFlights > 0) {
+    if (packageOption.extraFlightsTotal > 0) {
       lines.push({
         key: "extra_flights",
         label: `Additional flights of stairs × ${packageOption.extraFlights}`,
@@ -722,7 +713,7 @@ export function defaultMovingInput(overrides: Partial<MovingQuoteInput> = {}): M
     laborOnly: false,
     crew: 3,
     hoursOverride: undefined,
-    packing: { enabled: false, separateDay: true, packingDate: undefined, packers: 2, boxes: 0, hoursOverride: undefined, perBoxMaterials: R.packing.perBoxMaterials },
+    packing: { enabled: false, separateDay: true, packingDate: undefined, packers: 2, hours: 0, materials: R.packing.defaultMaterialsFlat },
     playStructure: { enabled: false, mode: "flat", price: R.playStructureFlat, hours: undefined },
     secondTruck: { requested: false, price: 0 },
     walkthroughDone: false,

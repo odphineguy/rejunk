@@ -85,10 +85,18 @@ describe("package eligibility", () => {
     expect(result.recommended).toMatchObject({ kind: "hourly", crew: 4 });
   });
 
-  it("2BR with 3 flights at pickup and 2 at delivery adds 3 extra flights × $75", () => {
+  it("stairs are never charged (Abe, Sep 18): 2BR with 3 + 2 flights still totals the flat package", () => {
     const result = calculateMovingQuote(input({ homeSize: "2br", pickupFlights: 3, deliveryFlights: 2, moveDate: "2026-09-16" }));
-    expect(result.packageOption).toMatchObject({ extraFlights: 3, extraFlightsTotal: 225, total: 975 });
-    expect(result.customerText).toContain("3 × $75");
+    expect(result.packageOption).toMatchObject({ extraFlights: 3, extraFlightsTotal: 0, total: 750 });
+    expect(result.customerText).not.toMatch(/flights of stairs/i);
+    expect(result.lines.some(line => line.key === "extra_flights")).toBe(false);
+  });
+
+  it("piano stairs are never charged either — stairs only add time on hourly jobs", () => {
+    const result = calculateMovingQuote(input({ homeSize: "4br", piano: "upright", pianoStairLocations: 2, pickupFlights: 2 }));
+    expect(result.addOnLines.some(line => line.key === "piano_stairs")).toBe(false);
+    expect(result.addOnsTotal).toBe(299);
+    expect(result.crewOptions[4].hours.low).toBeGreaterThan(5);
   });
 
   it("never offers a package on labor-only or 4BR+", () => {
@@ -189,7 +197,7 @@ describe("escalations", () => {
       input({
         homeSize: "4br",
         secondTruck: { requested: true, price: 0 },
-        packing: { enabled: true, separateDay: false, packers: 2, boxes: 20, perBoxMaterials: 5 },
+        packing: { enabled: true, separateDay: false, packers: 2, hours: 2, materials: 50 },
       }),
     );
     const codes = result.warnings.map(warning => warning.code);
@@ -292,12 +300,12 @@ describe("worked example — Ee Ee Eng (4BR, 2-story, Gilbert → North Phoenix,
     expect(result.customerText).not.toMatch(NEVER_IN_CUSTOMER_TEXT);
   });
 
-  it("after the Sep 8 walkthrough: packing 100 boxes, playset, 6–8 hrs override, 58 mi → $3,977–$4,395", () => {
+  it("after the Sep 8 walkthrough: 10 packer hours + $500 flat materials, playset, 6–8 hrs override, 58 mi → $3,977–$4,395", () => {
     const result = calculateMovingQuote({
       ...eeEeEng,
       distanceMiles: 58,
       assemblyAddOns: [],
-      packing: { enabled: true, separateDay: true, packingDate: "2026-09-17", packers: 2, boxes: 100, perBoxMaterials: 5 },
+      packing: { enabled: true, separateDay: true, packingDate: "2026-09-17", packers: 2, hours: 10, materials: 500 },
       playStructure: { enabled: true, mode: "flat", price: 499 },
       hoursOverride: { low: 6, high: 8 },
       walkthroughDone: true,

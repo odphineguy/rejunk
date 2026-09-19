@@ -107,7 +107,7 @@ const PIANOS: { value: PianoType; label: string }[] = [
 const WALKTHROUGH_ITEMS: { key: string; label: string }[] = [
   { key: "rooms", label: "Rooms and what's in each" },
   { key: "furniture", label: "Furniture list (beds, sofas, tables, shelving)" },
-  { key: "boxes", label: "Box count by size (small for books/toys, medium, large, dish pack, wardrobe)" },
+  { key: "boxes", label: "Packing scope — rough box count and what needs packing (kitchen, garage, closets)" },
   { key: "stays", label: "What stays behind" },
   { key: "stairs", label: "Stairs / elevator at each address" },
   { key: "parking", label: "Truck parking and access at each address" },
@@ -353,12 +353,14 @@ function PackageCard({ result, onUsePackage, onUseHourly }: { result: MovingQuot
           <span>Extra time</span>
           <span className="font-medium text-foreground">{money(pkg.overageRate)}/hr</span>
         </div>
-        <div className="flex justify-between">
-          <span>Extra flights of stairs</span>
-          <span className="font-medium text-foreground">
-            {pkg.extraFlights} · {money(pkg.extraFlightsTotal)}
-          </span>
-        </div>
+        {pkg.extraFlightsTotal > 0 && (
+          <div className="flex justify-between">
+            <span>Extra flights of stairs</span>
+            <span className="font-medium text-foreground">
+              {pkg.extraFlights} · {money(pkg.extraFlightsTotal)}
+            </span>
+          </div>
+        )}
         <div className="flex justify-between">
           <span>Add-ons</span>
           <span className="font-medium text-foreground">{money2(pkg.addOnsTotal)}</span>
@@ -804,7 +806,7 @@ export function MovingEstimatePanel({
                 </div>
               ))}
             </div>
-            <p className="text-xs text-muted-foreground">Packages include the first flight per address (+$75 per extra flight). Hourly jobs add time, not a fee.</p>
+            <p className="text-xs text-muted-foreground">Stairs are never a charge — on hourly jobs they add ½–¾ hour per flight per address.</p>
           </Section>
 
           {/* 4 · Distance */}
@@ -839,13 +841,11 @@ export function MovingEstimatePanel({
 
           {/* 5 · Piano & specialty */}
           <Section number={5} title="Piano & specialty">
-            <Segmented<PianoType> label="Piano" value={input.piano} options={PIANOS} onChange={piano => patch({ piano, pianoStairLocations: piano === "none" ? 0 : input.pianoStairLocations, pianoAccessUnusual: piano === "none" ? false : input.pianoAccessUnusual })} />
+            <Segmented<PianoType> label="Piano" value={input.piano} options={PIANOS} onChange={piano => patch({ piano, pianoStairLocations: 0, pianoAccessUnusual: piano === "none" ? false : input.pianoAccessUnusual })} />
             {input.piano !== "none" && (
               <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border p-3">
-                <span className="text-xs text-muted-foreground">Stairs / difficult access at</span>
-                <PianoStairsToggles value={input.pianoStairLocations} onChange={pianoStairLocations => patch({ pianoStairLocations })} />
-                <CheckRow id="mv-piano-unusual" label="Unusual access" hint="crane, balcony, spiral, >2 flights" checked={input.pianoAccessUnusual} onChange={pianoAccessUnusual => patch({ pianoAccessUnusual })} />
-                <span className="text-xs text-muted-foreground">Flat {money(MOVING_RATES.piano[input.piano])} + {money(MOVING_RATES.piano.stairsPerLocation)} per location with stairs</span>
+                <CheckRow id="mv-piano-unusual" label="Unusual access" hint="crane, balcony, spiral, >2 flights — escalate" checked={input.pianoAccessUnusual} onChange={pianoAccessUnusual => patch({ pianoAccessUnusual })} />
+                <span className="text-xs text-muted-foreground">Flat {money(MOVING_RATES.piano[input.piano])}, added on top of the move</span>
               </div>
             )}
             <div className="flex flex-wrap gap-4">
@@ -857,7 +857,7 @@ export function MovingEstimatePanel({
 
           {/* 6 · Packing */}
           <Section number={6} title="Packing">
-            <SwitchRow id="mv-packing" label="We pack for the customer" hint="packers × hours + materials" checked={input.packing.enabled} onChange={enabled => patchPacking({ enabled })} />
+            <SwitchRow id="mv-packing" label="We pack for the customer" hint="packers × hours + flat materials" checked={input.packing.enabled} onChange={enabled => patchPacking({ enabled })} />
             {input.packing.enabled && (
               <div className="space-y-3 rounded-lg border border-border p-3">
                 <div className="flex flex-wrap items-end gap-4">
@@ -890,16 +890,8 @@ export function MovingEstimatePanel({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <span className="block text-xs text-muted-foreground">Boxes</span>
-                    <div className="flex items-center gap-2">
-                      <Stepper label="boxes" value={input.packing.boxes} max={999} onChange={boxes => patchPacking({ boxes })} />
-                      <Input type="number" min="0" className="w-20" value={input.packing.boxes} onChange={event => patchPacking({ boxes: Math.max(0, Math.round(numeric(event.target.value))) })} aria-label="Boxes" />
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">Books and toys go in small boxes — count high.</p>
-                  </div>
-                  <div className="space-y-1.5">
                     <Label htmlFor="mv-packer-hours" className="text-xs text-muted-foreground">
-                      Packer hours {packing ? `(computed ${packing.hours})` : ""}
+                      Packer hours
                     </Label>
                     <Input
                       id="mv-packer-hours"
@@ -907,16 +899,18 @@ export function MovingEstimatePanel({
                       min="0"
                       step="0.25"
                       className="w-24"
-                      value={input.packing.hoursOverride ?? ""}
-                      placeholder={packing ? String(packing.hours) : "0"}
-                      onChange={event => patchPacking({ hoursOverride: event.target.value === "" ? undefined : Math.max(0, numeric(event.target.value)) })}
+                      value={input.packing.hours || ""}
+                      placeholder="0"
+                      onChange={event => patchPacking({ hours: Math.max(0, numeric(event.target.value)) })}
                     />
+                    <p className="text-[11px] text-muted-foreground">Billed in quarter hours.</p>
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="mv-per-box" className="text-xs text-muted-foreground">
-                      Materials per box
+                    <Label htmlFor="mv-materials" className="text-xs text-muted-foreground">
+                      Materials (flat, $)
                     </Label>
-                    <Input id="mv-per-box" type="number" min="0" step="0.5" className="w-24" value={input.packing.perBoxMaterials} onChange={event => patchPacking({ perBoxMaterials: Math.max(0, numeric(event.target.value)) })} />
+                    <Input id="mv-materials" type="number" min="0" step="5" className="w-28" value={input.packing.materials || ""} placeholder="0" onChange={event => patchPacking({ materials: Math.max(0, numeric(event.target.value)) })} />
+                    <p className="text-[11px] text-muted-foreground">Boxes, paper, tape — one amount.</p>
                   </div>
                 </div>
                 {packing && (
@@ -928,9 +922,7 @@ export function MovingEstimatePanel({
                       <span className="font-medium">{money2(packing.labor)}</span>
                     </div>
                     <div className="flex justify-between gap-3">
-                      <span className="text-muted-foreground">
-                        Packing materials — {packing.boxes} boxes × {money2(packing.perBox)}
-                      </span>
+                      <span className="text-muted-foreground">Packing materials — flat</span>
                       <span className="font-medium">{money2(packing.materials)}</span>
                     </div>
                   </div>
@@ -1211,25 +1203,3 @@ function recommendedCrewFallback(result: MovingQuoteResult, input: MovingQuoteIn
   return input.crew;
 }
 
-function PianoStairsToggles({ value, onChange }: { value: 0 | 1 | 2; onChange: (next: 0 | 1 | 2) => void }) {
-  // Pickup / delivery toggles → count of locations with stairs (0–2).
-  const [pickup, setPickup] = useState(value >= 1);
-  const [delivery, setDelivery] = useState(value >= 2);
-  useEffect(() => {
-    if (value === 0) {
-      setPickup(false);
-      setDelivery(false);
-    }
-  }, [value]);
-  const update = (nextPickup: boolean, nextDelivery: boolean) => {
-    setPickup(nextPickup);
-    setDelivery(nextDelivery);
-    onChange(((nextPickup ? 1 : 0) + (nextDelivery ? 1 : 0)) as 0 | 1 | 2);
-  };
-  return (
-    <div className="flex gap-4">
-      <CheckRow id="mv-piano-stairs-pickup" label="Pickup" checked={pickup} onChange={next => update(next, delivery)} />
-      <CheckRow id="mv-piano-stairs-delivery" label="Delivery" checked={delivery} onChange={next => update(pickup, next)} />
-    </div>
-  );
-}
