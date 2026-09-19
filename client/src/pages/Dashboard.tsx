@@ -5,6 +5,7 @@ import {
   CheckCheck,
   ChevronLeft,
   ChevronRight,
+  LayoutDashboard,
   Minus,
   MoveDownRight,
   MoveUpRight,
@@ -24,6 +25,7 @@ import {
 
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
+import { OperationsShell } from "@/components/OperationsShell";
 import {
   Popover,
   PopoverContent,
@@ -50,15 +52,6 @@ const quickRanges = [
   "This Month",
   "Last Month",
 ] as const;
-
-function formatLongDate(date: Date) {
-  return date.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 function addDays(date: Date, days: number) {
   const next = new Date(date);
@@ -168,22 +161,6 @@ function rangeLength(range: DateRange) {
 
 function isSingleDay(range: DateRange) {
   return rangeLength(range) === 1;
-}
-
-function formatRange(range: DateRange) {
-  if (isSingleDay(range)) return formatLongDate(range.to);
-  const sameYear = range.from.getFullYear() === range.to.getFullYear();
-  const from = range.from.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    ...(sameYear ? {} : { year: "numeric" }),
-  });
-  const to = range.to.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-  return `${from} – ${to} · ${rangeLength(range)} days`;
 }
 
 /**
@@ -499,7 +476,12 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-[1480px] px-4 py-6 md:px-7 md:pb-12">
+    <OperationsShell
+      title="Dashboard"
+      icon={LayoutDashboard}
+      actions={<DashboardDatePicker range={range} onSelectRange={setRange} />}
+    >
+      <div className="mx-auto w-full max-w-[1480px] md:pb-6">
       <svg width="0" height="0" className="absolute">
         <defs>
           <linearGradient id="kpi-sparkfill" x1="0" y1="0" x2="0" y2="1">
@@ -508,21 +490,6 @@ export default function Dashboard() {
           </linearGradient>
         </defs>
       </svg>
-
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-            Workspace / Overview
-          </div>
-          <h1 className="font-display text-[1.7rem] font-bold tracking-tight md:text-[1.7rem]">
-            Dashboard
-          </h1>
-          <div className="mt-1 text-sm font-semibold text-muted-foreground">
-            Operational snapshot · {formatRange(range)}
-          </div>
-        </div>
-        <DashboardDatePicker range={range} onSelectRange={setRange} />
-      </div>
 
       {!isSupabaseConfigured && (
         <p className="mb-4 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
@@ -612,7 +579,8 @@ export default function Dashboard() {
         />
         <CapacityStrip rows={metrics?.capacity ?? null} date={range.to} />
       </div>
-    </div>
+      </div>
+    </OperationsShell>
   );
 }
 

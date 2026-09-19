@@ -657,8 +657,8 @@ function GlobalSearch() {
 
   return (
     <div className="relative w-full md:max-w-[440px]">
-      <div className="flex h-11 items-center gap-2.5 rounded-[11px] border border-border bg-card px-3 transition-shadow focus-within:border-[var(--moss-deep)] focus-within:ring-[3px] focus-within:ring-[rgba(31,122,74,0.12)]">
-        <Search className="size-4 shrink-0 text-muted-foreground" />
+      <div className="flex h-11 items-center gap-2.5 rounded-[11px] border border-[var(--line-strong)] bg-card px-3 shadow-xs transition-shadow focus-within:border-[var(--moss-deep)] focus-within:ring-[3px] focus-within:ring-[rgba(31,122,74,0.12)]">
+        <Search className="size-4 shrink-0 text-foreground" />
         <input
           ref={inputRef}
           value={query}

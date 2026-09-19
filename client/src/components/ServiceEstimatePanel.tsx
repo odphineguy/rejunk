@@ -635,7 +635,7 @@ export function ServiceEstimatePanel({
             </CardHeader>
             <CardContent className="space-y-2">
               <div
-                className="inline-flex rounded-lg border border-border bg-muted/40 p-1"
+                className="inline-flex gap-1 rounded-lg"
                 role="tablist"
                 aria-label="Moving vehicle"
               >
@@ -644,7 +644,7 @@ export function ServiceEstimatePanel({
                   role="tab"
                   aria-selected={movingVehicle === "van"}
                   onClick={() => setVehicleChoice("van")}
-                  className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${movingVehicle === "van" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`rounded-md border px-4 py-2 text-sm font-medium shadow-xs transition-colors ${movingVehicle === "van" ? "border-primary bg-primary text-primary-foreground" : "border-[var(--line-strong)] bg-card text-foreground hover:border-primary/50 hover:bg-accent/60"}`}
                 >
                   Cargo Van
                 </button>
@@ -653,7 +653,7 @@ export function ServiceEstimatePanel({
                   role="tab"
                   aria-selected={movingVehicle === "box_truck"}
                   onClick={() => setVehicleChoice("box_truck")}
-                  className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${movingVehicle === "box_truck" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`rounded-md border px-4 py-2 text-sm font-medium shadow-xs transition-colors ${movingVehicle === "box_truck" ? "border-primary bg-primary text-primary-foreground" : "border-[var(--line-strong)] bg-card text-foreground hover:border-primary/50 hover:bg-accent/60"}`}
                 >
                   Box Truck
                 </button>

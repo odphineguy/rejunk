@@ -902,7 +902,7 @@ export default function EstimateBuilder() {
       icon={Calculator}
       actions={
         <div
-          className="inline-flex rounded-lg border border-border bg-muted/40 p-1"
+          className="inline-flex flex-wrap gap-1 rounded-lg"
           role="tablist"
           aria-label="Estimate mode"
         >
@@ -911,7 +911,7 @@ export default function EstimateBuilder() {
             role="tab"
             aria-selected={mode === "junk"}
             onClick={() => setMode("junk")}
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "junk" ? "bg-[var(--moss-deep)] text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            className={`rounded-md border px-4 py-2 text-sm font-medium shadow-xs transition-colors ${mode === "junk" ? "border-primary bg-primary text-primary-foreground" : "border-[var(--line-strong)] bg-card text-foreground hover:border-primary/50 hover:bg-accent/60"}`}
           >
             Junk Removal
           </button>
@@ -920,7 +920,7 @@ export default function EstimateBuilder() {
             role="tab"
             aria-selected={mode === "moving"}
             onClick={() => setMode("moving")}
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "moving" ? "bg-[var(--moss-deep)] text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            className={`rounded-md border px-4 py-2 text-sm font-medium shadow-xs transition-colors ${mode === "moving" ? "border-primary bg-primary text-primary-foreground" : "border-[var(--line-strong)] bg-card text-foreground hover:border-primary/50 hover:bg-accent/60"}`}
           >
             Moving
           </button>
@@ -929,7 +929,7 @@ export default function EstimateBuilder() {
             role="tab"
             aria-selected={mode === "service"}
             onClick={() => setMode("service")}
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "service" ? "bg-[var(--moss-deep)] text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            className={`rounded-md border px-4 py-2 text-sm font-medium shadow-xs transition-colors ${mode === "service" ? "border-primary bg-primary text-primary-foreground" : "border-[var(--line-strong)] bg-card text-foreground hover:border-primary/50 hover:bg-accent/60"}`}
           >
             Assembly &amp; Handyman
           </button>
@@ -938,7 +938,7 @@ export default function EstimateBuilder() {
             role="tab"
             aria-selected={mode === "vision"}
             onClick={() => setMode("vision")}
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === "vision" ? "bg-[var(--moss-deep)] text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            className={`rounded-md border px-4 py-2 text-sm font-medium shadow-xs transition-colors ${mode === "vision" ? "border-primary bg-primary text-primary-foreground" : "border-[var(--line-strong)] bg-card text-foreground hover:border-primary/50 hover:bg-accent/60"}`}
           >
             Vision
           </button>

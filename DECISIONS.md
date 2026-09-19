@@ -10,6 +10,28 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
 
 ---
 
+## 2026-09-19 — Office controls use an explicit high-contrast state language
+
+**Decision**
+Search and form fields use a solid card surface with the stronger control border (`--line-strong`). Selects
+use the same border and a clearly visible chevron. Filter chips and segmented tabs are individually outlined;
+the selected option uses the primary green fill with contrasting text. These rules live in the shared Input,
+Select, and Tabs primitives, with the same treatment on the few hand-built segmented controls. New office UI
+should reuse those primitives instead of introducing low-contrast text-only filters.
+
+The Dashboard uses the shared office page header: white square icon, title, and actions. It does not use an
+eyebrow such as "Workspace / Overview."
+
+**Rejected**
+- Page-by-page color overrides — they drift and leave new screens with the same visibility problem.
+- Relying on a very pale group background alone to communicate which chip is selected.
+
+**Constraints / Open risks**
+- Underline navigation tabs may remain underline-style when they switch major content sections; compact filters
+  and segmented choices must use the outlined/high-contrast treatment above.
+
+---
+
 ## 2026-09-18 (evening) — Moving quotes: no stairs charges, no box count, flat materials
 
 **Decision**

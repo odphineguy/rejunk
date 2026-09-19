@@ -148,7 +148,7 @@ function Segmented<T extends string | number>({
   size?: "sm" | "md";
 }) {
   return (
-    <div className="inline-flex flex-wrap rounded-lg border border-border bg-muted/40 p-1" role="tablist" aria-label={label}>
+    <div className="inline-flex flex-wrap gap-1 rounded-lg" role="tablist" aria-label={label}>
       {options.map(option => {
         const selected = option.value === value;
         return (
@@ -160,8 +160,8 @@ function Segmented<T extends string | number>({
             disabled={option.disabled}
             title={option.title}
             onClick={() => onChange(option.value)}
-            className={`rounded-md font-medium transition-colors ${size === "sm" ? "px-2.5 py-1 text-xs" : "px-3 py-1.5 text-sm"} ${
-              selected ? "bg-[var(--moss-deep)] text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
+            className={`rounded-md border font-medium shadow-xs transition-colors ${size === "sm" ? "px-2.5 py-1 text-xs" : "px-3 py-1.5 text-sm"} ${
+              selected ? "border-primary bg-primary text-primary-foreground" : "border-[var(--line-strong)] bg-card text-foreground hover:border-primary/50 hover:bg-accent/60"
             } ${option.disabled ? "cursor-not-allowed opacity-50" : ""}`}
           >
             {option.label}
@@ -370,13 +370,13 @@ function PackageCard({ result, onUsePackage, onUseHourly }: { result: MovingQuot
           <span className="font-medium text-foreground">{pkg.crewShown}</span>
         </div>
       </div>
-      <div className="mt-3 inline-flex rounded-lg border border-border bg-muted/40 p-1" role="tablist" aria-label="Package or hourly">
+      <div className="mt-3 inline-flex gap-1 rounded-lg" role="tablist" aria-label="Package or hourly">
         <button
           type="button"
           role="tab"
           aria-selected={active}
           onClick={onUsePackage}
-          className={`rounded-md px-3 py-1 text-xs font-medium ${active ? "bg-[var(--moss-deep)] text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+          className={`rounded-md border px-3 py-1 text-xs font-medium shadow-xs ${active ? "border-primary bg-primary text-primary-foreground" : "border-[var(--line-strong)] bg-card text-foreground hover:border-primary/50 hover:bg-accent/60"}`}
         >
           Use package
         </button>
@@ -385,7 +385,7 @@ function PackageCard({ result, onUsePackage, onUseHourly }: { result: MovingQuot
           role="tab"
           aria-selected={!active}
           onClick={onUseHourly}
-          className={`rounded-md px-3 py-1 text-xs font-medium ${!active ? "bg-[var(--moss-deep)] text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+          className={`rounded-md border px-3 py-1 text-xs font-medium shadow-xs ${!active ? "border-primary bg-primary text-primary-foreground" : "border-[var(--line-strong)] bg-card text-foreground hover:border-primary/50 hover:bg-accent/60"}`}
         >
           Use hourly
         </button>
@@ -1202,4 +1202,3 @@ function recommendedCrewFallback(result: MovingQuoteResult, input: MovingQuoteIn
   if (result.recommended.crew) return result.recommended.crew;
   return input.crew;
 }
-
