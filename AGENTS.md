@@ -449,21 +449,16 @@ Dashboard RPCs are VOLATILE and must be called via POST. Staff identity, rather
 than the transport session, keys account limits. Public AI has a separate daily
 ceiling; browser roles cannot access/reset counters. Timeout verification remains open.
 
-### Booking → crew-ready ticket review queue (September 19, 2026)
+### Booking → crew-ready ticket (September 19, 2026)
 
 BOOKING_TO_CREW_SPEC deliverable 1. The **pipeline repo** (`rejunk-webhook-services`,
 `_shared/ticket_extractor.ts`) reads a booked Thumbtack thread + lead + booking / HCP rows with one
-`claude-sonnet-5` tool call and writes a ticket into `jobs` with `status = 'needs_review'`,
-`source = 'thumbtack'`, `leadRef {negotiationId, hcpJobId, bookingId}` and a `data.extraction` block
-(`JobExtraction` in `types/jobs.ts`: per-field `source` / `sourceMessageId` / `confidence` / `quote`,
-`needsReview[]`, `escalations[]`, `customerSaid`, `attachments[]`). Per-tenant mode
-`businesses.responder_config.ticket_extractor_mode` off|draft|live (draft = email + lead row only). The
-app side: `needs_review` in `JobStatus` / `jobStatusLabels`, the "New from Thumbtack" tab on Jobs
-(`/jobs?status=needs_review`), a Dashboard tile, and `components/TicketReviewCard.tsx` on Job detail
-(flags, escalations, sources, thread sheet via the shared `ThumbtackConversationSheet`, **Book it** →
-`scheduled` with the New Job rule, **Reject** → `canceled` + `extraction.rejectedReason`). `needs_review`
-tickets never take a slot (`buildDayBoard`), are hidden from Dispatch Center's active list, and have an
-empty crew so drivers never see them. Migration `20260919000001_ticket_review_extraction.sql` (adds
-`extraction` to the office projection) **IS applied to rejunk-prod** (2026-09-19). Never write `extraction` from the
-app except `rejectedReason` / `rejectedAt`; the pipeline replaces it whole on re-runs and respects
-dispatcher edits on the tracked ticket fields.
+`claude-sonnet-5` tool call and writes a real ticket straight into `jobs`: `status = 'scheduled'` (or
+`open` when no date), `source = 'thumbtack'`, BOX-01 pre-set on truck moves, empty `crew` (Dispatch Center
+picks it), NO item checklist (heavy / fragile pieces go into `notes`), `leadRef {negotiationId, hcpJobId,
+bookingId}` and a `data.extraction` audit block (`JobExtraction` in `types/jobs.ts`). **There is no review
+queue** — Abe, Sep 19: "the point is for me to do less work". Per-tenant mode
+`businesses.responder_config.ticket_extractor_mode` off|draft|live. Same evening the Job detail page was
+stripped to the ticket only: no vehicle picker, no crew card, no items editor, no status box — the
+Jobs page makes the ticket, Dispatch Center assigns crew/vehicle. `ThumbtackConversationSheet` is the
+shared read-only thread viewer (Clients & Leads).

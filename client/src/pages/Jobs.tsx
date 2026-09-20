@@ -53,7 +53,6 @@ const currency = new Intl.NumberFormat("en-US", {
 
 const statusTabs: Array<"all" | JobStatus> = [
   "all",
-  "needs_review",
   "open",
   "scheduled",
   "en_route",
@@ -126,12 +125,7 @@ export default function Jobs() {
   const [jobs, setJobs] = useState<Job[]>(() => getJobs());
   const [settings, setSettings] = useState(() => loadPricingSettings());
   const [query, setQuery] = useState("");
-  // `/jobs?status=needs_review` (Dashboard tile) opens straight on the Thumbtack queue.
-  const [activeStatus, setActiveStatus] = useState<"all" | JobStatus>(() => {
-    if (typeof window === "undefined") return "all";
-    const wanted = new URLSearchParams(window.location.search).get("status");
-    return wanted && statusTabs.includes(wanted as JobStatus) ? (wanted as JobStatus) : "all";
-  });
+  const [activeStatus, setActiveStatus] = useState<"all" | JobStatus>("all");
   const [activeService, setActiveService] = useState<"all" | CanonicalJobServiceType>("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { isOwner } = useStaffSession();
@@ -188,7 +182,6 @@ export default function Jobs() {
 
   const counts = useMemo(
     () => ({
-      needs_review: jobs.filter(job => job.status === "needs_review").length,
       open: jobs.filter(job => job.status === "open").length,
       scheduled: jobs.filter(job => job.status === "scheduled").length,
       on_my_way: jobs.filter(job => job.status === "on_my_way").length,
@@ -327,12 +320,7 @@ export default function Jobs() {
                 <TabsList className="h-auto flex-wrap justify-start">
                   {statusTabs.map(status => (
                     <TabsTrigger key={status} value={status}>
-                      {status === "all" ? "All" : status === "needs_review" ? "New from Thumbtack" : jobStatusLabels[status]}
-                      {status === "needs_review" && counts.needs_review > 0 && (
-                        <Badge className="ml-1.5 h-5 min-w-5 justify-center rounded-full bg-amber-500 px-1.5 text-[11px] text-white hover:bg-amber-500">
-                          {counts.needs_review}
-                        </Badge>
-                      )}
+                      {status === "all" ? "All" : jobStatusLabels[status]}
                     </TabsTrigger>
                   ))}
                 </TabsList>

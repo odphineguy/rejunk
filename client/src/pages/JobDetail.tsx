@@ -6,7 +6,6 @@ import { ArrowLeft, BarChart3, CalendarClock, CopyPlus, Download, MessageSquare,
 import { toast } from "sonner";
 
 import { JobStatusBadge, JobWarningBadge, PaymentStatusBadge, jobStatusLabels, paymentStatusLabels } from "@/components/JobBadges";
-import { TicketReviewCard } from "@/components/TicketReviewCard";
 import { loadMapScript } from "@/components/Map";
 import { OperationsShell } from "@/components/OperationsShell";
 import { Badge } from "@/components/ui/badge";
@@ -423,9 +422,6 @@ export default function JobDetail() {
     >
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="space-y-6">
-          {!analytics && (job.status === "needs_review" || job.source === "thumbtack") && (
-            <TicketReviewCard job={job} onChanged={() => setJob(getJobs().find((item) => item.id === job.id) ?? job)} />
-          )}
           {!analytics && (
           <Card>
             <CardHeader>
@@ -464,7 +460,7 @@ export default function JobDetail() {
           {!analytics && (
           <Card>
             <CardHeader>
-              <CardTitle>When & what truck</CardTitle>
+              <CardTitle>When</CardTitle>
               <CardDescription>
                 {scheduleSummary(job, settings.vehicles)}
               </CardDescription>
@@ -484,12 +480,6 @@ export default function JobDetail() {
               />
               {junk && <EditableField label="Material" value={job.materialName ?? ""} onChange={(value) => applyUpdates({ materialName: value })} />}
               {junk && <EditableField label="Facility" value={job.facilityName ?? ""} onChange={(value) => applyUpdates({ facilityName: value })} />}
-              <SelectLite
-                label="Vehicle"
-                value={job.vehicleId ?? "none"}
-                onChange={(value) => applyUpdates({ vehicleId: value === "none" ? undefined : value })}
-                options={[{ value: "none", label: "No vehicle" }, ...fleetVehicles(settings.vehicles).map((vehicle) => ({ value: vehicle.id, label: `${vehicleUnitCode(vehicle)} · ${vehicle.vehicleName}` }))]}
-              />
               {junk && <EditableField label="Cubic yards" type="number" value={String(job.cubicYards ?? "")} onChange={(value) => applyUpdates({ cubicYards: fieldNumber(value) })} />}
               {job.serviceType === "moving" && job.movingKind && (
                 <div className="space-y-2">
@@ -497,12 +487,6 @@ export default function JobDetail() {
                   <div className="rounded-md border border-border px-3 py-2 text-sm">{movingKindLabels[job.movingKind]}{jobTakesFullDay(job) ? " · full day" : ""}</div>
                 </div>
               )}
-              <div className="space-y-2">
-                <Label>Crew</Label>
-                <div className={job.crew.length < job.requiredCrew ? "rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" : "rounded-md border border-border px-3 py-2 text-sm"}>
-                  {job.crew.length ? job.crew.map((member) => employeeNameById(member.employeeId, member.employeeId)).join(", ") : "Nobody yet"} · {job.crew.length} of {job.requiredCrew}
-                </div>
-              </div>
             </CardContent>
           </Card>
           )}
@@ -510,8 +494,8 @@ export default function JobDetail() {
           {!analytics && driverJob && (
             <Card>
               <CardHeader>
-                <CardTitle>{customerStops(driverJob.stops).length > 1 ? "Stops & items" : "Where & items"}</CardTitle>
-                <CardDescription>What the crew sees on their phones. Edit and save to push it to them.</CardDescription>
+                <CardTitle>{customerStops(driverJob.stops).length > 1 ? "Stops" : "Where"}</CardTitle>
+                <CardDescription>Addresses, gate codes and access notes. This is what the crew sees on their phones.</CardDescription>
               </CardHeader>
               <CardContent>
                 <StopsItemsEditor jobId={job.id} stops={customerStops(driverJob.stops)} items={driverJob.items} disposalEvents={driverJob.disposalEvents} onSaved={() => setJob(getJobs().find((item) => item.id === job.id) ?? job)} />
@@ -640,18 +624,6 @@ export default function JobDetail() {
                     </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {!analytics && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Crew & vehicle</CardTitle>
-                <CardDescription>Who is going and in what. Names come from the Employees page.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <AssignmentEditor job={job} onSaved={() => setJob(getJobs().find((item) => item.id === job.id) ?? job)} />
               </CardContent>
             </Card>
           )}
@@ -926,24 +898,9 @@ export default function JobDetail() {
 
           {!analytics && (<Card>
             <CardHeader>
-              <CardTitle>Status</CardTitle>
+              <CardTitle>Price</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Status</Label>
-                <Select value={job.status} onValueChange={(value) => applyUpdates({ status: value as JobStatus })}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {jobStatuses.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {jobStatusLabels[status]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
               <EditableField label="Quoted price" type="number" value={String(job.quotedAmount ?? "")} onChange={(value) => applyUpdates({ quotedAmount: fieldNumber(value) ?? 0 })} />
               <div className="grid gap-2">
                 <Button variant="outline" asChild>
@@ -1219,7 +1176,7 @@ function StopsItemsEditor({ jobId, stops, items, disposalEvents: currentDisposal
   useEffect(() => setDraftItems(items), [items]);
 
   const save = async () => {
-    await saveDispatchOperationalPlan(jobId, { stops: draftStops.map((stop, index) => ({ ...stop, stopOrder: index + 1 })), items: draftItems.filter((item) => item.name.trim()), disposalEvents: currentDisposalEvents, activityMessage: "Dispatch updated stops and item checklist." });
+    await saveDispatchOperationalPlan(jobId, { stops: draftStops.map((stop, index) => ({ ...stop, stopOrder: index + 1 })), items: draftItems.filter((item) => item.name.trim()), disposalEvents: currentDisposalEvents, activityMessage: "Dispatch updated the stops." });
     toast.success("Stops and items saved");
     onSaved();
   };
@@ -1266,30 +1223,7 @@ function StopsItemsEditor({ jobId, stops, items, disposalEvents: currentDisposal
         {draftStops.length > 2 && <p className="text-sm text-amber-700">Ops rule: more than two stops usually means two tickets.</p>}
       </div>
 
-      <div className="space-y-3">
-        <div className="font-semibold">Items</div>
-        {draftItems.map((item) => (
-          <div key={item.id} className="grid gap-2 rounded-md border border-border p-3 md:grid-cols-[minmax(0,1fr)_80px_auto_auto]">
-            <Input placeholder="Item" value={item.name} onChange={(event) => setDraftItems((current) => current.map((draft) => draft.id === item.id ? { ...draft, name: event.target.value } : draft))} />
-            <Input type="number" min={1} value={String(item.quantity)} onChange={(event) => setDraftItems((current) => current.map((draft) => draft.id === item.id ? { ...draft, quantity: Math.max(1, Number(event.target.value || 1)) } : draft))} />
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-              <label className="flex items-center gap-2"><Checkbox checked={item.heavy} onCheckedChange={(value) => setDraftItems((current) => current.map((draft) => draft.id === item.id ? { ...draft, heavy: Boolean(value) } : draft))} />Heavy</label>
-              <label className="flex items-center gap-2"><Checkbox checked={item.disassemblyRequired} onCheckedChange={(value) => setDraftItems((current) => current.map((draft) => draft.id === item.id ? { ...draft, disassemblyRequired: Boolean(value) } : draft))} />Take apart</label>
-              <label className="flex items-center gap-2"><Checkbox checked={item.reassemblyRequired} onCheckedChange={(value) => setDraftItems((current) => current.map((draft) => draft.id === item.id ? { ...draft, reassemblyRequired: Boolean(value) } : draft))} />Reassemble</label>
-              <Badge variant="outline">{item.status}</Badge>
-            </div>
-            <Button variant="ghost" size="sm" onClick={() => setDraftItems((current) => current.filter((draft) => draft.id !== item.id))}>Remove</Button>
-          </div>
-        ))}
-        {draftItems.length === 0 && <p className="text-sm text-muted-foreground">No checklist yet.</p>}
-        <Button variant="outline" size="sm" onClick={() => {
-          const now = new Date().toISOString();
-          setDraftItems((current) => [...current, { id: `item-${Date.now()}`, jobId, stopId: draftStops[0]?.id, name: "", quantity: 1, oversized: false, fragile: false, heavy: false, disassemblyRequired: false, reassemblyRequired: false, status: "pending", createdAt: now, updatedAt: now }]);
-        }}>
-          Add item
-        </Button>
-      </div>
-      <Button onClick={() => void save()}>Save stops and items</Button>
+      <Button onClick={() => void save()}>Save stops</Button>
     </div>
   );
 }

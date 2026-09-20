@@ -16,16 +16,9 @@ export type DriverJobStatus =
   | "issue"
   | "canceled";
 
-/**
- * `needs_review` = a ticket the pipeline built from a Thumbtack booking that
- * dispatch has not confirmed yet (BOOKING_TO_CREW_SPEC 1e). It never reaches a
- * driver: the crew is empty until "Book it" moves it to `scheduled`.
- */
-export type ReviewJobStatus = "needs_review";
-
 export type LegacyJobStatus = "open" | "scheduled" | "on_my_way";
 
-export type JobStatus = LegacyJobStatus | ReviewJobStatus | DriverJobStatus;
+export type JobStatus = LegacyJobStatus | DriverJobStatus;
 
 export type PaymentStatus = "unpaid" | "deposit_paid" | "paid" | "refunded";
 
@@ -125,8 +118,9 @@ export interface JobExtractionAttachment {
 }
 
 /**
- * Written by the pipeline's `_shared/ticket_extractor.ts` and read by the
- * review UI. Never edited by the app; a re-run replaces it whole.
+ * Written by the pipeline's `_shared/ticket_extractor.ts` (audit trail of
+ * where each ticket detail came from). Never edited by the app; a re-run
+ * replaces it whole.
  */
 export interface JobExtraction {
   version: string;
@@ -142,9 +136,6 @@ export interface JobExtraction {
   /** Field path (e.g. `stops[0].gate_code`, `when.date`, `items`) → evidence. */
   fields: Record<string, JobExtractionField>;
   attachments?: JobExtractionAttachment[];
-  /** Dispatch's decision when the ticket was rejected from the queue. */
-  rejectedReason?: string;
-  rejectedAt?: string;
 }
 
 /** Moving-specific details a ticket inherits from the estimate (v19 snapshot lands later). */
