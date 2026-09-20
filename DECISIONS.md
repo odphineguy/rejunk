@@ -39,16 +39,16 @@ false). Brianna Eno's real thread is in the live queue as **J-1009** (zero revie
 **Constraints**
 - Office role: `app_private.office_job()` doesn't allowlist `extraction`, so office logins see the ticket
   but not the sources. Migration `20260919000001_ticket_review_extraction.sql` adds it (minus `hcpTotal` /
-  `hcpPaid` / `raw`) — written, NOT applied; Abe applies it through the Supabase MCP.
+  `hcpPaid` / `raw`) — APPLIED to rejunk-prod 2026-09-19 (Abe approved via the Supabase MCP).
 - Crew floors / included hours in the pipeline mirror `jobShape.ts` (two_br = 3 / 6 h) — the app is behind
   v19.2 (2 movers / 5 h). Fix the app first, then the pipeline's `MOVING_CREW`.
 - Thumbtack attachment URLs can't be fetched server-side (202 + empty HTML, with or without the OAuth
   token) — the ticket keeps links; deliverable 3's photo strip needs another route.
 
 **Open risks / next**
-- Pipeline functions (hcp-webhook, voice-tools, thumbtack-webhook) carry the trigger but are NOT deployed
-  yet (the auto-mode classifier blocks `supabase functions deploy`); mode is `off` for progressive until
-  Abe flips `responder_config.ticket_extractor_mode` to `draft`, reads ~10 emails, then `live`.
+- Pipeline functions (hcp-webhook, voice-tools, thumbtack-webhook) DEPLOYED 2026-09-19 with the trigger;
+  mode is `off` for progressive until Abe flips `responder_config.ticket_extractor_mode` to `draft`, reads
+  ~10 emails, then `live`.
 - Deliverable 2 (driver OMW/Finish → customer SMS, `customer_notifications`, timing on Dispatch) and 3
   (service line + photos, office upload, draft invoice on Finish) are not started.
 

@@ -464,6 +464,6 @@ app side: `needs_review` in `JobStatus` / `jobStatusLabels`, the "New from Thumb
 `scheduled` with the New Job rule, **Reject** → `canceled` + `extraction.rejectedReason`). `needs_review`
 tickets never take a slot (`buildDayBoard`), are hidden from Dispatch Center's active list, and have an
 empty crew so drivers never see them. Migration `20260919000001_ticket_review_extraction.sql` (adds
-`extraction` to the office projection) is written, **not applied**. Never write `extraction` from the
+`extraction` to the office projection) **IS applied to rejunk-prod** (2026-09-19). Never write `extraction` from the
 app except `rejectedReason` / `rejectedAt`; the pipeline replaces it whole on re-runs and respects
 dispatcher edits on the tracked ticket fields.
