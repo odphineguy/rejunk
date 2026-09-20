@@ -6,6 +6,7 @@ import { ArrowLeft, BarChart3, CalendarClock, CopyPlus, Download, MessageSquare,
 import { toast } from "sonner";
 
 import { JobStatusBadge, JobWarningBadge, PaymentStatusBadge, jobStatusLabels, paymentStatusLabels } from "@/components/JobBadges";
+import { TicketReviewCard } from "@/components/TicketReviewCard";
 import { loadMapScript } from "@/components/Map";
 import { OperationsShell } from "@/components/OperationsShell";
 import { Badge } from "@/components/ui/badge";
@@ -422,13 +423,16 @@ export default function JobDetail() {
     >
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="space-y-6">
+          {!analytics && (job.status === "needs_review" || job.source === "thumbtack") && (
+            <TicketReviewCard job={job} onChanged={() => setJob(getJobs().find((item) => item.id === job.id) ?? job)} />
+          )}
           {!analytics && (
           <Card>
             <CardHeader>
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
                   <CardTitle>{serviceTypeLabel(job)}</CardTitle>
-                  <CardDescription>{job.jobLabel || (job.sourceEstimateId ? "From a saved estimate" : "Ticket")}</CardDescription>
+                  <CardDescription>{job.jobLabel || (job.sourceEstimateId ? "From a saved estimate" : job.source === "thumbtack" ? "From a Thumbtack booking" : "Ticket")}</CardDescription>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <JobStatusBadge status={job.status} />

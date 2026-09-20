@@ -4,6 +4,7 @@ import {
   CalendarIcon,
   CheckCheck,
   ChevronLeft,
+  Inbox,
   ChevronRight,
   LayoutDashboard,
   Minus,
@@ -35,6 +36,8 @@ import { cn } from "@/lib/utils";
 import { useStaffSession } from "@/hooks/useStaffSession";
 import { ensureSession, isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { APP_TENANT_ID } from "@/lib/tenant";
+import { getJobs } from "@/lib/jobStorage";
+import { Link } from "wouter";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -434,6 +437,17 @@ export default function Dashboard() {
   const { isOwner } = useStaffSession();
   const [series, setSeries] = useState<DayMetrics[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Tickets the pipeline built from Thumbtack bookings that dispatch hasn't confirmed yet.
+  const [reviewCount, setReviewCount] = useState(() => getJobs().filter(job => job.status === "needs_review").length);
+  useEffect(() => {
+    const refresh = () => setReviewCount(getJobs().filter(job => job.status === "needs_review").length);
+    window.addEventListener("jobs-updated", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.removeEventListener("jobs-updated", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
 
   const length = rangeLength(range);
   const single = length === 1;
@@ -555,6 +569,18 @@ export default function Dashboard() {
           loading && "opacity-60"
         )}
       >
+        <Link href="/jobs?status=needs_review" className="block">
+          <SmallTile
+            icon={Inbox}
+            label="New from Thumbtack"
+            value={String(reviewCount)}
+            hint={reviewCount === 0 ? "No tickets waiting for review" : reviewCount === 1 ? "1 ticket to check and book" : `${reviewCount} tickets to check and book`}
+            today={null}
+            prev={null}
+            periodLabel={periodLabel}
+            hideDelta
+          />
+        </Link>
         <SmallTile
           icon={Star}
           label="Reviews Received"
@@ -592,6 +618,7 @@ function SmallTile({
   today,
   prev,
   periodLabel,
+  hideDelta = false,
 }: {
   icon: LucideIcon;
   label: string;
@@ -600,6 +627,8 @@ function SmallTile({
   today: number | null;
   prev: number | null;
   periodLabel: string;
+  /** A live count (not a period metric) has no "vs prior" pill. */
+  hideDelta?: boolean;
 }) {
   return (
     <section className="kpi-card rounded-[var(--radius)] border border-border bg-card px-5 pb-4 pt-4">
@@ -620,7 +649,7 @@ function SmallTile({
             <div className="mt-1 text-xs font-medium text-muted-foreground">{hint}</div>
           )}
         </div>
-        <DeltaPill today={today} prev={prev} periodLabel={periodLabel} />
+        {!hideDelta && <DeltaPill today={today} prev={prev} periodLabel={periodLabel} />}
       </div>
     </section>
   );

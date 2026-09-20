@@ -448,3 +448,22 @@ on limiter errors. Keep server/visionAnalyze.ts and api/vision-analyze.ts in syn
 Dashboard RPCs are VOLATILE and must be called via POST. Staff identity, rather
 than the transport session, keys account limits. Public AI has a separate daily
 ceiling; browser roles cannot access/reset counters. Timeout verification remains open.
+
+### Booking → crew-ready ticket review queue (September 19, 2026)
+
+BOOKING_TO_CREW_SPEC deliverable 1. The **pipeline repo** (`rejunk-webhook-services`,
+`_shared/ticket_extractor.ts`) reads a booked Thumbtack thread + lead + booking / HCP rows with one
+`claude-sonnet-5` tool call and writes a ticket into `jobs` with `status = 'needs_review'`,
+`source = 'thumbtack'`, `leadRef {negotiationId, hcpJobId, bookingId}` and a `data.extraction` block
+(`JobExtraction` in `types/jobs.ts`: per-field `source` / `sourceMessageId` / `confidence` / `quote`,
+`needsReview[]`, `escalations[]`, `customerSaid`, `attachments[]`). Per-tenant mode
+`businesses.responder_config.ticket_extractor_mode` off|draft|live (draft = email + lead row only). The
+app side: `needs_review` in `JobStatus` / `jobStatusLabels`, the "New from Thumbtack" tab on Jobs
+(`/jobs?status=needs_review`), a Dashboard tile, and `components/TicketReviewCard.tsx` on Job detail
+(flags, escalations, sources, thread sheet via the shared `ThumbtackConversationSheet`, **Book it** →
+`scheduled` with the New Job rule, **Reject** → `canceled` + `extraction.rejectedReason`). `needs_review`
+tickets never take a slot (`buildDayBoard`), are hidden from Dispatch Center's active list, and have an
+empty crew so drivers never see them. Migration `20260919000001_ticket_review_extraction.sql` (adds
+`extraction` to the office projection) is written, **not applied**. Never write `extraction` from the
+app except `rejectedReason` / `rejectedAt`; the pipeline replaces it whole on re-runs and respects
+dispatcher edits on the tracked ticket fields.

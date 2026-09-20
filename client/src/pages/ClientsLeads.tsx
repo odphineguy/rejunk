@@ -71,20 +71,12 @@ import {
   getThumbtackLeads,
   isRepeatCustomer,
   leadSourceLabel,
-  loadConversation,
   setClientSource,
   type LeadSourceKind,
   type ThumbtackLead,
-  type ThumbtackMessage,
 } from "@/lib/leadsStorage";
 import { cn } from "@/lib/utils";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { ThumbtackConversationSheet } from "@/components/ThumbtackConversationSheet";
 import { importClientsFromCsv } from "@/utils/clientCsv";
 import type {
   ClientKind,
@@ -822,20 +814,10 @@ function ClientsList() {
   );
 }
 
-function formatMessageTime(value: string | null) {
-  if (!value) return "";
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
 /**
- * Read-only Thumbtack thread for one negotiation, newest last. No composer:
- * replies stay in the responder pipeline (spec §2), and nothing here can
- * clear an escalation.
+ * Read-only Thumbtack thread for one negotiation. The sheet itself is shared
+ * with the ticket review card (`ThumbtackConversationSheet`); this wrapper only
+ * builds the lead-flavoured header.
  */
 function ConversationSheet({
   lead,
@@ -844,105 +826,42 @@ function ConversationSheet({
   lead: ThumbtackLead | null;
   onClose: () => void;
 }) {
-  const [messages, setMessages] = useState<ThumbtackMessage[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!lead) return;
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setMessages([]);
-    loadConversation(lead.negotiationId)
-      .then(rows => {
-        if (!cancelled) setMessages(rows);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [lead]);
-
   return (
-    <Sheet open={Boolean(lead)} onOpenChange={open => !open && onClose()}>
-      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
-        <SheetHeader className="border-b border-border p-5">
-          <SheetTitle className="flex flex-wrap items-center gap-2 font-display text-xl">
-            {lead?.name}
-            {lead?.escalatedAt && (
-              <Badge className="rounded-full border-[#ead4ae] bg-[#f4e7d2] px-2 font-semibold text-[#a06b22] hover:bg-[#f4e7d2]">
-                <ShieldAlert className="size-3" />
-                Escalated
-              </Badge>
-            )}
-            {lead && (
-              <Badge
-                variant="secondary"
-                className="rounded-full bg-muted px-2 font-normal text-foreground"
-              >
-                {statusLabel[lead.status]}
-              </Badge>
-            )}
-          </SheetTitle>
-          <SheetDescription className="text-sm">
-            {[
-              lead?.category,
-              lead?.city,
-              lead?.phone
-                ? `${formatPhone(lead.phone)}${lead.phoneIsRelay ? " (relay)" : ""}`
-                : null,
-              lead?.leadPrice ? `Lead cost ${lead.leadPrice}` : null,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </SheetDescription>
-        </SheetHeader>
-        <div className="flex-1 space-y-3 overflow-y-auto bg-muted/20 p-5">
-          {loading && (
-            <p className="text-sm text-muted-foreground">Loading conversation…</p>
+    <ThumbtackConversationSheet
+      negotiationId={lead?.negotiationId ?? null}
+      open={Boolean(lead)}
+      onClose={onClose}
+      customerName={lead?.name}
+      title={
+        <>
+          {lead?.name}
+          {lead?.escalatedAt && (
+            <Badge className="rounded-full border-[#ead4ae] bg-[#f4e7d2] px-2 font-semibold text-[#a06b22] hover:bg-[#f4e7d2]">
+              <ShieldAlert className="size-3" />
+              Escalated
+            </Badge>
           )}
-          {error && (
-            <p className="text-sm text-[#a06b22]">Couldn't load the thread: {error}</p>
-          )}
-          {!loading && !error && messages.length === 0 && (
-            <p className="text-sm text-muted-foreground">No messages on this lead yet.</p>
-          )}
-          {messages.map(message => (
-            <div
-              key={message.id}
-              className={cn(
-                "flex flex-col gap-1",
-                message.direction === "outbound" ? "items-end" : "items-start"
-              )}
+          {lead && (
+            <Badge
+              variant="secondary"
+              className="rounded-full bg-muted px-2 font-normal text-foreground"
             >
-              <div
-                className={cn(
-                  "max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm shadow-sm",
-                  message.direction === "outbound"
-                    ? "rounded-br-md bg-[#155e3f] text-white"
-                    : "rounded-bl-md border border-border bg-card text-foreground"
-                )}
-              >
-                {message.text}
-              </div>
-              <span className="px-1 text-[11px] text-muted-foreground">
-                {message.direction === "outbound" ? "Us" : lead?.name ?? "Customer"} ·{" "}
-                {formatMessageTime(message.sentAt)}
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className="border-t border-border bg-card px-5 py-3 text-xs text-muted-foreground">
-          Read-only. Replies go out through the Thumbtack responder, not from here.
-        </div>
-      </SheetContent>
-    </Sheet>
+              {statusLabel[lead.status]}
+            </Badge>
+          )}
+        </>
+      }
+      description={[
+        lead?.category,
+        lead?.city,
+        lead?.phone
+          ? `${formatPhone(lead.phone)}${lead.phoneIsRelay ? " (relay)" : ""}`
+          : null,
+        lead?.leadPrice ? `Lead cost ${lead.leadPrice}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")}
+    />
   );
 }
 

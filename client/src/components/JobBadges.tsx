@@ -6,6 +6,7 @@ import type { JobWarning } from "@/lib/jobIntelligence";
 import type { JobStatus, PaymentStatus } from "@/types/jobs";
 
 export const jobStatusLabels: Record<JobStatus, string> = {
+  needs_review: "Needs review",
   open: "Open",
   scheduled: "Scheduled",
   on_my_way: "On My Way",
@@ -32,6 +33,7 @@ export const paymentStatusLabels: Record<PaymentStatus, string> = {
 };
 
 const jobTone: Record<JobStatus, string> = {
+  needs_review: "bg-amber-100 text-amber-800 border-amber-200",
   open: "bg-violet-100 text-violet-700 border-violet-200",
   scheduled: "bg-blue-100 text-blue-700 border-blue-200",
   on_my_way: "bg-sky-100 text-sky-700 border-sky-200",

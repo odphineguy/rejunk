@@ -175,7 +175,7 @@ export default function DispatchCenter() {
         if (statusFilter === "active")
           return (
             sameDay(job.scheduledStart, selectedDate) &&
-            !["completed", "canceled"].includes(job.status)
+            !["completed", "canceled", "needs_review"].includes(job.status)
           );
         return true;
       })
@@ -352,7 +352,7 @@ export default function DispatchCenter() {
       const online = isSessionLive(session);
       const job = rows.find(
         row =>
-          !["completed", "canceled"].includes(row.job.status) &&
+          !["completed", "canceled", "needs_review"].includes(row.job.status) &&
           row.driverJob.assignedCrew.some(
             crew => crew.displayName.toLowerCase() === name.toLowerCase()
           )

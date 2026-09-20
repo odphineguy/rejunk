@@ -198,7 +198,9 @@ export function buildDayBoard(jobs: Job[], day: Date, vehicles: Vehicle[]): DayB
   const unslotted: Job[] = [];
   const assemblyJobs: Job[] = [];
   for (const job of jobsForDay(jobs, day)) {
-    if (job.status === "canceled") continue;
+    // Canceled jobs and unconfirmed Thumbtack tickets (dispatch hasn't clicked
+    // "Book it") never take a slot.
+    if (job.status === "canceled" || job.status === "needs_review") continue;
     if (normalizeServiceType(job.serviceType) === "assembly_handyman") assemblyJobs.push(job);
     const key = jobSlotKey(job, vehicles);
     if (!key) {

@@ -16,13 +16,21 @@ export type DriverJobStatus =
   | "issue"
   | "canceled";
 
+/**
+ * `needs_review` = a ticket the pipeline built from a Thumbtack booking that
+ * dispatch has not confirmed yet (BOOKING_TO_CREW_SPEC 1e). It never reaches a
+ * driver: the crew is empty until "Book it" moves it to `scheduled`.
+ */
+export type ReviewJobStatus = "needs_review";
+
 export type LegacyJobStatus = "open" | "scheduled" | "on_my_way";
 
-export type JobStatus = LegacyJobStatus | DriverJobStatus;
+export type JobStatus = LegacyJobStatus | ReviewJobStatus | DriverJobStatus;
 
 export type PaymentStatus = "unpaid" | "deposit_paid" | "paid" | "refunded";
 
-export type JobSource = "manual" | "estimate" | "demo";
+/** `thumbtack` = created by the pipeline's ticket extractor from a booked Thumbtack thread. */
+export type JobSource = "manual" | "estimate" | "demo" | "thumbtack";
 
 export type JobLeadSource = "thumbtack" | "phone" | "repeat_customer" | "referral" | "website" | "housecall_pro" | "other";
 
@@ -93,6 +101,50 @@ export interface JobLeadRef {
   source: "thumbtack" | "website" | "hcp" | "direct";
   negotiationId?: string;
   hcpJobId?: string;
+  /** `bookings.id` when the voice/booking agent wrote the booking row. */
+  bookingId?: string;
+}
+
+/** Where one extracted ticket field came from (BOOKING_TO_CREW_SPEC 1c/1e). */
+export interface JobExtractionField {
+  confidence: "high" | "medium" | "low";
+  /** Tag in the extractor input: M<n> (message), L (lead form), B (booking), H (HCP appointment), V (voice). */
+  source: string;
+  /** `thumbtack_messages.id` when the source was a message. */
+  sourceMessageId: string | null;
+  /** The customer's (or David's) sentence, verbatim. */
+  quote: string;
+}
+
+export interface JobExtractionAttachment {
+  messageId: string;
+  fileName: string;
+  mimeType: string | null;
+  url: string;
+  description: string | null;
+}
+
+/**
+ * Written by the pipeline's `_shared/ticket_extractor.ts` and read by the
+ * review UI. Never edited by the app; a re-run replaces it whole.
+ */
+export interface JobExtraction {
+  version: string;
+  model: string;
+  mode: "draft" | "live";
+  extractedAt: string;
+  needsReview: string[];
+  escalations: string[];
+  customerSaid: string | null;
+  phoneSource: "thread" | "hcp" | "booking" | "relay" | null;
+  hcpTotal: number | null;
+  hcpPaid: number | null;
+  /** Field path (e.g. `stops[0].gate_code`, `when.date`, `items`) → evidence. */
+  fields: Record<string, JobExtractionField>;
+  attachments?: JobExtractionAttachment[];
+  /** Dispatch's decision when the ticket was rejected from the queue. */
+  rejectedReason?: string;
+  rejectedAt?: string;
 }
 
 /** Moving-specific details a ticket inherits from the estimate (v19 snapshot lands later). */
@@ -219,4 +271,6 @@ export interface Job {
   actuals?: JobCostActuals;
   notes?: string;
   internalNotes?: string;
+  /** Present only on tickets the pipeline built from a Thumbtack thread. */
+  extraction?: JobExtraction;
 }

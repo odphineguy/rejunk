@@ -10,6 +10,48 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
 
 ---
 
+## 2026-09-19 — Booking → crew-ready ticket (BOOKING_TO_CREW_SPEC deliverable 1 / D11): extraction lives in the pipeline, the app owns the review queue
+
+**Decision**
+The extractor (`rejunk-webhook-services/_shared/ticket_extractor.ts`, one `claude-sonnet-5` tool call over
+the lead + whole Thumbtack thread + booking / HCP rows) writes a full ticket into `jobs.data` with a new
+status **`needs_review`** and `source: "thumbtack"`, plus an `extraction` block (per-field source message
+id / confidence / verbatim quote, `needsReview` flags, escalations, the crew summary, Thumbtack attachment
+links). The app adds: `JobStatus` `needs_review` (amber "Needs review" badge), the **"New from Thumbtack"**
+tab on Jobs with a count badge (`/jobs?status=needs_review` deep link), a Dashboard tile, and the
+`TicketReviewCard` at the top of a Thumbtack ticket — what still needs a human, the escalations, "For the
+crew", where each detail came from (grouped, low-confidence marked), the read-only thread in a sheet with
+the messages used on the ticket highlighted (`ThumbtackConversationSheet`, now shared with Clients &
+Leads), and the two decisions: **Book it** (same rule as New Job: name + addresses + slot + vehicle unless
+labor-only + full crew → `scheduled`) and **Reject** (reason required → `canceled`, reason kept on
+`extraction.rejectedReason` for tuning). `needs_review` tickets never take a slot on the day board, are
+hidden from Dispatch Center's active list, and are invisible to drivers (empty crew → `assigned_job()` is
+false). Brianna Eno's real thread is in the live queue as **J-1009** (zero review flags) for Abe to open.
+
+**Rejected**
+- Inline "from: …" captions next to every field in the editors — the stops/items editor is a shared
+  component; the review card groups the sources instead and highlights the messages in the thread. Strip,
+  don't add.
+- Auto-booking high-confidence tickets — nothing reaches a driver without a human click, by design.
+- Letting `needs_review` tickets hold a slot — HCP still holds the real appointment; a queue ticket
+  blocking the board would double-count.
+
+**Constraints**
+- Office role: `app_private.office_job()` doesn't allowlist `extraction`, so office logins see the ticket
+  but not the sources. Migration `20260919000001_ticket_review_extraction.sql` adds it (minus `hcpTotal` /
+  `hcpPaid` / `raw`) — written, NOT applied; Abe applies it through the Supabase MCP.
+- Crew floors / included hours in the pipeline mirror `jobShape.ts` (two_br = 3 / 6 h) — the app is behind
+  v19.2 (2 movers / 5 h). Fix the app first, then the pipeline's `MOVING_CREW`.
+- Thumbtack attachment URLs can't be fetched server-side (202 + empty HTML, with or without the OAuth
+  token) — the ticket keeps links; deliverable 3's photo strip needs another route.
+
+**Open risks / next**
+- Pipeline functions (hcp-webhook, voice-tools, thumbtack-webhook) carry the trigger but are NOT deployed
+  yet (the auto-mode classifier blocks `supabase functions deploy`); mode is `off` for progressive until
+  Abe flips `responder_config.ticket_extractor_mode` to `draft`, reads ~10 emails, then `live`.
+- Deliverable 2 (driver OMW/Finish → customer SMS, `customer_notifications`, timing on Dispatch) and 3
+  (service line + photos, office upload, draft invoice on Finish) are not started.
+
 ## 2026-09-19 — Office controls use an explicit high-contrast state language
 
 **Decision**
