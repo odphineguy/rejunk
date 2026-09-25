@@ -6,6 +6,7 @@ import {
   Calculator,
   CalendarDays,
   CalendarPlus,
+  ChartNoAxesCombined,
   ChevronDown,
   ClipboardList,
   FileText,
@@ -57,6 +58,7 @@ const navGroups = [
     label: "Workspace",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/performance", label: "Performance", icon: ChartNoAxesCombined, ownerOnly: true },
       { href: "/messages", label: "Messages", icon: MessageSquare },
       { href: "/clients", label: "Clients & Leads", icon: UsersRound },
     ],

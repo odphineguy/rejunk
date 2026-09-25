@@ -22,6 +22,7 @@ import Jobs from "./pages/Jobs";
 import Messages from "./pages/Messages";
 import NewJob from "./pages/NewJob";
 import Payments from "./pages/Payments";
+import Performance from "./pages/Performance";
 import Pricebook from "./pages/Pricebook";
 import Schedule from "./pages/Schedule";
 import Settings from "./pages/Settings";
@@ -59,6 +60,7 @@ function StaffRouter() {
   return (
     <Switch>
       <Route path={"/dashboard"} component={Dashboard} />
+      <Route path={"/performance"}><OwnerOnly><Performance /></OwnerOnly></Route>
       <Route path={"/map"} component={Home} />
       <Route path={"/estimate-builder"} component={isOwner ? EstimateBuilder : OfficeEstimateBuilder} />
       <Route path={"/jobs/new"} component={NewJob} />
