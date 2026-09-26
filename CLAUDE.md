@@ -462,3 +462,14 @@ queue** — Abe, Sep 19: "the point is for me to do less work". Per-tenant mode
 stripped to the ticket only: no vehicle picker, no crew card, no items editor, no status box — the
 Jobs page makes the ticket, Dispatch Center assigns crew/vehicle. `ThumbtackConversationSheet` is the
 shared read-only thread viewer (Clients & Leads).
+
+### Crew time tracking (September 25, 2026)
+
+DRIVER_TIME_TRACKING_SPEC. Migration `20260925000001_job_time_tracking.sql`: `driver_update_job_status`
+now also writes one row per Start / Pause / Resume / Complete tap (who + when) into the server-only
+`job_time_events` table. Time on job = effective start → finish minus paused time; labor hours = that ×
+crew size. Owner-only RPCs: `job_time_summary`, `owner_set_job_time` (logged correction, keeps the old
+value), `labor_hours_series` (Performance page Labor Hours — the manual HCP "Enter hours" button is
+gone). pg_cron `missed-start-reminders` (every 5 min) posts one "Dispatch" message in the job thread when
+scheduled start + 15 min passes with crew assigned and no Start tap. Client: `lib/jobTime.ts`,
+`components/JobTimeCard.tsx` (owner-only, job page). Nothing reads HCP.

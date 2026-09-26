@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { JobStatusBadge, JobWarningBadge, PaymentStatusBadge, jobStatusLabels, paymentStatusLabels } from "@/components/JobBadges";
 import { loadMapScript } from "@/components/Map";
 import { OperationsShell } from "@/components/OperationsShell";
+import { JobTimeCard } from "@/components/JobTimeCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -490,6 +491,8 @@ export default function JobDetail() {
             </CardContent>
           </Card>
           )}
+
+          {!analytics && isOwner && <JobTimeCard jobId={job.id} />}
 
           {!analytics && driverJob && (
             <Card>

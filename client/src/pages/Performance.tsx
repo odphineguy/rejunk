@@ -13,19 +13,8 @@ import {
 } from "lucide-react";
 
 import { OperationsShell } from "@/components/OperationsShell";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { businessRows } from "@/lib/businessAccess";
-import {
-  SETTINGS_EVENT,
-  loadSettingsSection,
-  saveSettingsSection,
-} from "@/lib/settingsStorage";
+import { loadLaborHoursSeries, type LaborHoursSeries } from "@/lib/jobTime";
 import { ensureSession, isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { APP_TENANT_ID } from "@/lib/tenant";
 import { cn } from "@/lib/utils";
@@ -36,13 +25,10 @@ import { cn } from "@/lib/utils";
 //                read through `app_leads_v`), summed by the day the lead came in.
 //   Revenue      `hcp_appointments.total_amount` for jobs completed that week —
 //                the same `dashboard_metrics` numbers the Dashboard uses, summed.
-//   Labor Hours  (finish − start) × crew size per completed job. Housecall Pro
-//                rows carry only the scheduled window and no crew size, and the
-//                driver taps store no start/finish times, so Abe types the
-//                week's "Total on job hrs" from HCP's time-tracking report
-//                ("Enter hours"). Stored per week in the `app_settings` row
-//                `performance-labor-hours` (owner-only, same pattern as the
-//                /settings pages). Weeks with nothing entered show "—".
+//   Labor Hours  (finish − start − paused time) × crew size per completed job,
+//                from the crew's taps in the driver app (DRIVER_TIME_TRACKING_SPEC,
+//                `labor_hours_series`), counted on the Phoenix day the job finished.
+//                Weeks before the first saved tap show "—". Nothing reads HCP.
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -94,25 +80,6 @@ function formatWeek(monday: string): string {
 }
 
 // ---------- data ----------
-
-/** Hand-entered weekly labor hours, keyed by the week's Monday (YYYY-MM-DD). */
-interface LaborHoursSection {
-  weeks: Record<string, number>;
-}
-const LABOR_HOURS_SECTION = "performance-labor-hours";
-const EMPTY_LABOR_HOURS: LaborHoursSection = { weeks: {} };
-
-function loadLaborHours(): Record<string, number> {
-  return { ...loadSettingsSection(LABOR_HOURS_SECTION, EMPTY_LABOR_HOURS).weeks };
-}
-
-function saveLaborHours(monday: string, hours: number | null): Record<string, number> {
-  const weeks = loadLaborHours();
-  if (hours == null) delete weeks[monday];
-  else weeks[monday] = hours;
-  saveSettingsSection(LABOR_HOURS_SECTION, { weeks });
-  return weeks;
-}
 
 interface WeekNumbers {
   leadSpend: number | null;
@@ -186,6 +153,15 @@ function weekSpend(charges: LeadCharge[], monday: string): number | null {
     .reduce((acc, c) => acc + (c.amount ?? 0), 0);
 }
 
+function weekLaborHours(series: LaborHoursSeries, monday: string): number | null {
+  const sunday = shiftDate(monday, 6);
+  if (!series.trackingSince || sunday < series.trackingSince) return null;
+  const total = series.days
+    .filter(d => d.date >= monday && d.date <= sunday)
+    .reduce((acc, d) => acc + Number(d.hours), 0);
+  return Math.round(total * 10) / 10;
+}
+
 function weekRevenue(byDay: Map<string, number | null>, monday: string): number | null {
   const days = Array.from({ length: 7 }, (_, i) => shiftDate(monday, i));
   if (!days.some(d => byDay.has(d))) return null;
@@ -252,7 +228,7 @@ const cardDefs: Array<{
     label: "Labor Hours",
     icon: Clock3,
     fmt: value => `${value.toFixed(1)} h`,
-    hint: "On-job hours from the HCP time-tracking report, entered by hand",
+    hint: "Crew time on finished jobs × crew size, from the driver app",
   },
 ];
 
@@ -260,7 +236,7 @@ export default function Performance() {
   const [monday, setMonday] = useState(() => mondayOf(phoenixDate(new Date())));
   const [revenueByDay, setRevenueByDay] = useState<Map<string, number | null> | null>(null);
   const [charges, setCharges] = useState<LeadCharge[] | null>(null);
-  const [laborHours, setLaborHours] = useState<Record<string, number>>(loadLaborHours);
+  const [laborSeries, setLaborSeries] = useState<LaborHoursSeries | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const sunday = shiftDate(monday, 6);
@@ -300,23 +276,37 @@ export default function Performance() {
     };
   }, []);
 
-  // Background hydration or another tab may update the stored hours.
   useEffect(() => {
-    const sync = () => setLaborHours(loadLaborHours());
-    window.addEventListener(SETTINGS_EVENT, sync);
-    return () => window.removeEventListener(SETTINGS_EVENT, sync);
-  }, []);
+    let cancelled = false;
+    setLaborSeries(null);
+    if (!isSupabaseConfigured) {
+      setLaborSeries({ trackingSince: null, days: [] });
+      return;
+    }
+    loadLaborHoursSeries(lastMonday, sunday)
+      .then(series => {
+        if (!cancelled) setLaborSeries(series);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setLaborSeries({ trackingSince: null, days: [] });
+        setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lastMonday, sunday]);
 
-  const loading = revenueByDay === null || charges === null;
+  const loading = revenueByDay === null || charges === null || laborSeries === null;
 
   const { current, prev } = useMemo(() => {
     const week = (start: string): WeekNumbers => ({
       leadSpend: charges ? weekSpend(charges, start) : null,
       revenue: revenueByDay ? weekRevenue(revenueByDay, start) : null,
-      laborHours: laborHours[start] ?? null,
+      laborHours: laborSeries ? weekLaborHours(laborSeries, start) : null,
     });
     return { current: week(monday), prev: week(lastMonday) };
-  }, [charges, revenueByDay, laborHours, monday, lastMonday]);
+  }, [charges, revenueByDay, laborSeries, monday, lastMonday]);
 
   return (
     <OperationsShell
@@ -371,13 +361,6 @@ export default function Performance() {
                 <div className="mt-1 text-xs font-medium text-muted-foreground">{card.hint}</div>
                 <div className="mt-4 flex items-end justify-between gap-2.5">
                   <DeltaPill current={value} prev={prev[card.key]} />
-                  {card.key === "laborHours" && (
-                    <EnterHours
-                      monday={monday}
-                      value={value}
-                      onSave={hours => setLaborHours(saveLaborHours(monday, hours))}
-                    />
-                  )}
                 </div>
               </section>
             );
@@ -385,79 +368,6 @@ export default function Performance() {
         </div>
       </div>
     </OperationsShell>
-  );
-}
-
-function EnterHours({
-  monday,
-  value,
-  onSave,
-}: {
-  monday: string;
-  value: number | null;
-  onSave: (hours: number | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState("");
-  const submit = () => {
-    const trimmed = draft.trim();
-    if (trimmed === "") {
-      onSave(null);
-    } else {
-      const hours = Number(trimmed);
-      if (!Number.isFinite(hours) || hours < 0) return;
-      onSave(Math.round(hours * 10) / 10);
-    }
-    setOpen(false);
-  };
-  return (
-    <Popover
-      open={open}
-      onOpenChange={next => {
-        setOpen(next);
-        if (next) setDraft(value == null ? "" : String(value));
-      }}
-    >
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 rounded-lg font-display text-xs font-semibold">
-          {value == null ? "Enter hours" : "Edit hours"}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-64 rounded-[14px] p-4 shadow-[var(--shadow-pop)]">
-        <form
-          onSubmit={event => {
-            event.preventDefault();
-            submit();
-          }}
-          className="space-y-3"
-        >
-          <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            Labor hours · week of {formatWeek(monday)}
-          </div>
-          <Input
-            type="number"
-            inputMode="decimal"
-            min={0}
-            step={0.1}
-            autoFocus
-            placeholder="e.g. 29.0"
-            value={draft}
-            onChange={event => setDraft(event.target.value)}
-          />
-          <p className="text-xs text-muted-foreground">
-            "Total on job hrs" from HCP Reporting → Jobs → Overall job time tracking, filtered to this week. Leave blank to clear.
-          </p>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" size="sm">
-              Save
-            </Button>
-          </div>
-        </form>
-      </PopoverContent>
-    </Popover>
   );
 }
 
