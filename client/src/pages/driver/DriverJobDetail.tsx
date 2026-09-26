@@ -14,6 +14,7 @@ import {
   formatDriverAddress,
   confirmDispatchCalled,
   getDriverJob,
+  loadDriverJobNotifications,
   sendJobMessage,
   syncJobPhotos,
   updateDisposalEventFacility,
@@ -26,6 +27,7 @@ import { toDriverStatus } from "@/lib/jobStatus";
 import { customerStops, disposalEvents } from "@/lib/operationalMetrics";
 import { loadDriverFacilities, type DriverFacility } from "@/lib/driverStorage";
 import type { DriverJob, JobPhotoType, JobPhotoVisibility } from "@/types/driver";
+import type { DriverJobNotification } from "@/lib/driverStorage";
 import type { DriverJobStatus } from "@/types/jobs";
 
 const photoTypes: JobPhotoType[] = ["before", "progress", "after", "damage", "issue", "receipt", "equipment", "other"];
@@ -123,6 +125,26 @@ function stripFor(status: DriverJobStatus): { actions: StripAction[]; info?: str
   }
 }
 
+const phoenixTime = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Phoenix" }) : "";
+
+/** One plain line per customer text; null when there's nothing worth telling the driver. */
+function notificationLine(n: DriverJobNotification): { text: string; ok: boolean } | null {
+  const what = n.kind === "omw" ? "you're on the way" : "the job is done";
+  if (n.status === "sent") {
+    return { text: n.kind === "omw" ? "Customer was texted that you're on the way" : "Customer was texted that the job is done", ok: true };
+  }
+  if (n.status === "queued" || n.status === "sending") {
+    return n.reason === "quiet_hours"
+      ? { text: `Text to customer will send at ${phoenixTime(n.sendAfter)}`, ok: true }
+      : { text: "Texting the customer…", ok: true };
+  }
+  if (n.status === "failed" || (n.status === "skipped" && ["no_number", "quiet_hours", "too_late"].includes(n.reason ?? ""))) {
+    return { text: `Couldn't text the customer — call them to say ${what}`, ok: false };
+  }
+  return null; // texts turned off, job canceled, etc.
+}
+
 export default function DriverJobDetail() {
   const [, params] = useRoute("/driver/jobs/:jobId");
   const [job, setJob] = useState<DriverJob | null>(null);
@@ -133,6 +155,7 @@ export default function DriverJobDetail() {
   const [photoCaption, setPhotoCaption] = useState("");
   const [uploading, setUploading] = useState(false);
   const [changingFacilityFor, setChangingFacilityFor] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<DriverJobNotification[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [facilities, setFacilities] = useState<DriverFacility[]>([]);
@@ -146,7 +169,17 @@ export default function DriverJobDetail() {
     if (!params?.jobId) return;
     setJob(await getDriverJob(params.jobId));
     setLoading(false);
+    setNotifications(await loadDriverJobNotifications(params.jobId));
   };
+
+  // A queued text goes out within a minute — check back until it settles.
+  const pending = notifications.some((n) => n.status === "sending" || (n.status === "queued" && n.reason !== "quiet_hours"));
+  useEffect(() => {
+    if (!pending || !params?.jobId) return;
+    const jobId = params.jobId;
+    const timer = window.setInterval(() => void loadDriverJobNotifications(jobId).then(setNotifications), 15_000);
+    return () => window.clearInterval(timer);
+  }, [pending, params?.jobId]);
 
   useEffect(() => {
     void refresh();
@@ -337,6 +370,17 @@ export default function DriverJobDetail() {
                 ))}
               </div>
             )}
+
+            {notifications.map((n) => {
+              const line = notificationLine(n);
+              if (!line) return null;
+              return (
+                <div key={n.kind} className={`flex items-start gap-2 text-sm ${line.ok ? "text-[#155e3f]" : "font-semibold text-amber-800"}`}>
+                  {line.ok ? <Check className="mt-0.5 size-4 shrink-0" /> : <Phone className="mt-0.5 size-4 shrink-0" />}
+                  <span>{line.text}</span>
+                </div>
+              );
+            })}
 
             {showStops && (
               <div className="space-y-2 border-t border-[#d4dece] pt-4">

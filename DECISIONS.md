@@ -10,6 +10,26 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
 
 ---
 
+## 2026-09-26 — Customer texts from crew taps (BOOKING_TO_CREW_SPEC deliverable 2)
+
+**Decision**
+On My Way and Complete each queue ONE customer text per job in `customer_notifications` (the RPC
+`driver_update_job_status` does it, so there's no browser path to Twilio). The pipeline owns the sending,
+through the one A2P number (480) 351-0291, or as a Thumbtack message when only the relay number is known.
+Outcomes and customer replies go into the job thread instead of a new Dispatch screen. Behind the
+`customer_notify_enabled` flag because crews still tap in HCP too, and HCP texts the customer as well.
+
+**Rejected**
+Sending from the app (Twilio keys would reach the browser). Google ETA in the text (the pipeline has no
+Maps key; the browser key is referrer-locked) — "on the way now" instead. Queuing late "on the way" texts
+until morning (pointless) — dropped, driver told to call.
+
+**Open risks**
+Double texts while HCP is also used for the same job. Templates are editable only in
+`responder_config` (`omw_sms_template` / `finish_sms_template`), not yet in Settings.
+
+---
+
 ## 2026-09-19 — Booking → crew-ready ticket (BOOKING_TO_CREW_SPEC deliverable 1 / D11): extraction lives in the pipeline, the app owns the review queue
 
 **Decision**

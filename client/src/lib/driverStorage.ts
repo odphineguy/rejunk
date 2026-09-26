@@ -298,6 +298,24 @@ function upsertOperational<K extends keyof OperationalCache>(key: K, row: any) {
   return next;
 }
 
+/** Outcome of the customer texts the crew's taps queued ("On My Way", "Complete").
+ *  Never carries the phone number or the words — just what happened. */
+export interface DriverJobNotification {
+  kind: "omw" | "finish";
+  status: "queued" | "sending" | "sent" | "failed" | "skipped";
+  channel: "sms" | "thumbtack" | null;
+  reason: string | null;
+  sendAfter: string | null;
+  sentAt: string | null;
+}
+
+export async function loadDriverJobNotifications(jobId: string): Promise<DriverJobNotification[]> {
+  if (!supabase || !(await ensureSession())) return [];
+  const { data, error } = await (supabase as any).rpc("driver_job_notifications", { target_job_id: jobId });
+  if (error) return [];
+  return Array.isArray(data) ? (data as DriverJobNotification[]) : [];
+}
+
 export async function updateDriverJobStatus(jobId: string, nextStatus: DriverJobStatus, message?: string) {
   const job = supabase ? await getDriverJob(jobId) : getJobs().find((item) => item.id === jobId);
   if (!job) throw new Error("Job not found.");

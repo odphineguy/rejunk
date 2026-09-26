@@ -473,3 +473,17 @@ value), `labor_hours_series` (Performance page Labor Hours — the manual HCP "E
 gone). pg_cron `missed-start-reminders` (every 5 min) posts one "Dispatch" message in the job thread when
 scheduled start + 15 min passes with crew assigned and no Start tap. Client: `lib/jobTime.ts`,
 `components/JobTimeCard.tsx` (owner-only, job page). Nothing reads HCP.
+
+### Customer texts from crew taps (September 26, 2026)
+
+BOOKING_TO_CREW_SPEC deliverable 2. Migration `20260926000001_customer_notifications.sql`:
+`driver_update_job_status` also queues one server-only `customer_notifications` row per job for
+**On My Way** (`omw`) and **Complete** (`finish`) — `unique(job_id, kind)`, so re-taps never resend.
+The **pipeline** sends them (`_shared/customer_notify.ts`, drained by `thumbtack-send` every minute):
+real ticket phone → `app_contact_overrides` → Thumbtack message for relay-only customers (tenant must be
+allowed to send) → else "call the customer". Quiet hours 9pm–8am Phoenix (a late "on the way" is
+dropped, a late "all done" waits for 8am). Every outcome, and any customer text-back, is posted as a
+"Dispatch" line in the job thread. Kill switch `businesses.responder_config.customer_notify_enabled`
+(literally true; off = rows closed as `texts_off`). Drivers see only the outcome
+(`driver_job_notifications`, no number / words) under the buttons; office RPC `job_customer_notifications`.
+No ETA (the pipeline has no Maps key) — the text says "on the way … now".
