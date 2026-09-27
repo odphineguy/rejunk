@@ -54,8 +54,10 @@ Steps, one screen each (same order as HCP so customers and David's instructions 
    description + price), bookable items only, Back + breadcrumb.
 2. **When** — calendar of the next 30 days; each day shows open arrival windows only. Respects settings:
    same-day on/off, lead time, closed days.
-3. **Where** — service address; moving asks pickup **and** delivery, plus floor/stairs/elevator and a
-   gate code / access box (the things Abe hand-types today).
+3. **Where** — service address. **Two addresses when the service needs them (Abe, Sep 26): Loading +
+   Unloading** for moves, deliveries and cargo-van jobs (HCP's form only takes one — that's why Abe typed
+   "Loading address: …" by hand). Each address gets floor/stairs/elevator and a gate code / access box
+   (the things Abe hand-types today). They become the ticket's pickup + delivery stops.
 4. **You** — name, mobile, email, notes, photo upload (optional), SMS consent checkbox (A2P wording from
    `/estimate`).
 5. **Review → Book it** — summary with price wording per the all-in rule ("estimate, not fixed" for hourly;
@@ -90,8 +92,9 @@ so Abe can flip back instantly. UTM tags stay.
 HCP payments go away with HCP, so Rejunk needs its own. Recommended processor: **Stripe** (already the
 plan in D10; works with Apple Pay / Google Pay; card-on-file; payment links; tap-to-pay on a phone later).
 
-1. **Deposit at booking** (optional per settings): Stripe Checkout / Payment Element on the Review step.
-   The booking only confirms when the payment succeeds. Labor-only / third-party pickups can be set to
+1. **$50 deposit at booking (Abe, Sep 26 — decided).** Stripe Payment Element on the Review step; the
+   booking only confirms when the payment succeeds. The $50 is a **credit on the final invoice** (shows as
+   "Deposit paid −$50", balance due = total − 50), recorded in `app_payments` against the ticket. Labor-only / third-party pickups can be set to
    "full payment at booking" (matches `paymentTerms = full_upfront`).
 2. **Invoices move to the database** (the deferred item from deliverable 3): owner-only `app_invoices`,
    the draft invoice on crew **Finish**, line items from the ticket's service + extra hours.
@@ -127,8 +130,9 @@ Website + Thumbtack both book into Rejunk, payments in Stripe, invoices in Rejun
 3. **Show prices on the page?** (default: yes, like HCP — flat prices for packages, "starting at" for hourly.)
 4. **Arrival windows?** (default: HCP's 2-hour windows — 8–10 am and 12–2 pm for the truck; assembly
    one job a day.)
-5. **Deposit?** (default for Phase 1: **none**, same as HCP today. Phase 2: $50 deposit, refundable up to 24h
-   before.) Card fee passed on or absorbed? (default: absorbed.)
+5. **Deposit — DECIDED (Abe, Sep 26): $50 at booking, credited toward the final invoice.** Because it's
+   required, Stripe (Phase 2 step 1) must be ready before `/book` replaces the HCP link. Still open: refund
+   rule on cancellation (default: refundable up to 24h before, per the Terms) and card fee (default: absorbed).
 6. **Stripe account** — you need to open it (or tell me if you already have one) in the Progressive
    Transportation Services LLC name; I can't create accounts for you.
 7. **Page address** — `progressive-junk.xyz/book` (default) or a subdomain.
@@ -139,9 +143,10 @@ Website + Thumbtack both book into Rejunk, payments in Stripe, invoices in Rejun
 1. `booking_availability` RPC (Rejunk tickets + HCP appointments) + tests.
 2. `/api/book` endpoint + ticket/client creation + alerts + tests.
 3. `/book` page (5 steps) + Settings wiring + "bookable online" flag on pricebook items.
-4. Abe books a test job end to end on the live site → flip the website buttons to `/book`.
-5. Stripe: account → deposit on booking → invoices in the DB → pay links → webhook.
-6. Thumbtack link in David's prompt; availability feed for David.
+4. Stripe account (Abe) → $50 deposit on the Review step → webhook records it.
+5. Abe books a test job end to end on the live site (with a real $50, refunded) → flip the website buttons to `/book`.
+6. Invoices in the DB (deposit shows as a credit) → draft invoice on Finish → pay links.
+7. Thumbtack link in David's prompt; availability feed for David.
 
 ## Constraints
 
