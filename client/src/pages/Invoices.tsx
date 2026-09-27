@@ -2,25 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import {
   CalendarClock,
-  CalendarIcon,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
-  Copy,
   CreditCard,
   Download,
-  Edit3,
   ExternalLink,
   FileText,
-  Mail,
-  MapPin,
   MoreHorizontal,
-  Paperclip,
   Plus,
   Save,
   Search,
-  Send,
   Signature,
   Trash2,
   WalletCards,
@@ -37,14 +30,46 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { deleteInvoice, getInvoice, getInvoices, saveInvoice } from "@/lib/invoiceStorage";
+import {
+  deleteInvoice,
+  getInvoice,
+  getInvoices,
+  saveInvoice,
+} from "@/lib/invoiceStorage";
+import { getJobs } from "@/lib/jobStorage";
+import { isOwner } from "@/lib/staffSession";
+import {
+  getInvoiceCompanyInfo,
+  getInvoiceSettings,
+} from "@/lib/invoiceSettings";
+import {
+  buildInvoicePdf,
+  downloadInvoicePdf,
+  invoiceTotals,
+} from "@/utils/invoicePdf";
 import { cn } from "@/lib/utils";
 import type { InvoiceRecord, InvoiceStatus } from "@/types/invoices";
 
-const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+const money = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+});
 
 function formatInvoiceDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -55,30 +80,41 @@ function formatInvoiceDate(value: string) {
   }).format(new Date(value));
 }
 
-function formatInputDate(value: string) {
-  const date = new Date(value);
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${month}/${day}/${date.getFullYear()}`;
+function displayStatus(invoice: InvoiceRecord): InvoiceStatus {
+  if (
+    (invoice.status === "sent" || invoice.status === "partial") &&
+    invoice.amountDue > 0 &&
+    new Date(invoice.dueDate).getTime() < Date.now()
+  )
+    return "overdue";
+  return invoice.status;
 }
 
 export default function Invoices() {
   const [, params] = useRoute("/invoices/:invoiceId");
   const [isNewRoute] = useRoute("/invoices/new");
 
-  if (isNewRoute) return <InvoiceDetails invoiceId="new" initialInvoice={newDraftInvoice()} isNew />;
+  if (isNewRoute)
+    return (
+      <InvoiceDetails
+        invoiceId="new"
+        initialInvoice={newDraftInvoice()}
+        isNew
+      />
+    );
   if (params?.invoiceId) return <InvoiceDetails invoiceId={params.invoiceId} />;
   return <InvoiceList />;
 }
 
 function newDraftInvoice(): InvoiceRecord {
-  const nextNumber = Math.max(0, ...getInvoices().map((invoice) => invoice.invoiceNumber)) + 1;
+  const nextNumber =
+    Math.max(0, ...getInvoices().map(invoice => invoice.invoiceNumber)) + 1;
   const now = new Date().toISOString();
   return {
-    id: `invoice-draft-${nextNumber}`,
+    id: crypto.randomUUID(),
     invoiceNumber: nextNumber,
     jobId: "",
-    clientName: "New Client",
+    clientName: "",
     clientEmail: "",
     clientAddress: "",
     createdAt: now,
@@ -91,7 +127,13 @@ function newDraftInvoice(): InvoiceRecord {
   };
 }
 
-function InvoiceHeader({ crumb, actions }: { crumb?: string; actions?: React.ReactNode }) {
+function InvoiceHeader({
+  crumb,
+  actions,
+}: {
+  crumb?: string;
+  actions?: React.ReactNode;
+}) {
   return (
     <div className="border-b border-border bg-background px-4 py-5 md:px-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -112,14 +154,18 @@ function InvoiceHeader({ crumb, actions }: { crumb?: string; actions?: React.Rea
             </>
           )}
         </div>
-        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+        {actions && (
+          <div className="flex flex-wrap items-center gap-2">{actions}</div>
+        )}
       </div>
     </div>
   );
 }
 
 function InvoiceList() {
-  const [invoices, setInvoices] = useState<InvoiceRecord[]>(() => getInvoices());
+  const [invoices, setInvoices] = useState<InvoiceRecord[]>(() =>
+    getInvoices()
+  );
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Status");
   const [pageSize, setPageSize] = useState("10");
@@ -135,11 +181,23 @@ function InvoiceList() {
 
   const filteredInvoices = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return invoices.filter((invoice) => {
+    return invoices.filter(invoice => {
       const matchesStatus =
-        statusFilter === "Status" || invoice.status === statusFilter.toLowerCase();
-      const searchable = [invoice.invoiceNumber, invoice.jobId, invoice.clientName, invoice.status, invoice.total].join(" ").toLowerCase();
-      return matchesStatus && (!normalizedQuery || searchable.includes(normalizedQuery));
+        statusFilter === "Status" ||
+        displayStatus(invoice) === statusFilter.toLowerCase();
+      const searchable = [
+        invoice.invoiceNumber,
+        invoice.jobId,
+        invoice.clientName,
+        invoice.status,
+        invoice.total,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return (
+        matchesStatus &&
+        (!normalizedQuery || searchable.includes(normalizedQuery))
+      );
     });
   }, [invoices, query, statusFilter]);
 
@@ -153,13 +211,28 @@ function InvoiceList() {
     setPage(1);
   }, [query, statusFilter, pageSize]);
 
-  const dueTotal = invoices.filter((invoice) => invoice.status !== "paid").reduce((sum, invoice) => sum + invoice.amountDue, 0);
-  const overdueTotal = invoices.filter((invoice) => invoice.status === "overdue").reduce((sum, invoice) => sum + invoice.amountDue, 0);
+  const dueTotal = invoices
+    .filter(invoice =>
+      ["sent", "partial", "overdue"].includes(displayStatus(invoice))
+    )
+    .reduce((sum, invoice) => sum + invoice.amountDue, 0);
+  const overdueTotal = invoices
+    .filter(invoice => displayStatus(invoice) === "overdue")
+    .reduce((sum, invoice) => sum + invoice.amountDue, 0);
 
-  const removeInvoice = (event: React.MouseEvent, invoiceId: string) => {
+  const removeInvoice = async (event: React.MouseEvent, invoiceId: string) => {
     event.stopPropagation();
-    setInvoices(deleteInvoice(invoiceId));
-    setSelectedIds((prev) => {
+    if (!window.confirm("Delete this invoice? This can't be undone.")) return;
+    try {
+      await deleteInvoice(invoiceId);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not delete invoice"
+      );
+      return;
+    }
+    setInvoices(getInvoices());
+    setSelectedIds(prev => {
       const next = new Set(prev);
       next.delete(invoiceId);
       return next;
@@ -167,21 +240,22 @@ function InvoiceList() {
     toast.success("Invoice deleted");
   };
 
-  const visibleIds = pagedInvoices.map((invoice) => invoice.id);
-  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
-  const someVisibleSelected = visibleIds.some((id) => selectedIds.has(id));
+  const visibleIds = pagedInvoices.map(invoice => invoice.id);
+  const allVisibleSelected =
+    visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id));
+  const someVisibleSelected = visibleIds.some(id => selectedIds.has(id));
 
   const toggleAllVisible = (checked: boolean) => {
-    setSelectedIds((prev) => {
+    setSelectedIds(prev => {
       const next = new Set(prev);
-      if (checked) visibleIds.forEach((id) => next.add(id));
-      else visibleIds.forEach((id) => next.delete(id));
+      if (checked) visibleIds.forEach(id => next.add(id));
+      else visibleIds.forEach(id => next.delete(id));
       return next;
     });
   };
 
   const toggleOne = (invoiceId: string, checked: boolean) => {
-    setSelectedIds((prev) => {
+    setSelectedIds(prev => {
       const next = new Set(prev);
       if (checked) next.add(invoiceId);
       else next.delete(invoiceId);
@@ -189,15 +263,25 @@ function InvoiceList() {
     });
   };
 
-  const deleteSelected = () => {
+  const deleteSelected = async () => {
     const count = selectedIds.size;
     if (count === 0) return;
-    if (!window.confirm(`Delete ${count} invoice${count === 1 ? "" : "s"}? This can't be undone.`)) return;
-    let result = invoices;
-    selectedIds.forEach((id) => {
-      result = deleteInvoice(id);
-    });
-    setInvoices(result);
+    if (
+      !window.confirm(
+        `Delete ${count} invoice${count === 1 ? "" : "s"}? This can't be undone.`
+      )
+    )
+      return;
+    try {
+      await Promise.all(Array.from(selectedIds).map(id => deleteInvoice(id)));
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not delete invoices"
+      );
+      setInvoices(getInvoices());
+      return;
+    }
+    setInvoices(getInvoices());
     setSelectedIds(new Set());
     toast.success(`${count} invoice${count === 1 ? "" : "s"} deleted`);
   };
@@ -206,7 +290,10 @@ function InvoiceList() {
     <>
       <InvoiceHeader
         actions={
-          <Button asChild className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]">
+          <Button
+            asChild
+            className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]"
+          >
             <Link href="/invoices/new">
               <Plus className="size-4" />
               Create Invoice
@@ -217,9 +304,19 @@ function InvoiceList() {
       <div className="space-y-5 px-4 py-8 md:px-8">
         <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
           <div className="mx-auto grid max-w-3xl gap-8 md:grid-cols-[1fr_1px_1fr] md:items-center">
-            <InvoiceMetric icon={CheckCircle2} iconClassName="bg-green-100 text-green-600" amount={dueTotal} label="Due from Invoices" />
+            <InvoiceMetric
+              icon={CheckCircle2}
+              iconClassName="bg-green-100 text-green-600"
+              amount={dueTotal}
+              label="Due from Invoices"
+            />
             <div className="hidden h-16 bg-border md:block" />
-            <InvoiceMetric icon={CalendarClock} iconClassName="bg-red-50 text-red-500" amount={overdueTotal} label="Overdue from Invoices" />
+            <InvoiceMetric
+              icon={CalendarClock}
+              iconClassName="bg-red-50 text-red-500"
+              amount={overdueTotal}
+              label="Overdue from Invoices"
+            />
           </div>
         </section>
 
@@ -227,16 +324,42 @@ function InvoiceList() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="relative w-full lg:max-w-[400px]">
               <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-foreground" />
-              <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search..." className="h-12 rounded-lg pl-10 pr-10" />
+              <Input
+                value={query}
+                onChange={event => setQuery(event.target.value)}
+                placeholder="Search..."
+                className="h-12 rounded-lg pl-10 pr-10"
+              />
               {query && (
-                <button type="button" onClick={() => setQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8a9180]" aria-label="Clear invoice search">
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8a9180]"
+                  aria-label="Clear invoice search"
+                >
                   x
                 </button>
               )}
             </div>
             <div className="flex flex-wrap gap-3">
-              <FilterSelect value={statusFilter} onChange={setStatusFilter} options={["Status", "Draft", "Overdue", "Paid"]} />
-              <FilterSelect value={pageSize} onChange={setPageSize} options={["10", "25", "50"]} />
+              <FilterSelect
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={[
+                  "Status",
+                  "Draft",
+                  "Sent",
+                  "Partial",
+                  "Overdue",
+                  "Paid",
+                  "Void",
+                ]}
+              />
+              <FilterSelect
+                value={pageSize}
+                onChange={setPageSize}
+                options={["10", "25", "50"]}
+              />
             </div>
           </div>
 
@@ -244,10 +367,18 @@ function InvoiceList() {
             <div className="mt-4 flex items-center justify-between rounded-lg border border-border bg-muted/40 px-4 py-2 text-sm">
               <span className="font-medium">{selectedIds.size} selected</span>
               <div className="flex gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedIds(new Set())}
+                >
                   Clear
                 </Button>
-                <Button variant="destructive" size="sm" onClick={deleteSelected}>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={deleteSelected}
+                >
                   <Trash2 className="size-4" />
                   Delete selected
                 </Button>
@@ -262,8 +393,16 @@ function InvoiceList() {
                   <TableHead className="w-14 px-8">
                     <Checkbox
                       aria-label="Select all invoices"
-                      checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
-                      onCheckedChange={(checked) => toggleAllVisible(checked === true)}
+                      checked={
+                        allVisibleSelected
+                          ? true
+                          : someVisibleSelected
+                            ? "indeterminate"
+                            : false
+                      }
+                      onCheckedChange={checked =>
+                        toggleAllVisible(checked === true)
+                      }
                     />
                   </TableHead>
                   <TableHead>ID</TableHead>
@@ -276,43 +415,90 @@ function InvoiceList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pagedInvoices.map((invoice) => (
-                  <TableRow key={invoice.id} className="cursor-pointer" onClick={() => navigate(`/invoices/${invoice.id}`)}>
-                    <TableCell className="px-8" onClick={(event) => event.stopPropagation()}>
+                {pagedInvoices.map(invoice => (
+                  <TableRow
+                    key={invoice.id}
+                    className="cursor-pointer"
+                    onClick={() => navigate(`/invoices/${invoice.id}`)}
+                  >
+                    <TableCell
+                      className="px-8"
+                      onClick={event => event.stopPropagation()}
+                    >
                       <Checkbox
                         aria-label={`Select invoice ${invoice.invoiceNumber}`}
                         checked={selectedIds.has(invoice.id)}
-                        onCheckedChange={(checked) => toggleOne(invoice.id, checked === true)}
+                        onCheckedChange={checked =>
+                          toggleOne(invoice.id, checked === true)
+                        }
                       />
                     </TableCell>
                     <TableCell>{invoice.invoiceNumber}</TableCell>
-                    <TableCell>{invoice.jobId}</TableCell>
+                    <TableCell>{invoice.jobId || "—"}</TableCell>
                     <TableCell>{invoice.clientName}</TableCell>
                     <TableCell>{formatInvoiceDate(invoice.dueDate)}</TableCell>
                     <TableCell>{money.format(invoice.total)}</TableCell>
                     <TableCell>
-                      <InvoiceStatusBadge status={invoice.status} />
+                      <InvoiceStatusBadge status={displayStatus(invoice)} />
                     </TableCell>
-                    <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
-                      <Button variant="ghost" size="icon" onClick={(event) => removeInvoice(event, invoice.id)} aria-label={`Delete invoice ${invoice.invoiceNumber}`}>
+                    <TableCell
+                      className="text-right"
+                      onClick={event => event.stopPropagation()}
+                    >
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={event => removeInvoice(event, invoice.id)}
+                        aria-label={`Delete invoice ${invoice.invoiceNumber}`}
+                      >
                         <Trash2 className="size-4 text-destructive" />
                       </Button>
                     </TableCell>
                   </TableRow>
                 ))}
+                {pagedInvoices.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={8}
+                      className="py-12 text-center text-muted-foreground"
+                    >
+                      No invoices yet. Create one to get started.
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </div>
         </section>
 
         <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5 text-sm md:flex-row md:items-center md:justify-between">
-          <span>{filteredInvoices.length ? `Showing ${pageStart + 1}-${pageStart + pagedInvoices.length} of ${filteredInvoices.length} results` : "No results."}</span>
+          <span>
+            {filteredInvoices.length
+              ? `Showing ${pageStart + 1}-${pageStart + pagedInvoices.length} of ${filteredInvoices.length} results`
+              : "No results."}
+          </span>
           <div className="flex items-center justify-center gap-4">
-            <Button variant="outline" size="icon" className="size-10 rounded-lg" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} aria-label="Previous page">
+            <Button
+              variant="outline"
+              size="icon"
+              className="size-10 rounded-lg"
+              disabled={currentPage <= 1}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              aria-label="Previous page"
+            >
               <ChevronLeft className="size-4" />
             </Button>
-            <span>Page {currentPage} of {totalPages}</span>
-            <Button variant="outline" size="icon" className="size-10 rounded-lg" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} aria-label="Next page">
+            <span>
+              Page {currentPage} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              className="size-10 rounded-lg"
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              aria-label="Next page"
+            >
               <ChevronRight className="size-4" />
             </Button>
           </div>
@@ -322,9 +508,37 @@ function InvoiceList() {
   );
 }
 
-function InvoiceDetails({ invoiceId, initialInvoice, isNew = false }: { invoiceId: string; initialInvoice?: InvoiceRecord; isNew?: boolean }) {
+function InvoiceDetails({
+  invoiceId,
+  initialInvoice,
+  isNew = false,
+}: {
+  invoiceId: string;
+  initialInvoice?: InvoiceRecord;
+  isNew?: boolean;
+}) {
   const [, navigate] = useLocation();
-  const [invoice, setInvoice] = useState<InvoiceRecord | null>(() => initialInvoice ?? getInvoice(invoiceId));
+  const [invoice, setInvoice] = useState<InvoiceRecord | null>(
+    () => initialInvoice ?? getInvoice(invoiceId)
+  );
+  const [saving, setSaving] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [settings, setSettings] = useState(getInvoiceSettings);
+  const [company, setCompany] = useState(getInvoiceCompanyInfo);
+  useEffect(() => {
+    if (isNew) return;
+    const refresh = () => setInvoice(getInvoice(invoiceId));
+    window.addEventListener("invoices-updated", refresh);
+    return () => window.removeEventListener("invoices-updated", refresh);
+  }, [invoiceId, isNew]);
+  useEffect(() => {
+    const refresh = () => {
+      setSettings(getInvoiceSettings());
+      setCompany(getInvoiceCompanyInfo());
+    };
+    window.addEventListener("settings-updated", refresh);
+    return () => window.removeEventListener("settings-updated", refresh);
+  }, []);
 
   if (!invoice) {
     return (
@@ -335,14 +549,110 @@ function InvoiceDetails({ invoiceId, initialInvoice, isNew = false }: { invoiceI
     );
   }
 
-  const subtotal = invoice.items.reduce((sum, item) => sum + item.quantity * item.amount, 0);
-  const amountDue = invoice.status === "paid" ? 0 : subtotal;
+  const totals = invoiceTotals(invoice);
+  const jobs = getJobs();
 
-  const updateInvoice = (updates: Partial<InvoiceRecord>) => setInvoice((current) => (current ? { ...current, ...updates } : current));
-  const persistInvoice = () => {
-    const saved = saveInvoice({ ...invoice, amountDue, total: subtotal });
-    setInvoice(saved);
-    toast.success("Invoice saved");
+  const updateInvoice = (updates: Partial<InvoiceRecord>) =>
+    setInvoice(current => (current ? { ...current, ...updates } : current));
+  const persistInvoice = async () => {
+    if (!invoice.clientName.trim()) {
+      toast.error("Enter a client name");
+      return;
+    }
+    if (
+      !invoice.items.length ||
+      invoice.items.some(
+        item =>
+          !item.name.trim() ||
+          !Number.isFinite(item.quantity) ||
+          !Number.isFinite(item.amount) ||
+          item.quantity <= 0 ||
+          item.amount < 0
+      )
+    ) {
+      toast.error("Add at least one valid item");
+      return;
+    }
+    if (
+      ![
+        invoice.discount ?? 0,
+        invoice.taxRate ?? 0,
+        invoice.amountPaid ?? 0,
+      ].every(value => Number.isFinite(value) && value >= 0)
+    ) {
+      toast.error("Discount, tax, and paid amount must be valid numbers");
+      return;
+    }
+    setSaving(true);
+    try {
+      const status =
+        totals.amountDue === 0
+          ? "paid"
+          : totals.amountPaid > 0
+            ? "partial"
+            : invoice.status === "paid"
+              ? "draft"
+              : invoice.status;
+      const saved = await saveInvoice({
+        ...invoice,
+        status,
+        total: totals.total,
+        amountDue: totals.amountDue,
+      });
+      setInvoice(saved);
+      toast.success("Invoice saved");
+      if (isNew) navigate(`/invoices/${saved.id}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not save invoice"
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+  const updateItem = (
+    id: string,
+    patch: Partial<InvoiceRecord["items"][number]>
+  ) =>
+    updateInvoice({
+      items: invoice.items.map(item =>
+        item.id === id ? { ...item, ...patch } : item
+      ),
+    });
+  const previewPdf = async () => {
+    const previewWindow = window.open("", "_blank");
+    if (!previewWindow) {
+      toast.error("Allow popups to preview the invoice");
+      return;
+    }
+    previewWindow.opener = null;
+    setPreviewing(true);
+    try {
+      const pdf = await buildInvoicePdf({
+        ...invoice,
+        total: totals.total,
+        amountDue: totals.amountDue,
+      });
+      const url = URL.createObjectURL(pdf.output("blob"));
+      previewWindow.location.href = url;
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      previewWindow.close();
+      toast.error("Could not preview PDF");
+    } finally {
+      setPreviewing(false);
+    }
+  };
+  const downloadPdf = async () => {
+    try {
+      await downloadInvoicePdf({
+        ...invoice,
+        total: totals.total,
+        amountDue: totals.amountDue,
+      });
+    } catch {
+      toast.error("Could not create PDF");
+    }
   };
 
   return (
@@ -351,59 +661,98 @@ function InvoiceDetails({ invoiceId, initialInvoice, isNew = false }: { invoiceI
         crumb={`${isNew ? "New Invoice" : "Invoice Details"} - #${invoice.invoiceNumber}`}
         actions={
           <>
-            <Button variant="outline" className="rounded-lg border-red-400 text-red-500 hover:text-red-500">
-              <CalendarClock className="size-4" />
-              {invoice.status === "overdue" ? "Overdue" : invoice.status === "paid" ? "Paid" : "Draft"}
+            <Select
+              value={invoice.status}
+              onValueChange={(status: InvoiceStatus) =>
+                updateInvoice({
+                  status,
+                  ...(status === "paid"
+                    ? { amountPaid: totals.total }
+                    : status === "draft"
+                      ? { amountPaid: 0 }
+                      : {}),
+                })
+              }
+            >
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {["draft", "sent", "partial", "overdue", "paid", "void"].map(
+                  status => (
+                    <SelectItem
+                      key={status}
+                      value={status}
+                      className="capitalize"
+                    >
+                      {status}
+                    </SelectItem>
+                  )
+                )}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              onClick={() => void downloadPdf()}
+              className="rounded-lg"
+            >
+              <Download className="size-4" />
+              Download PDF
             </Button>
-            <Button variant="outline" className="rounded-lg">
-              <Send className="size-4" />
-              Send Invoice
-            </Button>
-            <Button onClick={persistInvoice} className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]">
+            <Button
+              onClick={() => void persistInvoice()}
+              disabled={saving}
+              className="rounded-lg bg-[#155e3f] text-white hover:bg-[#0c4a30]"
+            >
               <Save className="size-4" />
               Save
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="size-10 rounded-lg">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="size-10 rounded-lg"
+                >
                   <MoreHorizontal className="size-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52 rounded-lg p-2">
-                <DropdownMenuItem onClick={() => toast.info("Preview placeholder")}>
+                <DropdownMenuItem
+                  disabled={previewing}
+                  onClick={() => void previewPdf()}
+                >
                   <ExternalLink className="size-4" />
                   Preview
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => toast.info("PDF download placeholder")}>
+                <DropdownMenuItem onClick={() => void downloadPdf()}>
                   <Download className="size-4" />
                   Download PDF
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    const invoiceUrl = `${window.location.origin}/invoices/${invoice.id}`;
-                    if (navigator.clipboard) {
-                      void navigator.clipboard.writeText(invoiceUrl).then(() => toast.success("Invoice link copied"));
-                    } else {
-                      toast.info(invoiceUrl);
-                    }
-                  }}
-                >
-                  <Copy className="size-4" />
-                  Copy Invoice Link
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href={`/jobs/${invoice.jobId}`}>
-                    <WalletCards className="size-4" />
-                    View Job
-                  </Link>
-                </DropdownMenuItem>
+                {invoice.jobId && (
+                  <DropdownMenuItem asChild>
+                    <Link href={`/jobs/${invoice.jobId}`}>
+                      <WalletCards className="size-4" />
+                      View Job
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   variant="destructive"
-                  onClick={() => {
-                    deleteInvoice(invoice.id);
-                    toast.success("Invoice deleted");
-                    navigate("/invoices");
-                  }}
+                  onClick={() =>
+                    void deleteInvoice(invoice.id)
+                      .then(() => {
+                        toast.success("Invoice deleted");
+                        navigate("/invoices");
+                      })
+                      .catch(error =>
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Could not delete invoice"
+                        )
+                      )
+                  }
                 >
                   <Trash2 className="size-4" />
                   Delete
@@ -419,33 +768,131 @@ function InvoiceDetails({ invoiceId, initialInvoice, isNew = false }: { invoiceI
           <div className="flex flex-col gap-6 border-b border-border pb-6 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold">Invoice #</h1>
-              <Input value={invoice.invoiceNumber} readOnly className="h-10 w-24 rounded-lg" />
+              <Input
+                value={invoice.invoiceNumber}
+                readOnly
+                className="h-10 w-24 rounded-lg"
+              />
             </div>
-            <Button variant="outline" className="w-fit rounded-full border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]">
-              Edit Client
-            </Button>
+            {isOwner() && <Link
+              href="/settings/invoices"
+              className="text-sm text-[#155e3f] underline"
+            >
+              Invoice Settings
+            </Link>}
           </div>
           <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_auto]">
             <div>
               <div className="text-sm font-medium text-[#8a9180]">Client:</div>
-              <div className="mt-2 text-2xl font-semibold">{invoice.clientName}</div>
-              {invoice.clientAddress && (
-                <div className="mt-5 flex items-center gap-3 text-sm">
-                  <MapPin className="size-4 fill-foreground" />
-                  {invoice.clientAddress}
-                </div>
-              )}
-              {invoice.clientEmail && (
-                <div className="mt-5 flex items-center gap-3 text-sm">
-                  <Mail className="size-4 fill-foreground" />
-                  {invoice.clientEmail}
-                </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <Input
+                  aria-label="Client name"
+                  value={invoice.clientName}
+                  onChange={event =>
+                    updateInvoice({ clientName: event.target.value })
+                  }
+                  placeholder="Client name"
+                />
+                <Input
+                  aria-label="Client email"
+                  type="email"
+                  value={invoice.clientEmail ?? ""}
+                  onChange={event =>
+                    updateInvoice({ clientEmail: event.target.value })
+                  }
+                  placeholder="Email"
+                />
+                <Input
+                  aria-label="Client address"
+                  className="md:col-span-2"
+                  value={invoice.clientAddress ?? ""}
+                  onChange={event =>
+                    updateInvoice({ clientAddress: event.target.value })
+                  }
+                  placeholder="Billing address"
+                />
+              </div>
+              {(settings.showCompanyName ||
+                settings.showCompanyAddress ||
+                settings.showCompanyLogo) && (
+                <p className="mt-4 text-xs text-muted-foreground">
+                  PDF letterhead:{" "}
+                  {settings.showCompanyName
+                    ? company.companyName
+                    : "Company name hidden"}
+                  {settings.showCompanyAddress && company.companyAddress
+                    ? ` · ${company.companyAddress}`
+                    : ""}
+                  {settings.showCompanyLogo && company.logoDataUrl
+                    ? " · Logo"
+                    : ""}
+                </p>
               )}
             </div>
             <div className="w-full overflow-hidden rounded-lg border border-foreground lg:w-[246px]">
-              <InvoiceMeta label="JOB ID" value={invoice.jobId} link />
-              <InvoiceMeta label="CREATED" value={formatInvoiceDate(invoice.createdAt)} />
-              <InvoiceMeta label="DUE DATE" value={formatInvoiceDate(invoice.dueDate)} />
+              <div className="border-b border-foreground px-5 py-3 text-sm">
+                <label className="font-semibold" htmlFor="invoice-job">
+                  JOB
+                </label>
+                <Select
+                  value={invoice.jobId || "none"}
+                  onValueChange={value => {
+                    const job = jobs.find(row => row.id === value);
+                    updateInvoice({
+                      jobId: value === "none" ? "" : value,
+                      ...(job
+                        ? {
+                            clientName: job.customerName,
+                            clientEmail: job.email ?? "",
+                            clientAddress: [
+                              job.address,
+                              job.city,
+                              job.state,
+                              job.zip,
+                            ]
+                              .filter(Boolean)
+                              .join(", "),
+                            items: invoice.items.length
+                              ? invoice.items
+                              : job.quotedAmount > 0
+                                ? [
+                                    {
+                                      id: crypto.randomUUID(),
+                                      name:
+                                        job.jobLabel ||
+                                        job.serviceType.replaceAll("_", " "),
+                                      quantity: 1,
+                                      amount: job.quotedAmount,
+                                      taxable: false,
+                                    },
+                                  ]
+                                : [],
+                          }
+                        : {}),
+                    });
+                  }}
+                >
+                  <SelectTrigger id="invoice-job" className="mt-2">
+                    <SelectValue placeholder="Select job" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No linked job</SelectItem>
+                    {jobs.map(job => (
+                      <SelectItem key={job.id} value={job.id}>
+                        #{job.jobNumber} · {job.customerName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <InvoiceMeta
+                label="CREATED"
+                value={formatInvoiceDate(invoice.createdAt)}
+              />
+              <InvoiceMeta
+                label="DUE DATE"
+                value={formatInvoiceDate(invoice.dueDate)}
+              />
             </div>
           </div>
         </Panel>
@@ -453,7 +900,32 @@ function InvoiceDetails({ invoiceId, initialInvoice, isNew = false }: { invoiceI
         <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
           <div className="space-y-5">
             <Panel>
-              <SectionHeader icon={FileText} title="Items" action={<Button variant="outline" className="rounded-full border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]">Add Item</Button>} />
+              <SectionHeader
+                icon={FileText}
+                title="Items"
+                action={
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      updateInvoice({
+                        items: [
+                          ...invoice.items,
+                          {
+                            id: crypto.randomUUID(),
+                            name: "",
+                            quantity: 1,
+                            amount: 0,
+                            taxable: false,
+                          },
+                        ],
+                      })
+                    }
+                    className="rounded-full border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]"
+                  >
+                    Add Item
+                  </Button>
+                }
+              />
               <Table>
                 <TableHeader className="bg-muted/30">
                   <TableRow>
@@ -465,21 +937,74 @@ function InvoiceDetails({ invoiceId, initialInvoice, isNew = false }: { invoiceI
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {invoice.items.map((item) => (
+                  {invoice.items.map(item => (
                     <TableRow key={item.id}>
                       <TableCell>
-                        {item.name}
-                        {item.taxable && <Badge className="ml-2 rounded-full bg-[#eaf1e3] text-[#155e3f]">Taxable</Badge>}
+                        <Input
+                          aria-label="Item description"
+                          value={item.name}
+                          onChange={event =>
+                            updateItem(item.id, { name: event.target.value })
+                          }
+                          placeholder="Description"
+                        />
+                        <label className="mt-2 flex items-center gap-2 text-xs">
+                          <Checkbox
+                            checked={item.taxable ?? false}
+                            onCheckedChange={checked =>
+                              updateItem(item.id, { taxable: checked === true })
+                            }
+                          />
+                          Taxable
+                        </label>
                       </TableCell>
-                      <TableCell>{item.quantity}</TableCell>
-                      <TableCell>{money.format(item.amount)}</TableCell>
-                      <TableCell>{money.format(item.quantity * item.amount)}</TableCell>
+                      <TableCell>
+                        <Input
+                          aria-label="Quantity"
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          className="w-20"
+                          value={item.quantity}
+                          onChange={event =>
+                            updateItem(item.id, {
+                              quantity: Number(event.target.value),
+                            })
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          aria-label="Unit price"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="w-28"
+                          value={item.amount}
+                          onChange={event =>
+                            updateItem(item.id, {
+                              amount: Number(event.target.value),
+                            })
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {money.format(item.quantity * item.amount)}
+                      </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="icon">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Remove item"
+                          onClick={() =>
+                            updateInvoice({
+                              items: invoice.items.filter(
+                                row => row.id !== item.id
+                              ),
+                            })
+                          }
+                        >
                           <Trash2 className="size-4 text-destructive" />
-                        </Button>
-                        <Button variant="ghost" size="icon">
-                          <Edit3 className="size-4 text-[#8a9180]" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -489,18 +1014,79 @@ function InvoiceDetails({ invoiceId, initialInvoice, isNew = false }: { invoiceI
             </Panel>
 
             <Panel>
-              <SectionHeader icon={CreditCard} title="Payments" action={<Button variant="outline" className="rounded-full border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]">Add Payment</Button>} />
-              <p className="text-sm text-[#8a9180]">No payments made</p>
+              <SectionHeader icon={CreditCard} title="Payment recorded" />
+              <FieldLabel>Amount already paid</FieldLabel>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={
+                  invoice.amountPaid ??
+                  (invoice.status === "paid" ? invoice.total : 0)
+                }
+                onChange={event =>
+                  updateInvoice({ amountPaid: Number(event.target.value) })
+                }
+              />
+              <p className="mt-2 text-xs text-muted-foreground">
+                Enter payments received outside this invoice. Card collection is
+                not connected here.
+              </p>
             </Panel>
 
             <Panel>
               <SectionHeader icon={ClipboardList} title="Summary" />
               <div className="space-y-0 text-sm">
-                <SummaryRow label={<span>Items Subtotal <span className="text-[#8a9180]">({invoice.items.length} item)</span></span>} value={money.format(subtotal)} />
-                <SummaryRow label="Discounts Subtotal" action="Add Discount" value="-$0.00" />
-                <SummaryRow label="Taxes" action="Select ..." value="$0.00" />
-                <SummaryRow label="Total" value={money.format(subtotal)} />
-                <SummaryRow label="Amount Due" value={money.format(amountDue)} valueClassName="text-red-500 font-semibold" />
+                <SummaryRow
+                  label={
+                    <span>
+                      Items Subtotal{" "}
+                      <span className="text-[#8a9180]">
+                        ({invoice.items.length} items)
+                      </span>
+                    </span>
+                  }
+                  value={money.format(totals.subtotal)}
+                />
+                <div className="flex items-center justify-between gap-3 border-b border-border py-3">
+                  <span>Discount</span>
+                  <Input
+                    aria-label="Discount amount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28"
+                    value={invoice.discount ?? 0}
+                    onChange={event =>
+                      updateInvoice({ discount: Number(event.target.value) })
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3 border-b border-border py-3">
+                  <span>Tax rate (%)</span>
+                  <Input
+                    aria-label="Tax rate percent"
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    className="w-28"
+                    value={invoice.taxRate ?? 0}
+                    onChange={event =>
+                      updateInvoice({ taxRate: Number(event.target.value) })
+                    }
+                  />
+                </div>
+                <SummaryRow label="Tax" value={money.format(totals.tax)} />
+                <SummaryRow label="Total" value={money.format(totals.total)} />
+                <SummaryRow
+                  label="Paid"
+                  value={money.format(totals.amountPaid)}
+                />
+                <SummaryRow
+                  label="Amount Due"
+                  value={money.format(totals.amountDue)}
+                  valueClassName="text-red-500 font-semibold"
+                />
               </div>
             </Panel>
           </div>
@@ -510,39 +1096,36 @@ function InvoiceDetails({ invoiceId, initialInvoice, isNew = false }: { invoiceI
               <SectionHeader icon={ExternalLink} title="More" />
               <FieldLabel>Due Date</FieldLabel>
               <div className="relative">
-                <Input value={formatInputDate(invoice.dueDate)} onChange={(event) => updateInvoice({ dueDate: new Date(event.target.value).toISOString() })} className="h-12 rounded-lg pr-12" />
-                <CalendarIcon className="absolute right-4 top-1/2 size-4 -translate-y-1/2 text-foreground" />
+                <Input
+                  type="date"
+                  value={invoice.dueDate.slice(0, 10)}
+                  onChange={event =>
+                    updateInvoice({
+                      dueDate: `${event.target.value}T12:00:00.000Z`,
+                    })
+                  }
+                  className="h-12 rounded-lg pr-12"
+                />
               </div>
             </Panel>
 
             <Panel>
               <SectionHeader icon={FileText} title="Notes" />
-              <Textarea value={invoice.notes ?? ""} onChange={(event) => updateInvoice({ notes: event.target.value })} className="min-h-[160px] rounded-lg p-6" />
-            </Panel>
-
-            <Panel>
-              <SectionHeader
-                icon={Paperclip}
-                title="Attachments"
-                action={
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" className="rounded-full border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]">Add Photo/Doc</Button>
-                    <Button variant="outline" className="rounded-full border-[#155e3f] text-[#155e3f] hover:text-[#155e3f]">Transfer from Job</Button>
-                  </div>
-                }
+              <Textarea
+                value={invoice.notes ?? ""}
+                onChange={event => updateInvoice({ notes: event.target.value })}
+                className="min-h-[160px] rounded-lg p-6"
               />
-              <p className="text-sm text-[#8a9180]">No attachments found</p>
             </Panel>
 
-            <Panel>
-              <SectionHeader icon={Signature} title="Signature" />
-              <div className="h-48 rounded-lg border border-dashed border-[#dce1f1] bg-background" />
-              <div className="mt-5 flex justify-end">
-                <Button variant="secondary" className="rounded-lg bg-[#eaf1e3] text-[#155e3f] hover:bg-[#dde9d2]">
-                  Save Signature
-                </Button>
-              </div>
-            </Panel>
+            {settings.invoiceSignature && (
+              <Panel>
+                <SectionHeader icon={Signature} title="Customer signature" />
+                <p className="text-sm text-muted-foreground">
+                  A signature line will appear on the downloaded PDF.
+                </p>
+              </Panel>
+            )}
           </div>
         </div>
       </div>
@@ -550,10 +1133,25 @@ function InvoiceDetails({ invoiceId, initialInvoice, isNew = false }: { invoiceI
   );
 }
 
-function InvoiceMetric({ icon: Icon, iconClassName, amount, label }: { icon: typeof CheckCircle2; iconClassName: string; amount: number; label: string }) {
+function InvoiceMetric({
+  icon: Icon,
+  iconClassName,
+  amount,
+  label,
+}: {
+  icon: typeof CheckCircle2;
+  iconClassName: string;
+  amount: number;
+  label: string;
+}) {
   return (
     <div className="flex items-center gap-3">
-      <div className={cn("flex size-10 items-center justify-center rounded-lg", iconClassName)}>
+      <div
+        className={cn(
+          "flex size-10 items-center justify-center rounded-lg",
+          iconClassName
+        )}
+      >
         <Icon className="size-5" />
       </div>
       <div>
@@ -564,14 +1162,22 @@ function InvoiceMetric({ icon: Icon, iconClassName, amount, label }: { icon: typ
   );
 }
 
-function FilterSelect({ value, onChange, options }: { value: string; onChange?: (value: string) => void; options: string[] }) {
+function FilterSelect({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange?: (value: string) => void;
+  options: string[];
+}) {
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger className="h-10 min-w-[90px] rounded-lg bg-card">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {options.map((option) => (
+        {options.map(option => (
           <SelectItem key={option} value={option}>
             {option}
           </SelectItem>
@@ -588,14 +1194,32 @@ function InvoiceStatusBadge({ status }: { status: InvoiceStatus }) {
       : status === "paid"
         ? "bg-green-100 text-foreground"
         : "bg-muted text-foreground";
-  return <Badge className={cn("rounded-full px-3 font-normal capitalize", className)}>{status}</Badge>;
+  return (
+    <Badge
+      className={cn("rounded-full px-3 font-normal capitalize", className)}
+    >
+      {status}
+    </Badge>
+  );
 }
 
 function Panel({ children }: { children: React.ReactNode }) {
-  return <section className="rounded-lg border border-border bg-card p-6 shadow-sm">{children}</section>;
+  return (
+    <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
+      {children}
+    </section>
+  );
 }
 
-function SectionHeader({ icon: Icon, title, action }: { icon: typeof FileText; title: string; action?: React.ReactNode }) {
+function SectionHeader({
+  icon: Icon,
+  title,
+  action,
+}: {
+  icon: typeof FileText;
+  title: string;
+  action?: React.ReactNode;
+}) {
   return (
     <div className="mb-5 flex flex-col gap-3 border-b border-border pb-4 md:flex-row md:items-center md:justify-between">
       <div className="flex items-center gap-2">
@@ -608,14 +1232,28 @@ function SectionHeader({ icon: Icon, title, action }: { icon: typeof FileText; t
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label className="mb-3 block text-sm font-semibold text-foreground">{children}</label>;
+  return (
+    <label className="mb-3 block text-sm font-semibold text-foreground">
+      {children}
+    </label>
+  );
 }
 
-function InvoiceMeta({ label, value, link = false }: { label: string; value: string; link?: boolean }) {
+function InvoiceMeta({
+  label,
+  value,
+  link = false,
+}: {
+  label: string;
+  value: string;
+  link?: boolean;
+}) {
   return (
     <div className="grid grid-cols-[1fr_auto] gap-3 border-b border-foreground px-5 py-4 text-sm last:border-b-0">
       <div className="font-semibold">{label}</div>
-      <div className={cn("text-right", link && "text-[#8a9180] underline")}>{value}</div>
+      <div className={cn("text-right", link && "text-[#8a9180] underline")}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -634,7 +1272,11 @@ function SummaryRow({
   return (
     <div className="grid grid-cols-[1fr_auto_auto] items-center gap-4 border-b border-border py-3 last:border-b-0">
       <div className="font-medium">{label}</div>
-      {action && <button className="text-[#155e3f] underline-offset-2 hover:underline">{action}</button>}
+      {action && (
+        <button className="text-[#155e3f] underline-offset-2 hover:underline">
+          {action}
+        </button>
+      )}
       <div className={cn("text-right", valueClassName)}>{value}</div>
     </div>
   );

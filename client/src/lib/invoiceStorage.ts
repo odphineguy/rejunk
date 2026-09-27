@@ -1,96 +1,131 @@
+import { currentStaffIdentity } from "@/lib/financialCache";
+import { ensureSession, supabase } from "@/lib/supabase";
 import type { InvoiceRecord } from "@/types/invoices";
 
-const INVOICES_KEY = "junk_estimator_invoices_v1";
+const LEGACY_KEY = "junk_estimator_invoices_v1";
+let invoices: InvoiceRecord[] = [];
+const notify = () => window.dispatchEvent(new Event("invoices-updated"));
 
-const defaultInvoices: InvoiceRecord[] = [
-  {
-    id: "invoice-3",
-    invoiceNumber: 3,
-    jobId: "3",
-    clientName: "Sam Doe",
-    clientEmail: "sam.doe@example.com",
-    clientAddress: "5300 Lost Hills Road, Calabasas, CA 91302",
-    createdAt: "2026-06-01T18:45:00.000Z",
-    dueDate: "2026-06-02T12:00:00.000Z",
-    total: 450,
-    amountDue: 450,
-    status: "overdue",
-    notes: "Removal of 6-person hot tub from difficult access area. Unit was pre-disconnected. Thank you for your business!",
-    items: [
-      {
-        id: "invoice-3-item-1",
-        name: "Demo - Hot Tub Removal",
-        quantity: 1,
-        amount: 450,
-        taxable: true,
-      },
-    ],
-  },
-  {
-    id: "invoice-1",
-    invoiceNumber: 1,
-    jobId: "1",
-    clientName: "John Doe",
-    clientEmail: "john.doe@example.com",
-    createdAt: "2026-06-01T18:45:00.000Z",
-    dueDate: "2026-06-01T12:00:00.000Z",
-    total: 845,
-    amountDue: 0,
-    status: "paid",
-    items: [{ id: "invoice-1-item-1", name: "Junk Removal", quantity: 1, amount: 845, taxable: true }],
-  },
-  {
-    id: "invoice-2",
-    invoiceNumber: 2,
-    jobId: "2",
-    clientName: "Jane Doe",
-    clientEmail: "jane.doe@example.com",
-    createdAt: "2026-06-01T18:45:00.000Z",
-    dueDate: "2026-06-01T12:00:00.000Z",
-    total: 220,
-    amountDue: 0,
-    status: "paid",
-    items: [{ id: "invoice-2-item-1", name: "Junk Removal", quantity: 1, amount: 220, taxable: true }],
-  },
-];
-
-const canUseLocalStorage = () => typeof window !== "undefined" && Boolean(window.localStorage);
-
-function readInvoices() {
-  if (!canUseLocalStorage()) return defaultInvoices;
-  try {
-    const raw = window.localStorage.getItem(INVOICES_KEY);
-    return raw ? (JSON.parse(raw) as InvoiceRecord[]) : defaultInvoices;
-  } catch {
-    return defaultInvoices;
-  }
+function isOriginalDemo(invoice: InvoiceRecord) {
+  const demos: Record<string, [string, number]> = {
+    "invoice-1": ["John Doe", 845],
+    "invoice-2": ["Jane Doe", 220],
+    "invoice-3": ["Sam Doe", 450],
+  };
+  const match = demos[invoice.id];
+  return Boolean(
+    match &&
+      invoice.clientName === match[0] &&
+      invoice.total === match[1] &&
+      invoice.createdAt === "2026-06-01T18:45:00.000Z"
+  );
 }
 
-function writeInvoices(invoices: InvoiceRecord[]) {
-  if (!canUseLocalStorage()) return;
-  window.localStorage.setItem(INVOICES_KEY, JSON.stringify(invoices));
-  window.dispatchEvent(new Event("invoices-updated"));
+function database() {
+  if (!supabase) throw new Error("Invoice storage is unavailable.");
+  return supabase as any;
+}
+
+export async function hydrateInvoices() {
+  const identity = currentStaffIdentity();
+  if (!identity || !(await ensureSession())) {
+    invoices = [];
+    notify();
+    return;
+  }
+  const db = database();
+  const initial = await db.from("app_invoices").select("data");
+  if (initial.error) throw initial.error;
+  const remote = (initial.data ?? []).map(
+    (row: { data: InvoiceRecord }) => row.data
+  );
+  const legacy = localStorage.getItem(LEGACY_KEY);
+  if (legacy) {
+    const rows = JSON.parse(legacy) as InvoiceRecord[];
+    if (
+      !Array.isArray(rows) ||
+      rows.some(row => !row.id || !Array.isArray(row.items))
+    )
+      throw new Error("Invalid saved invoice records.");
+    const usedNumbers = new Set<number>(
+      remote.map((row: InvoiceRecord) => row.invoiceNumber)
+    );
+    const usedIds = new Set<string>(remote.map((row: InvoiceRecord) => row.id));
+    let nextNumber = Math.max(0, ...Array.from(usedNumbers)) + 1;
+    const actualRows = rows
+      .filter(row => !isOriginalDemo(row) && !usedIds.has(row.id))
+      .map(row => {
+        if (usedNumbers.has(row.invoiceNumber)) {
+          while (usedNumbers.has(nextNumber)) nextNumber++;
+          usedNumbers.add(nextNumber);
+          return { ...row, invoiceNumber: nextNumber++ };
+        }
+        usedNumbers.add(row.invoiceNumber);
+        return row;
+      });
+    if (actualRows.length) {
+      const { error } = await db.from("app_invoices").upsert(
+        actualRows.map(data => ({
+          id: data.id,
+          invoice_number: data.invoiceNumber,
+          data,
+        })),
+        { onConflict: "id", ignoreDuplicates: true }
+      );
+      if (error) throw error;
+    }
+    localStorage.removeItem(LEGACY_KEY);
+  }
+  const { data, error } = legacy
+    ? await db.from("app_invoices").select("data")
+    : initial;
+  if (error) throw error;
+  if (identity !== currentStaffIdentity()) return;
+  invoices = (data ?? []).map((row: { data: InvoiceRecord }) => row.data);
+  notify();
 }
 
 export function getInvoices(): InvoiceRecord[] {
-  return readInvoices().sort((a, b) => {
-    const statusRank = (invoice: InvoiceRecord) => (invoice.status === "overdue" ? 0 : invoice.status === "draft" ? 1 : 2);
-    return statusRank(a) - statusRank(b) || a.invoiceNumber - b.invoiceNumber;
-  });
+  return [...invoices].sort((a, b) => b.invoiceNumber - a.invoiceNumber);
 }
 
 export function getInvoice(invoiceId: string): InvoiceRecord | null {
-  return getInvoices().find((invoice) => invoice.id === invoiceId) ?? null;
+  return invoices.find(invoice => invoice.id === invoiceId) ?? null;
 }
 
-export function saveInvoice(invoice: InvoiceRecord): InvoiceRecord {
-  const updated = { ...invoice };
-  writeInvoices([updated, ...readInvoices().filter((item) => item.id !== invoice.id)]);
-  return updated;
+export async function saveInvoice(
+  invoice: InvoiceRecord
+): Promise<InvoiceRecord> {
+  if (!currentStaffIdentity() || !(await ensureSession()))
+    throw new Error("Sign in to save invoices.");
+  const { error } = await database().from("app_invoices").upsert(
+    {
+      id: invoice.id,
+      invoice_number: invoice.invoiceNumber,
+      data: invoice,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" }
+  );
+  if (error) throw error;
+  invoices = [invoice, ...invoices.filter(row => row.id !== invoice.id)];
+  notify();
+  return invoice;
 }
 
-export function deleteInvoice(invoiceId: string): InvoiceRecord[] {
-  const next = readInvoices().filter((invoice) => invoice.id !== invoiceId);
-  writeInvoices(next);
-  return next;
+export async function deleteInvoice(invoiceId: string): Promise<void> {
+  if (!currentStaffIdentity() || !(await ensureSession()))
+    throw new Error("Sign in to delete invoices.");
+  const { error } = await database()
+    .from("app_invoices")
+    .delete()
+    .eq("id", invoiceId);
+  if (error) throw error;
+  invoices = invoices.filter(invoice => invoice.id !== invoiceId);
+  notify();
 }
+
+window.addEventListener("business-cache-reset", () => {
+  invoices = [];
+  notify();
+});

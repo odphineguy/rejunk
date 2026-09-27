@@ -9,45 +9,39 @@ import {
   SettingsToggleRow,
 } from "@/components/SettingsShell";
 import { Switch } from "@/components/ui/switch";
-import { loadSettingsSection, saveSettingsSection } from "@/lib/settingsStorage";
+import {
+  loadSettingsSection,
+  saveSettingsSection,
+} from "@/lib/settingsStorage";
+import {
+  DEFAULT_INVOICE_SETTINGS,
+  type InvoiceSettingsState,
+} from "@/lib/invoiceSettings";
 
 const SECTION = "invoices";
 
-type InvoiceSettingsState = {
-  showCompanyName: boolean;
-  showCompanyAddress: boolean;
-  showCompanyLogo: boolean;
-  invoiceSignature: boolean;
-  estimateSignature: boolean;
-  acceptCardPayments: boolean;
-  autoInvoicing: boolean;
-};
-
-const DEFAULTS: InvoiceSettingsState = {
-  showCompanyName: true,
-  showCompanyAddress: true,
-  showCompanyLogo: true,
-  invoiceSignature: false,
-  estimateSignature: false,
-  acceptCardPayments: false,
-  autoInvoicing: false,
-};
-
 export default function InvoiceSettings() {
   const [settings, setSettings] = useState<InvoiceSettingsState>(() =>
-    loadSettingsSection(SECTION, DEFAULTS)
+    loadSettingsSection(SECTION, DEFAULT_INVOICE_SETTINGS)
   );
 
   const update = (patch: Partial<InvoiceSettingsState>) =>
-    setSettings((prev) => ({ ...prev, ...patch }));
+    setSettings(prev => ({ ...prev, ...patch }));
 
   const save = () => {
-    saveSettingsSection(SECTION, settings);
+    saveSettingsSection(SECTION, {
+      ...settings,
+      acceptCardPayments: false,
+      autoInvoicing: false,
+    });
     toast.success("Settings saved");
   };
 
   return (
-    <SettingsShell title="Invoice Settings" actions={<SettingsSaveButton onClick={save} />}>
+    <SettingsShell
+      title="Invoice Settings"
+      actions={<SettingsSaveButton onClick={save} />}
+    >
       <div className="grid items-start gap-5 lg:grid-cols-2">
         <div className="space-y-5">
           <SettingsCard title="Interface" icon={FileText}>
@@ -58,7 +52,9 @@ export default function InvoiceSettings() {
                 control={
                   <Switch
                     checked={settings.showCompanyName}
-                    onCheckedChange={(checked) => update({ showCompanyName: checked })}
+                    onCheckedChange={checked =>
+                      update({ showCompanyName: checked })
+                    }
                     aria-label="Show company name"
                   />
                 }
@@ -69,7 +65,9 @@ export default function InvoiceSettings() {
                 control={
                   <Switch
                     checked={settings.showCompanyAddress}
-                    onCheckedChange={(checked) => update({ showCompanyAddress: checked })}
+                    onCheckedChange={checked =>
+                      update({ showCompanyAddress: checked })
+                    }
                     aria-label="Show company address"
                   />
                 }
@@ -80,7 +78,9 @@ export default function InvoiceSettings() {
                 control={
                   <Switch
                     checked={settings.showCompanyLogo}
-                    onCheckedChange={(checked) => update({ showCompanyLogo: checked })}
+                    onCheckedChange={checked =>
+                      update({ showCompanyLogo: checked })
+                    }
                     aria-label="Show company logo"
                   />
                 }
@@ -91,7 +91,9 @@ export default function InvoiceSettings() {
                 control={
                   <Switch
                     checked={settings.invoiceSignature}
-                    onCheckedChange={(checked) => update({ invoiceSignature: checked })}
+                    onCheckedChange={checked =>
+                      update({ invoiceSignature: checked })
+                    }
                     aria-label="Customer invoice signature"
                   />
                 }
@@ -102,18 +104,20 @@ export default function InvoiceSettings() {
                 control={
                   <Switch
                     checked={settings.estimateSignature}
-                    onCheckedChange={(checked) => update({ estimateSignature: checked })}
+                    onCheckedChange={checked =>
+                      update({ estimateSignature: checked })
+                    }
                     aria-label="Customer estimate signature"
                   />
                 }
               />
               <SettingsToggleRow
                 label="Accept Payments via Credit Card / Stripe"
-                help="This will only show if you have Stripe connected on your Rejunk account"
+                help="Card collection is unavailable until a Stripe account is connected."
                 control={
                   <Switch
-                    checked={settings.acceptCardPayments}
-                    onCheckedChange={(checked) => update({ acceptCardPayments: checked })}
+                    checked={false}
+                    disabled
                     aria-label="Accept card payments"
                   />
                 }
@@ -126,13 +130,9 @@ export default function InvoiceSettings() {
           <SettingsCard title="Automation" icon={Zap}>
             <SettingsToggleRow
               label="Auto-invoicing"
-              help="Automatically create an invoice when a job is completed (marking a job completed from the mobile app doesn't yet trigger this)"
+              help="Automatic creation will be available after office and driver job completion are connected to invoices."
               control={
-                <Switch
-                  checked={settings.autoInvoicing}
-                  onCheckedChange={(checked) => update({ autoInvoicing: checked })}
-                  aria-label="Auto-invoicing"
-                />
+                <Switch checked={false} disabled aria-label="Auto-invoicing" />
               }
             />
           </SettingsCard>

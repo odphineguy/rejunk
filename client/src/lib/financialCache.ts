@@ -1,4 +1,4 @@
-/** These are disposable server-backed caches, not the local-only invoice ledger. */
+/** These are disposable server-backed caches. Invoices are held in memory. */
 const keys = [
   "junk_estimator_jobs_v1",
   "junk_estimator_saved_estimates_v1",

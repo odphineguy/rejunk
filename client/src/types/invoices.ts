@@ -1,4 +1,10 @@
-export type InvoiceStatus = "paid" | "overdue" | "draft";
+export type InvoiceStatus =
+  | "paid"
+  | "overdue"
+  | "draft"
+  | "sent"
+  | "partial"
+  | "void";
 
 export interface InvoiceItem {
   id: string;
@@ -19,6 +25,10 @@ export interface InvoiceRecord {
   createdAt: string;
   total: number;
   amountDue: number;
+  amountPaid?: number;
+  taxRate?: number;
+  taxName?: string;
+  discount?: number;
   status: InvoiceStatus;
   notes?: string;
   items: InvoiceItem[];
