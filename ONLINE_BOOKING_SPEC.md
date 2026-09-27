@@ -23,20 +23,35 @@ it from Thumbtack (David), and take card payments — so Progressive can turn HC
 
 ## What HCP's page does (the thing to mirror)
 
-From Cynthia Rodriguez's real booking (HCP job `job_a9f29fa4…`, lead source **"Online Booking"**):
-1. Customer picks a **service from the price book with its flat price** ("Apartment Move - Studio/1
-   Bedroom", $525, with its description).
+From Abe's screenshots of the live HCP page (Sep 26) and Cynthia Rodriguez's real booking (HCP job
+`job_a9f29fa4…`, lead source **"Online Booking"**):
+0. **ZIP check first** — "Welcome to Progressive Transportation Services LLC · Let us check if we operate in
+   your area" → Verify zip code. Logo on top, progress bar on every step after.
+1. **"What can we do for you?"** — the service is picked by drilling down the price book, with a Back
+   button and a breadcrumb:
+   - Category: **Moving** → Local Moving · Labor Only · Heavy Lifting · Containers · Piano Moving
+   - Local Moving → **Small Moves · Apartment Moves · Home Moves**
+   - Small Moves → services as cards (name + description): "Small Move - Up to 8 Items (No Full Rooms)",
+     "Cargo Van Moving and Delivery" (flat price, one large item or matching set, within 15 miles).
+   - Cynthia picked Apartment Moves → "Apartment Move - Studio/1 Bedroom" ($525 flat).
 2. Picks a **date + arrival window** (hers: Sep 24, 12:00–2:00 pm arrival, job blocked 12–5).
 3. Enters the **service address** (street/city/state/zip), name, phone, email, optional description.
 4. **No payment** at booking. HCP creates the job; extra hours are added later by the office.
+
+**Gap in Rejunk's pricebook:** it has one level of categories ("Progressive — Moving", 27 items) and an
+`add_to_online_booking` flag on every item (all 0 today). HCP's page needs **subcategories** (Local Moving →
+Small / Apartment / Home Moves). Add a `parent_id` to `pricebook_categories` (additive) and mirror HCP's
+tree — `import_hcp_pricebook.ts` in the pipeline repo is the starting point — then tick the same items
+"online" that are on HCP's page today.
 
 ## Phase 1 — Rejunk booking page that mirrors HCP (build first)
 
 **Page:** public `/book` on the Progressive site (same look as the marketing pages, mobile-first, no login).
 
-Steps, one screen each:
-1. **Service** — cards for the bookable services only (name, short description, "from $X" or flat price).
-   Moving adds a "Kind of move" choice (package sizes / hourly crew / labor-only) from the v19 rate card.
+Steps, one screen each (same order as HCP so customers and David's instructions don't change):
+0. **ZIP check** — service-area ZIP list in Settings; outside the area → "call us" with the phone number.
+1. **Service** — the same drill-down as HCP (category → subcategory → service cards with name +
+   description + price), bookable items only, Back + breadcrumb.
 2. **When** — calendar of the next 30 days; each day shows open arrival windows only. Respects settings:
    same-day on/off, lead time, closed days.
 3. **Where** — service address; moving asks pickup **and** delivery, plus floor/stairs/elevator and a
