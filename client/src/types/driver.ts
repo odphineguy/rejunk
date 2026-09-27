@@ -145,6 +145,16 @@ export interface JobPhoto {
   createdAt: string;
 }
 
+/** Who a photo came from, read off its storage path (`<job>/thumbtack/…` = customer, `<job>/office/…` = office). */
+export type JobPhotoSource = "customer" | "office" | "crew";
+
+export function photoSource(photo: Pick<JobPhoto, "storagePath">): JobPhotoSource {
+  const folder = photo.storagePath.split("/")[1];
+  return folder === "thumbtack" ? "customer" : folder === "office" ? "office" : "crew";
+}
+
+export const photoSourceLabels: Record<JobPhotoSource, string> = { customer: "Customer", office: "Office", crew: "Crew" };
+
 export interface JobDisposalEvent {
   id: string;
   jobId: string;
@@ -244,6 +254,8 @@ export type DriverJob = Pick<
   serviceTypeKey?: JobServiceType;
   movingKind?: MovingKind;
   requiredCrew?: number;
+  /** On-site hours the package includes (from the quote). Never a price. */
+  includedHours?: number;
   stops: JobStop[];
   items: JobItem[];
   activity: JobActivity[];

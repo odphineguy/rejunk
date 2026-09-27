@@ -487,3 +487,14 @@ dropped, a late "all done" waits for 8am). Every outcome, and any customer text-
 (literally true; off = rows closed as `texts_off`). Drivers see only the outcome
 (`driver_job_notifications`, no number / words) under the buttons; office RPC `job_customer_notifications`.
 No ETA (the pipeline has no Maps key) — the text says "on the way … now".
+
+### Service + photos on the ticket (September 26, 2026)
+
+BOOKING_TO_CREW_SPEC deliverable 3 (minus the draft invoice — Abe: invoices move to the database in their
+own session first; `invoiceStorage.ts` is still demo localStorage). The Job page's top card edits the
+service line (`quote.tier` = David's sentence, `quote.includedHours`). Migration
+`20260926000002_driver_included_hours.sql` adds ONE field, `includedHours`, to `get_driver_today` — drivers see
+"Moving · Studio/1BR · 2 hrs included", never `quote` or dollars. Photos: `components/TicketPhotos.tsx` on
+the ticket (office "Add photos" → `<job>/office/…`) and the driver page share one strip tagged by storage path
+(`photoSource()` in `types/driver.ts`: `<job>/thumbtack/…` = Customer, copied by the pipeline extractor;
+`office/` = Office; else Crew). No table change for tags.

@@ -49,7 +49,8 @@ import { geocodeStatusToReason, primaryServiceLocationStatus, reasonLabel, write
 import { loadPricingSettings } from "@/utils/pricingStorage";
 import { getRouteEstimateToFacility } from "@/utils/distanceRouting";
 import { buildBestRecommendation, recommendationInputFromJob } from "@/utils/recommendations";
-import type { Job, JobStatus, PaymentStatus } from "@/types/jobs";
+import type { Job, JobQuote, JobStatus, PaymentStatus } from "@/types/jobs";
+import { TicketPhotos } from "@/components/TicketPhotos";
 import type { JobDisposalEvent, JobIssue, JobIssueResolutionType, JobIssueStatus, JobItem, JobPhotoVisibility, JobStop } from "@/types/driver";
 import type { JobRouteEstimate } from "@/types/pricing";
 
@@ -89,6 +90,11 @@ function formatDate(value?: string) {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+/** The ticket's quote, or a manual one seeded from the quoted price so the service line can be edited. */
+function serviceQuote(job: Job): JobQuote {
+  return job.quote ?? { tier: "", low: job.quotedAmount ?? 0, high: job.quotedAmount ?? 0, source: "manual" };
 }
 
 function fieldNumber(value: string) {
@@ -454,6 +460,22 @@ export default function JobDetail() {
               <EditableField label="Job label" value={job.jobLabel ?? ""} onChange={(value) => applyUpdates({ jobLabel: value })} />
               <EditableField label="Phone" value={job.phone ?? ""} onChange={(value) => applyUpdates({ phone: value })} />
               <EditableField label="Email" value={job.email ?? ""} onChange={(value) => applyUpdates({ email: value })} />
+              <div className="space-y-2 md:col-span-2">
+                <Label>Service quoted</Label>
+                <Textarea
+                  rows={2}
+                  value={job.quote?.tier ?? ""}
+                  placeholder="Package or hourly crew + rate, as David quoted it"
+                  onChange={(event) => applyUpdates({ quote: { ...serviceQuote(job), tier: event.target.value } })}
+                />
+                <p className="text-xs text-muted-foreground">The crew sees the service name and included hours, never the price.</p>
+              </div>
+              <EditableField
+                label="Hours included"
+                type="number"
+                value={String(job.quote?.includedHours ?? "")}
+                onChange={(value) => applyUpdates({ quote: { ...serviceQuote(job), includedHours: fieldNumber(value) } })}
+              />
             </CardContent>
           </Card>
           )}
@@ -505,6 +527,8 @@ export default function JobDetail() {
               </CardContent>
             </Card>
           )}
+
+          {!analytics && driverJob && <TicketPhotos jobId={job.id} photos={driverJob.photos} />}
 
           {analytics && driverJob && (
             <Card>

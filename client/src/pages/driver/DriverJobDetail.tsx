@@ -26,7 +26,7 @@ import {
 import { toDriverStatus } from "@/lib/jobStatus";
 import { customerStops, disposalEvents } from "@/lib/operationalMetrics";
 import { loadDriverFacilities, type DriverFacility } from "@/lib/driverStorage";
-import type { DriverJob, JobPhotoType, JobPhotoVisibility } from "@/types/driver";
+import { photoSource, photoSourceLabels, type DriverJob, type JobPhotoType, type JobPhotoVisibility } from "@/types/driver";
 import type { DriverJobNotification } from "@/lib/driverStorage";
 import type { DriverJobStatus } from "@/types/jobs";
 
@@ -225,6 +225,12 @@ export default function DriverJobDetail() {
     );
   }, [job]);
 
+  // Customer photos (what the job looks like) first, then office, then crew — newest first within each.
+  const sortedPhotos = useMemo(() => {
+    const rank = { customer: 0, office: 1, crew: 2 } as const;
+    return [...(job?.photos ?? [])].sort((a, b) => rank[photoSource(a)] - rank[photoSource(b)] || b.createdAt.localeCompare(a.createdAt));
+  }, [job?.photos]);
+
   const changeStatus = async (next: DriverJobStatus, buttonLabel: string) => {
     if (!job) return;
     try {
@@ -305,8 +311,10 @@ export default function DriverJobDetail() {
         <Card className="border-[#c8d1c0] shadow-sm">
           <CardContent className="space-y-4 p-4">
             <div>
-              {!serviceTypeDuplicated && job.serviceType && (
-                <div className="text-sm font-medium text-muted-foreground">{job.serviceType}</div>
+              {((!serviceTypeDuplicated && job.serviceType) || job.includedHours) && (
+                <div className="text-sm font-medium text-muted-foreground">
+                  {[!serviceTypeDuplicated ? job.serviceType : null, job.includedHours ? `${job.includedHours} hrs included` : null].filter(Boolean).join(" · ")}
+                </div>
               )}
               <div className="text-xl font-bold">{formatWindow(job.scheduledStart, job.scheduledEnd)}</div>
               <div className="mt-1.5 flex gap-2">
@@ -498,9 +506,10 @@ export default function DriverJobDetail() {
               </Button>
               {job.photos.length > 0 && (
                 <div className="grid grid-cols-3 gap-2">
-                  {job.photos.map((photo) => (
-                    <a key={photo.id} href={photo.publicUrl || "#"} className="aspect-square overflow-hidden rounded-md border bg-muted" title={`${label(photo.photoType)} · ${time(photo.createdAt)}`}>
+                  {sortedPhotos.map((photo) => (
+                    <a key={photo.id} href={photo.publicUrl || "#"} className="relative aspect-square overflow-hidden rounded-md border bg-muted" title={`${label(photo.photoType)} · ${time(photo.createdAt)}`}>
                       {photo.publicUrl ? <img src={photo.publicUrl} alt={photo.caption || label(photo.photoType)} className="h-full w-full object-cover" /> : <div className="p-2 text-xs">{label(photo.photoType)}</div>}
+                      <span className="absolute left-1 top-1 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-semibold">{photoSourceLabels[photoSource(photo)]}</span>
                     </a>
                   ))}
                 </div>

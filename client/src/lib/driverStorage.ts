@@ -223,6 +223,8 @@ export function toDriverJob(rawJob: Job, cache = readJson(OPERATIONAL_CACHE_KEY,
     serviceTypeKey: job.serviceType,
     movingKind: job.movingKind,
     requiredCrew: job.requiredCrew,
+    // Office reads the quote; the driver RPC sends only this number (never the price).
+    includedHours: job.quote?.includedHours ?? (rawJob as Job & { includedHours?: number }).includedHours,
     instructionsChanged: rows.activity.some((entry) => entry.eventType === "scope_change"),
     assignedCrew,
     ...rows,
@@ -587,10 +589,12 @@ export async function uploadJobPhoto(input: {
   photoType: JobPhotoType;
   visibility: JobPhotoVisibility;
   caption?: string;
+  /** Office uploads land under `<job>/office/` so the strip can tag them. */
+  fromOffice?: boolean;
 }) {
   const now = new Date().toISOString();
   const compressed = await compressImage(input.file);
-  const storagePath = `${input.jobId}/${Date.now()}-${compressed.name.replace(/[^a-z0-9._-]/gi, "-")}`;
+  const storagePath = `${input.jobId}/${input.fromOffice ? "office/" : ""}${Date.now()}-${compressed.name.replace(/[^a-z0-9._-]/gi, "-")}`;
   let publicUrl: string | undefined;
 
   if (supabase && await ensureSession()) {
