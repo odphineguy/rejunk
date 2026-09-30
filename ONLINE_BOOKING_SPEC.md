@@ -36,7 +36,69 @@ From Abe's screenshots of the live HCP page (Sep 26) and Cynthia Rodriguez's rea
    - Cynthia picked Apartment Moves → "Apartment Move - Studio/1 Bedroom" ($525 flat).
 2. Picks a **date + arrival window** (hers: Sep 24, 12:00–2:00 pm arrival, job blocked 12–5).
 3. Enters the **service address** (street/city/state/zip), name, phone, email, optional description.
-4. **No payment** at booking. HCP creates the job; extra hours are added later by the office.
+4. ~~No payment at booking~~ — **superseded by Abe's Sep 29 walkthrough below: HCP now takes a $50 deposit.**
+
+### Full HCP flow — Abe's walkthrough, Sep 29 (11 screenshots; this is the version to mirror)
+
+1. **ZIP check**: logo, "Welcome to Progressive Transportation Services LLC · Let us check if we operate in
+   your area", ZIP box, then **Verify zip code**. The ZIP carries into the address step.
+2. **"What can we do for you?"**: drill down with a Back button, a breadcrumb (Moving › Local Moving › Home
+   Moves › Services), and a progress bar on every step.
+   - Top-level tiles under **Moving**: Local Moving · Labor Only · Heavy Lifting · Containers · Piano Moving.
+   - Local Moving: Small Moves · Apartment Moves · Home Moves.
+   - Each services list ends with a dashed **"Something else? Don't see your service? Tell us what you need."**
+     card, for a free-text request.
+3. **Service detail**: name, a **quantity − 1 +** stepper, the full pricebook description, then **Add to
+   booking**.
+   - Example: "Home Move - Small House": flat price, up to 3 bedrooms, 2 movers, 26-ft liftgate truck, 6 hrs
+     on site, then $109/hr, and the stairs wording.
+4. **Additional details (optional)**: text box (2000 characters), **Upload photos**, and two buttons, **Add more
+   services** and **Book service**.
+   - The chosen services sit in a **cart** dropdown at the top of every later step, so a booking can hold
+     several services.
+5. **Contact details**: first and last name, phone and email (all required), then ONE service address (street,
+   unit, city, ZIP, country, state).
+   - Ends with a **marketing SMS consent checkbox** ("…marketing and promotional text messages… Reply HELP…
+     STOP… Terms of Service and Privacy Policy").
+   - **The gap (Abe, Sep 29): only one address. Rejunk must ask for a Loading address and an Unloading
+     address.**
+6. **Pick an arrival window**: date picker plus a scrolling day strip (today greyed out as "Unavailable"),
+   then "We'll arrive within the selected timeframe:" with **8:00–10:00am** and **12:00–2:00pm**.
+7. **Booking confirmation**: selected services, arrival time ("Arriving on Thursday, Oct 1st, between
+   12:00pm–2:00pm MST"), location, contact details, then **Book my appointment**.
+8. **Payment method**: a blue note, "Deposit payment only — the remaining balance will be charged later."
+   - The customer enters name on card, card number, expiry, CVC and postal code.
+   - A **"Save card on file"** checkbox carries the wording "I authorize Progressive Transportation Services
+     LLC to save and charge my card above for agreed upon future purchases."
+   - The button reads **Pay $50.00**. The page also says **"Up to 3% surcharge on credit card payments."**
+
+**What this settles or changes for the Rejunk build:**
+- The $50 deposit happens after confirmation (steps 7–8), and so does the save-card-on-file option with HCP's
+  authorization wording. Use Stripe to save the card for later charges.
+- **Card fee — DECIDED (Abe, Sep 29): keep the 3% card surcharge**, same wording as HCP ("Up to 3% surcharge
+  on credit card payments"). This replaces decision 5's "absorbed" default.
+- **Stairs — DECIDED (Abe, Sep 29):**
+  - In the address step, the page asks **"Flights of stairs"** separately for the Loading address and the
+    Unloading address.
+  - The total adds **$75 for each flight after the first, per address**, on its own. This is the existing
+    `movingCalculator.ts` package rule: `extraFlightOfStairs` plus the first flight per address included.
+  - Stairs go on the **ticket** and the **invoice** as their own line item, so the booking price, David's
+    quote and the invoice all match.
+  - The booking price must come from the same calculator, not a copy of the rule.
+  - **Stairs charging back ON everywhere (Abe, Sep 29).** This reverses Sep 18's "I don't charge for stairs".
+    The build does three things:
+    1. Sets `MOVING_RATES.chargeStairs = true` in `client/src/data/movingRates.ts`.
+    2. Updates the pipeline's `responder_config.agent_rates` to match. The pipeline is the source; change it
+       first.
+    3. Updates the movingCalculator tests.
+  - What it covers: flat-price moves only, $75 per extra flight per address, in the estimate builder,
+    `/book`, the ticket and the invoice. Hourly moves still add **time** for stairs, not dollars.
+  - The stairs line on the ticket and invoice is its own item, so it isn't hidden inside the package price.
+- Rejunk needs a **cart** (several services per booking, with quantity) and the **"Something else?"**
+  free-text option. Neither was in Phase 1 before.
+- Rejunk's order: ZIP → service(s) → details + photos → contact + **Loading / Unloading addresses** → arrival
+  window → confirm → pay $50.
+- The arrival windows match the decision 4 default (8–10am and 12–2pm). Times are shown in MST (Arizona).
 
 **Gap in Rejunk's pricebook:** it has one level of categories ("Progressive — Moving", 27 items) and an
 `add_to_online_booking` flag on every item (all 0 today). HCP's page needs **subcategories** (Local Moving →

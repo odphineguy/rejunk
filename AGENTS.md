@@ -1,6 +1,9 @@
 # AGENTS.md
 
-This file provides guidance to Codex (and other coding agents) when working with code in this repository.
+> **This is the single source of truth** for project rules, architecture, decisions, and current state.
+> All coding agents (Claude Code, Codex, Cursor, etc.) should read this file.
+> Tool-specific files (CLAUDE.md, .cursor/rules) layer agent-specific preferences on top —
+> if they conflict with this file, this file wins.
 
 ## What this app is
 
@@ -425,11 +428,13 @@ the existing exception.)
 
 ## Notes for agents
 
-- **This file is a near-identical copy of `CLAUDE.md` (the Claude Code version).** Keep the two in sync
-  when you change architecture-level guidance in either.
+- **This file is the canonical project reference.** `CLAUDE.md` points here and adds Claude-specific
+  context only. When updating architecture-level guidance, update this file — not CLAUDE.md.
 - Reference docs worth reading before non-trivial work: `DECISIONS.md` (decision trail + rejected
   alternatives), `rejunk-pricebook-v4.md` and `rejunk-operations-rules-v1.md` (pricing/ops source of
   truth), and the `DRIVER_*` / `DISPATCH_*` / `HAUL_OR_CALL_WORKFLOW.md` notes for those features.
+- **`HCP_EXIT_PLAN.md`** — the build order for replacing Housecall Pro and becoming multi-tenant (who
+  owns each build, dependencies). Check it before starting a new feature.
 
 ### Owner employee administration (September 13, 2026)
 
