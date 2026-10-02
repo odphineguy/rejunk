@@ -8,6 +8,8 @@ export interface InvoiceSettingsState {
   estimateSignature: boolean;
   acceptCardPayments: boolean;
   autoInvoicing: boolean;
+  paymentInstructions: string;
+  invoiceTerms: string;
 }
 
 export const DEFAULT_INVOICE_SETTINGS: InvoiceSettingsState = {
@@ -18,6 +20,8 @@ export const DEFAULT_INVOICE_SETTINGS: InvoiceSettingsState = {
   estimateSignature: false,
   acceptCardPayments: false,
   autoInvoicing: false,
+  paymentInstructions: "",
+  invoiceTerms: "",
 };
 
 export const getInvoiceSettings = () =>

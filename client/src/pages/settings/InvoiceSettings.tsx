@@ -8,6 +8,8 @@ import {
   SettingsCard,
   SettingsToggleRow,
 } from "@/components/SettingsShell";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
   loadSettingsSection,
@@ -74,7 +76,7 @@ export default function InvoiceSettings() {
               />
               <SettingsToggleRow
                 label="Your Company Logo"
-                help="Show your company logo on invoices and estimates."
+                help="Use the white-background Progressive logo on invoice PDFs."
                 control={
                   <Switch
                     checked={settings.showCompanyLogo}
@@ -127,6 +129,39 @@ export default function InvoiceSettings() {
         </div>
 
         <div className="space-y-5">
+          <SettingsCard title="PDF wording" icon={FileText}>
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="invoice-payment">Payment instructions</Label>
+                <Textarea
+                  id="invoice-payment"
+                  rows={3}
+                  value={settings.paymentInstructions}
+                  onChange={event =>
+                    update({ paymentInstructions: event.target.value })
+                  }
+                  placeholder="Add accepted payment methods and how to pay."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invoice-terms">Service terms</Label>
+                <Textarea
+                  id="invoice-terms"
+                  rows={7}
+                  value={settings.invoiceTerms}
+                  onChange={event =>
+                    update({ invoiceTerms: event.target.value })
+                  }
+                  placeholder="Add your approved invoice terms."
+                />
+                <p className="text-sm text-muted-foreground">
+                  Appears in downloaded PDFs. Agree liability limits and
+                  coverage with the customer before service; an invoice does not
+                  replace a signed service agreement.
+                </p>
+              </div>
+            </div>
+          </SettingsCard>
           <SettingsCard title="Automation" icon={Zap}>
             <SettingsToggleRow
               label="Auto-invoicing"
