@@ -89,6 +89,8 @@ export async function buildInvoicePdf(
     bottom = 716;
   const ink = [24, 45, 38] as const;
   const green = [8, 59, 45] as const;
+  const blue = [24, 91, 139] as const;
+  const accent = [88, 166, 64] as const;
   const muted = [91, 108, 99] as const;
   let y = 0;
   const textStyle = (
@@ -133,27 +135,65 @@ export async function buildInvoicePdf(
   const logo = settings.showCompanyLogo
     ? (options.logoDataUrl ?? (await loadInvoiceLogo()))
     : "";
-  let companyY = 46;
+  // The angled masthead echoes the road motif in Progressive's logo.
+  const polygon = (
+    points: [number, number][],
+    color: readonly [number, number, number]
+  ) => {
+    pdf.setFillColor(...color);
+    pdf.lines(
+      points
+        .slice(1)
+        .map((point, index) => [
+          point[0] - points[index][0],
+          point[1] - points[index][1],
+        ]),
+      points[0][0],
+      points[0][1],
+      [1, 1],
+      "F",
+      true
+    );
+  };
+  polygon(
+    [
+      [393, 0],
+      [612, 0],
+      [612, 104],
+      [347, 104],
+    ],
+    blue
+  );
+  polygon(
+    [
+      [378, 0],
+      [385, 0],
+      [339, 104],
+      [332, 104],
+    ],
+    accent
+  );
+  let companyY = 43;
   if (logo.startsWith("data:image/")) {
     try {
       const image = pdf.getImageProperties(logo);
-      const logoWidth = Math.min(260, (62 * image.width) / image.height);
+      const logoWidth = Math.min(250, (62 * image.width) / image.height);
       pdf.addImage(
         logo,
         left,
-        32,
+        34,
         logoWidth,
         (logoWidth * image.height) / image.width
       );
-      companyY = 112;
+      companyY = 110;
     } catch {
       /* An invalid logo must not prevent downloading the invoice. */
     }
   }
-  textStyle(28, true, green);
-  pdf.text("INVOICE", right, 58, { align: "right" });
-  textStyle(13, false, muted);
-  pdf.text(`#${invoice.invoiceNumber}`, right, 80, { align: "right" });
+  textStyle(29, true, [255, 255, 255]);
+  pdf.text("INVOICE", right, 53, { align: "right" });
+  textStyle(12, false, [255, 255, 255]);
+  pdf.text(`#${invoice.invoiceNumber}`, right, 77, { align: "right" });
   y = companyY;
   if (settings.showCompanyName && company.companyName.trim()) {
     textStyle(11, true, green);
@@ -169,9 +209,11 @@ export async function buildInvoicePdf(
       : company.companyPhone;
   for (const value of [phone, company.companyEmail])
     if (value) paragraph(value, 330, left, 13);
-  y = Math.max(204, y + 24);
-  rule(y);
-  y += 24;
+  y = Math.max(186, y + 18);
+  pdf.setDrawColor(...blue);
+  pdf.setLineWidth(1);
+  pdf.line(left, y, right, y);
+  y += 27;
   const billTop = y;
   textStyle(8, true, muted);
   pdf.text("BILL TO", left, y);
@@ -187,7 +229,7 @@ export async function buildInvoicePdf(
     paragraph(`Job reference: ${invoice.jobId}`, 280);
   }
   const billingEnd = y;
-  pdf.setFillColor(239, 245, 241);
+  pdf.setFillColor(239, 244, 248);
   pdf.rect(366, billTop - 8, 202, 90, "F");
   textStyle(8, true, muted);
   pdf.text(
@@ -195,18 +237,19 @@ export async function buildInvoicePdf(
     380,
     billTop + 8
   );
-  textStyle(25, true, green);
+  textStyle(25, true, blue);
   pdf.text(money(totals.amountDue), 380, billTop + 38);
   textStyle(9, false, muted);
   pdf.text(`Issued  ${date(invoice.createdAt)}`, 380, billTop + 59);
   pdf.text(`Due      ${date(invoice.dueDate)}`, 380, billTop + 73);
-  y = Math.max(billingEnd, billTop + 90) + 32;
+  y = Math.max(billingEnd, billTop + 90) + 26;
 
   const tableHeader = () => {
-    pdf.setFillColor(...green);
+    pdf.setFillColor(...blue);
     pdf.rect(left, y - 17, width, 29, "F");
     textStyle(9, true, [255, 255, 255]);
-    pdf.text("DESCRIPTION", left + 12, y);
+    pdf.text("NO.", left + 12, y);
+    pdf.text("ITEM DESCRIPTION", left + 47, y);
     pdf.text("QTY", 385, y, { align: "right" });
     pdf.text("RATE", 472, y, { align: "right" });
     pdf.text("AMOUNT", right - 12, y, { align: "right" });
@@ -215,13 +258,24 @@ export async function buildInvoicePdf(
   };
   ensure(55);
   tableHeader();
-  for (const item of invoice.items) {
-    const lines = pdf.splitTextToSize(item.name, 285) as string[];
-    const height = Math.max(34, lines.length * 14 + 20);
-    if (y + height > bottom) {
+  for (let index = 0; index < invoice.items.length; index++) {
+    const item = invoice.items[index];
+    const lines = pdf.splitTextToSize(item.name, 252) as string[];
+    const height = Math.max(38, lines.length * 14 + 24);
+    if (y + Math.min(height, 60) > bottom) {
       newPage();
       tableHeader();
     }
+    const stripe = () => {
+      if (index % 2 === 0) {
+        pdf.setFillColor(240, 243, 245);
+        pdf.rect(left, y - 14, width, Math.min(height, bottom - y + 14), "F");
+      }
+    };
+    stripe();
+    textStyle(9, false, muted);
+    pdf.text(String(index + 1).padStart(2, "0"), left + 12, y);
+    textStyle(10);
     pdf.text(String(item.quantity), 385, y, { align: "right" });
     pdf.text(money(item.amount), 472, y, { align: "right" });
     pdf.text(money(item.quantity * item.amount), right - 12, y, {
@@ -231,15 +285,19 @@ export async function buildInvoicePdf(
       if (y + 14 > bottom) {
         newPage();
         tableHeader();
+        stripe();
       }
-      pdf.text(line, left + 12, y);
+      pdf.text(line, left + 47, y);
       y += 14;
     }
-    y += 20;
-    rule(y - 12);
+    y += 24;
   }
   y += 12;
   ensure(180);
+  textStyle(14, true, blue);
+  pdf.text("Thank you for your business.", left, y + 8);
+  textStyle(10, false, muted);
+  pdf.text("We appreciate the opportunity to help.", left, y + 26);
   const row = (label: string, value: number, bold = false) => {
     textStyle(10, bold, bold ? ink : muted);
     pdf.text(label, 365, y);
@@ -252,7 +310,7 @@ export async function buildInvoicePdf(
     row(`${invoice.taxName || "Tax"} (${invoice.taxRate}%)`, totals.tax);
   row("Invoice total", totals.total, true);
   if (totals.amountPaid) row("Payments received", totals.amountPaid);
-  pdf.setFillColor(...green);
+  pdf.setFillColor(...blue);
   pdf.rect(350, y - 6, 218, 37, "F");
   textStyle(10, true, [255, 255, 255]);
   pdf.text("Balance due", 365, y + 17);
@@ -289,10 +347,29 @@ export async function buildInvoicePdf(
   const pages = pdf.getNumberOfPages();
   for (let page = 1; page <= pages; page++) {
     pdf.setPage(page);
-    rule(748);
-    textStyle(8, false, muted);
-    pdf.text(`Invoice #${invoice.invoiceNumber}`, left, 766);
-    pdf.text(`Page ${page} of ${pages}`, right, 766, { align: "right" });
+    polygon(
+      [
+        [0, 747],
+        [475, 747],
+        [498, 769],
+        [612, 769],
+        [612, 792],
+        [0, 792],
+      ],
+      blue
+    );
+    polygon(
+      [
+        [492, 747],
+        [520, 747],
+        [543, 769],
+        [515, 769],
+      ],
+      accent
+    );
+    textStyle(8, false, [255, 255, 255]);
+    pdf.text(`Invoice #${invoice.invoiceNumber}`, left, 776);
+    pdf.text(`Page ${page} of ${pages}`, right, 776, { align: "right" });
   }
   return pdf;
 }
