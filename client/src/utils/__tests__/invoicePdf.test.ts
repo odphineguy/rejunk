@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { buildInvoicePdf, invoiceTotals } from "../invoicePdf";
 import { DEFAULT_INVOICE_SETTINGS } from "@/lib/invoiceSettings";
@@ -44,6 +45,32 @@ describe("invoice PDF", () => {
     const pdf = await buildInvoicePdf(invoice);
     expect(pdf.output()).toMatch(/^%PDF-/);
     expect(pdf.getNumberOfPages()).toBe(1);
+  });
+
+  it("uses the company logo and omits it when disabled or missing", async () => {
+    const company = {
+      companyName: "Another Company",
+      companyAddress: "",
+      companyPhone: "",
+      companyEmail: "",
+      logoDataUrl:
+        "data:image/png;base64," +
+        readFileSync(
+          new URL("../../../public/progressive-logo.png", import.meta.url)
+        ).toString("base64"),
+    };
+    const branded = await buildInvoicePdf(invoice, { company });
+    expect(branded.output()).toContain("/Subtype /Image");
+    expect(branded.output()).toContain("Another Company");
+    const hidden = await buildInvoicePdf(invoice, {
+      company,
+      settings: { ...DEFAULT_INVOICE_SETTINGS, showCompanyLogo: false },
+    });
+    expect(hidden.output()).not.toContain("/Subtype /Image");
+    const missing = await buildInvoicePdf(invoice, {
+      company: { ...company, logoDataUrl: "" },
+    });
+    expect(missing.output()).not.toContain("/Subtype /Image");
   });
 
   it("keeps long descriptions and terms across continuation pages", async () => {

@@ -76,7 +76,7 @@ export default function InvoiceSettings() {
               />
               <SettingsToggleRow
                 label="Your Company Logo"
-                help="Use the white-background Progressive logo on invoice PDFs."
+                help="Use the logo saved in Company Settings on invoice PDFs."
                 control={
                   <Switch
                     checked={settings.showCompanyLogo}

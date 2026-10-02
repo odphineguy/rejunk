@@ -10,6 +10,18 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
 
 ---
 
+## 2026-10-02 — Invoice branding comes from Company Settings
+
+**Decision**
+Keep the approved invoice layout, but load its logo from Company Settings instead of the
+fixed Progressive asset. Progressive's saved logo is the approved white-background version.
+Payment instructions and service terms remain configurable rather than platform-wide legal defaults.
+
+**Constraints**
+This corrects the current PDF path without bringing forward the tenant-foundation build.
+The existing settings store still serves Progressive; Build 2 moves settings to company records.
+
+
 ## 2026-09-26 — Customer texts from crew taps (BOOKING_TO_CREW_SPEC deliverable 2)
 
 **Decision**

@@ -57,24 +57,6 @@ export interface InvoicePdfOptions {
   logoDataUrl?: string;
 }
 
-async function loadInvoiceLogo(): Promise<string> {
-  if (typeof window === "undefined") return "";
-  try {
-    const response = await fetch("/progressive-logo.png");
-    if (!response.ok) return "";
-    const blob = await response.blob();
-    return await new Promise<string>(resolve => {
-      const reader = new FileReader();
-      reader.onload = () =>
-        resolve(typeof reader.result === "string" ? reader.result : "");
-      reader.onerror = () => resolve("");
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return "";
-  }
-}
-
 export async function buildInvoicePdf(
   invoice: InvoiceRecord,
   options: InvoicePdfOptions = {}
@@ -133,9 +115,9 @@ export async function buildInvoicePdf(
   };
 
   const logo = settings.showCompanyLogo
-    ? (options.logoDataUrl ?? (await loadInvoiceLogo()))
+    ? (options.logoDataUrl ?? company.logoDataUrl)
     : "";
-  // The angled masthead echoes the road motif in Progressive's logo.
+  // Keep the approved angled masthead independent of company branding.
   const polygon = (
     points: [number, number][],
     color: readonly [number, number, number]

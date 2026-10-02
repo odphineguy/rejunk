@@ -503,3 +503,11 @@ service line (`quote.tier` = David's sentence, `quote.includedHours`). Migration
 the ticket (office "Add photos" → `<job>/office/…`) and the driver page share one strip tagged by storage path
 (`photoSource()` in `types/driver.ts`: `<job>/thumbtack/…` = Customer, copied by the pipeline extractor;
 `office/` = Office; else Crew). No table change for tags.
+
+### Invoice PDF branding (October 2, 2026)
+
+Invoice PDFs use the logo saved in Company Settings (`company.logoDataUrl`), alongside the
+company name and contact details. No Progressive logo is loaded by the invoice generator.
+The approved blue/green document layout remains shared; logos, payment instructions, and
+service terms are configurable settings. This uses the existing single-company settings
+store; per-tenant company records remain Build 2 in `HCP_EXIT_PLAN.md`.
