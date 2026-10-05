@@ -10,6 +10,49 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
 
 ---
 
+## 2026-10-05 — Shared company foundation agreed with Sol
+
+**Decision**
+- `companies.id` is a `uuid` with a unique `slug`; Progressive's slug is `'progressive'` (Abe).
+- `memberships(user_id, tenant_id, role)`, unique on `(user_id, tenant_id)`. Every `tenant_id`,
+  including `memberships.tenant_id`, references `companies.id`.
+- Subscription state lives on the company row: `plan_tier`, `subscription_status`,
+  `stripe_customer_id`, `stripe_subscription_id`, `stripe_price_id`, `cancel_at_period_end`. A
+  local mirror of Stripe, written only by verified server-side webhooks; plan tier comes from a
+  server-controlled Price-ID mapping. Owners and MCP tools never edit these fields directly.
+- `stripe_customer_id` (company pays Rejunk, on the platform account) and
+  `stripe_connect_account_id` (company's connected account receiving its own customers'
+  payments) are different relationships. A company's customers never use its subscription
+  customer id. Mappings unique per Stripe account + environment; test and live kept separate.
+- Billing roles: only `owner` manages the subscription, opens the billing portal and connects
+  Stripe. No separate billing role. Every billing endpoint re-checks owner membership in the
+  target company server-side.
+- Billing stays optional during the foundation rollout so Progressive can't be locked out.
+- Claude owns the company/membership foundation; Sol builds Stripe against it.
+
+**Adjustments accepted (Sol's point 5)**
+- This foundation supersedes the older HCP exit plan, which linked payment settings to the
+  pipeline's `businesses.id` and put payments before tenants. Billing references `companies.id`;
+  keep an explicit mapping to pipeline `businesses`.
+- Drivers stay on PIN, so keep the verified driver-session + assigned-job checks, scoped to the
+  right tenant, until drivers have real Auth identities.
+- Phase 6 estimate tools: the pure pricing engine doesn't solve access to private cost inputs.
+  Office MCP estimates need an approved calculation boundary that keeps owner-only financial
+  protection.
+- Company billing columns need column-level protection; tenant RLS alone would let anyone who can
+  edit company details rewrite their plan or Stripe mapping. Same for membership role promotion.
+
+**Rejected**
+- Keeping the text id `'progressive'` as the company key (Sol's preference, less disruption).
+  Abe chose uuid + slug; the cost is an explicit slug → uuid mapping and a backfill coordinated
+  with the pipeline repo.
+
+**Open risks**
+- Exact tiers, prices, trial rules and overdue handling are undecided.
+- The text `tenant_id` columns already in shared tables (pipeline tables, `pricebook_items`,
+  `app_settings`) must convert to uuid without breaking the pipeline mid-deploy.
+
+
 ## 2026-10-05 — MCP connector foundation
 
 **Decision**

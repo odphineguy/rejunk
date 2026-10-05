@@ -46,14 +46,34 @@ unlock), so there is a real user an AI pass can belong to.
 **Goal:** every row belongs to a company, people belong to companies through memberships, and
 the database itself prevents Company A from seeing Company B.
 
+**Agreed schema (Abe + Sol, 2026-10-05 — see `DECISIONS.md`).** Claude builds this foundation;
+Sol builds Stripe on top of it.
+- `companies`: `id uuid` primary key, plus a unique `slug` (Progressive = `'progressive'`). Owned
+  by the app, not the pipeline's `businesses`; keeps an explicit link to the matching pipeline
+  `businesses` row.
+- Billing columns live on the company row: `plan_tier`, `subscription_status`,
+  `stripe_customer_id`, `stripe_subscription_id`, `stripe_price_id`, `cancel_at_period_end`,
+  `stripe_connect_account_id`. They mirror Stripe and are written **only** by verified
+  server-side Stripe webhooks — column-protected, so an owner allowed to edit company details
+  still can't touch them. Billing stays optional during the rollout so Progressive can't be
+  locked out.
+- `memberships`: `user_id`, `tenant_id`, `role` (`owner` / `office` / `crew`), unique on
+  `(user_id, tenant_id)`. Nobody can promote a membership through a plain table update.
+- Every `tenant_id` (including `memberships.tenant_id`) is a `uuid` referencing `companies.id`.
+  Today's text `'progressive'` values need an explicit slug → uuid mapping and a coordinated
+  backfill with the pipeline repo.
+- **Drivers:** they stay on PIN, so membership rules can't simply replace the driver rules. Keep
+  the verified driver-session and assigned-job checks, now scoped to the right company, until
+  drivers have real accounts.
+
 **Files it will touch**
 - New migrations:
-  - `companies`: owned by the app and agreed with Sol, not the pipeline's `businesses`.
-  - `memberships`: user ↔ company ↔ role.
-  - `tenant_id` on every core table, backfilled to `progressive`: jobs, clients, customers,
-    saved_estimates, app_invoices, app_payments, app_settings, vehicles, facilities, the pricing
-    tables, job_photos, job_time_events, dispatch_*, driver_*, staff.
-  - Rewrite every hard-coded `'progressive'` rule, RPC and view to "this user's memberships".
+  - `companies` and `memberships` as above, with column protection on the billing fields.
+  - `tenant_id` on every core table, backfilled to Progressive's company id: jobs, clients,
+    customers, saved_estimates, app_invoices, app_payments, app_settings, vehicles, facilities,
+    the pricing tables, job_photos, job_time_events, dispatch_*, driver_*, staff.
+  - Rewrite every hard-coded `'progressive'` rule, RPC and view to "this user's memberships"
+    (drivers: "this driver session's company").
 - `client/src/lib/tenant.ts` and the storage modules that insert rows (`lib/dataStore.ts`,
   `lib/jobStorage.ts`, `lib/clientStorage.ts`, …).
 - New test: `scripts/security/test-tenant-isolation.mjs`.
@@ -63,6 +83,8 @@ the database itself prevents Company A from seeing Company B.
 **Done when**
 - The isolation test creates Company B and a B user, then proves B sees zero Progressive rows
   and can't create, change or delete them.
+- An owner can't edit billing columns or promote a membership; office and crew can't do either.
+- Drivers still see only their assigned jobs, only in their own company.
 - No live access rule still names `'progressive'`.
 - **The pipeline repo stamps `tenant_id` on every row it writes, and both repos are deployed
   together.**
@@ -129,8 +151,11 @@ Mode. Confirm which ChatGPT plan allows custom MCP servers.
 **Goal:** the AI can make everyday changes, always showing a preview first.
 
 **Tools**
-- Draft estimate. It uses the pure pricing engine in `client/src/utils/*`, never
-  `server/officeQuote.ts`, which uses the admin key.
+- Draft estimate. **Needs a design decision first (Sol, 2026-10-05):** calling the pure pricing
+  engine doesn't solve access to the private cost inputs it needs. Office estimates need an
+  approved calculation step that keeps today's rule (office logins never see costs or margins)
+  and never uses the admin key (`server/officeQuote.ts` does). Agree that step with Abe before
+  building this tool.
 - Create draft job, reschedule job, add job note.
 
 **Files it will touch:** `mcp/tools/write/*`.
@@ -193,24 +218,18 @@ MCP Apps widgets (schedule, estimate builder) and a Rejunk skills plugin.
 
 ---
 
-## Note for Sol (forwardable)
+## Agreed with Sol (2026-10-05)
 
-Sol: I'm planning the Rejunk AI connector (Claude/ChatGPT), and its first phases build the same
-multi-company foundation your Stripe billing needs, so let's build it once together. The plan:
-
-- One app-owned `companies` table, not the pipeline's `businesses`. A company row is also your
-  billing customer.
-- One `memberships` table (user ↔ company ↔ role).
-- A `tenant_id` on every core table: jobs, clients, invoices, payments, settings, vehicles,
-  photos, messaging and drivers.
-- Database access rules driven by memberships instead of today's hard-coded "progressive".
-
-Before that, office staff move to real Supabase email accounts (the PIN stays as an unlock). That
-gives memberships a real user to point at.
-
-Phase 1 touches the same tables you'll need. The `rejunk-webhook-services` pipeline also writes
-jobs, so it has to ship its `tenant_id` change at the same time. Please let's agree on table and
-column names (companies, memberships, roles, where the subscription status lives) before either
-of us writes a migration.
-
-Details: `PLAN-mcp-connector.md` and the 2026-10-05 entry in `DECISIONS.md`.
+Sol answered the note above (now removed). Summary — full detail in `DECISIONS.md`:
+- Table names and shape agreed (see Phase 1). Abe chose `uuid` ids + a `slug` over Sol's
+  preferred text id.
+- Billing state lives on the company row, written only by Stripe webhooks; billing stays
+  optional during the rollout.
+- Two different Stripe ids: `stripe_customer_id` (the company paying Rejunk) and
+  `stripe_connect_account_id` (the company's own account that receives its customers'
+  payments). Test and live data kept separate.
+- Only `owner` can manage billing; every billing endpoint re-checks owner membership on the
+  server. No billing or money tools in the connector.
+- This foundation replaces the older `HCP_EXIT_PLAN.md` order (payments linked to the
+  pipeline's `businesses.id`, payments before tenants). Billing now points at `companies.id`.
+- Claude owns the company/membership foundation; Sol builds Stripe against it.
