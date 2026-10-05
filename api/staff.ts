@@ -19,6 +19,7 @@ const MAX_PIN_ATTEMPTS = 5;
 const PIN_WINDOW_MS = 15 * 60 * 1000;
 const PIN_LOCKOUT_MS = 15 * 60 * 1000;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const CODE_RESEND_MS = 60 * 1000;
 const DEFAULT_FROM = "Rejunk Dispatch <onboarding@resend.dev>";
 const DEFAULT_BASE_URL = "https://rejunk.vercel.app";
 
@@ -80,7 +81,12 @@ type StaffRow = {
   employee_id: string | null;
   failed_attempts: number;
   locked_until: string | null;
+  auth_user_id: string | null;
+  code_sent_at: string | null;
 };
+
+const STAFF_COLUMNS =
+  "id, full_name, email, role, active, must_change_pin, pin_hash, employee_id, failed_attempts, locked_until, auth_user_id, code_sent_at";
 type Result = { status: number; body: Record<string, unknown> };
 
 const isEmail = (value: unknown): value is string =>
@@ -97,7 +103,7 @@ async function resolveToken(supabase: SupabaseClient, token: unknown): Promise<S
   if (!session || new Date(session.expires_at).getTime() < Date.now()) return null;
   const { data: staff } = await supabase
     .from("staff")
-    .select("id, full_name, email, role, active, must_change_pin, pin_hash, employee_id, failed_attempts, locked_until")
+    .select(STAFF_COLUMNS)
     .eq("id", session.staff_id)
     .maybeSingle();
   if (!staff || !staff.active) return null;
@@ -147,34 +153,116 @@ function publicStaff(staff: StaffRow) {
     email: staff.email,
     role: staff.role,
     mustChangePin: staff.must_change_pin,
+    authUserId: staff.auth_user_id,
   };
 }
 
-async function login(supabase: SupabaseClient, body: Record<string, unknown>): Promise<Result> {
+/** The real (non-anonymous) Supabase user behind a browser access token, or null. */
+async function realUserFromAccessToken(supabase: SupabaseClient, accessToken: unknown) {
+  if (typeof accessToken !== "string" || !accessToken) return null;
+  const { data, error } = await supabase.auth.getUser(accessToken);
+  if (error || !data.user || data.user.is_anonymous) return null;
+  return data.user;
+}
+
+/**
+ * Makes sure the staffer has a real Supabase Auth account with their current
+ * email (created on their first sign-in code) and returns its id.
+ */
+async function ensureAuthUser(supabase: SupabaseClient, staff: StaffRow): Promise<string | null> {
+  if (staff.auth_user_id) {
+    const { data } = await supabase.auth.admin.getUserById(staff.auth_user_id);
+    if (data.user) {
+      if (data.user.email?.toLowerCase() !== staff.email) {
+        const { error } = await supabase.auth.admin.updateUserById(staff.auth_user_id, { email: staff.email, email_confirm: true });
+        if (error) return null;
+      }
+      return staff.auth_user_id;
+    }
+  }
+  const created = await supabase.auth.admin.createUser({
+    email: staff.email,
+    email_confirm: true,
+    user_metadata: { full_name: staff.full_name },
+  });
+  let userId = created.data.user?.id ?? null;
+  if (!userId) {
+    // Already registered (e.g. a half-finished earlier attempt): find it by email.
+    const { data } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+    userId = data?.users.find((user) => user.email?.toLowerCase() === staff.email)?.id ?? null;
+  }
+  if (!userId) return null;
+  await supabase.from("staff").update({ auth_user_id: userId }).eq("id", staff.id);
+  return userId;
+}
+
+/**
+ * Step 1 on a new device: email a 6-digit sign-in code. The code comes from
+ * auth.admin.generateLink (Supabase never sends mail itself); the browser
+ * redeems it with verifyOtp, which makes the staffer's real account the
+ * session user. Same answer for unknown emails — no email probing.
+ */
+async function sendCode(supabase: SupabaseClient, body: Record<string, unknown>): Promise<Result> {
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  if (!isEmail(email)) return { status: 400, body: { error: "Enter the email address on your staff account." } };
+  if (loginRateLimited(`code:${email}`)) {
+    return { status: 429, body: { error: "Too many codes requested. Wait 15 minutes, then try again." } };
+  }
+  const sentBody = { ok: true };
+  const { data: staff } = await supabase.from("staff").select(STAFF_COLUMNS).eq("email", email).maybeSingle();
+  if (!staff || !staff.active) return { status: 200, body: sentBody };
+  // One code per minute per account; a quick second click just reuses the first email.
+  if (staff.code_sent_at && Date.now() - new Date(staff.code_sent_at).getTime() < CODE_RESEND_MS) {
+    return { status: 200, body: sentBody };
+  }
+  const userId = await ensureAuthUser(supabase, staff as StaffRow);
+  if (!userId) return { status: 500, body: { error: "We couldn't set up your sign-in. Try again in a minute." } };
+  const { data: link, error } = await supabase.auth.admin.generateLink({ type: "magiclink", email });
+  const code = link?.properties?.email_otp;
+  if (error || !code) {
+    console.error("[staff-api] Sign-in code failed.", error?.message);
+    return { status: 500, body: { error: "We couldn't create a sign-in code. Try again in a minute." } };
+  }
+  await supabase.from("staff").update({ code_sent_at: new Date().toISOString() }).eq("id", staff.id);
+  const sent = await sendSignInCodeEmail({ email, fullName: staff.full_name, code });
+  if (!sent.sent) {
+    console.error("[staff-api] Sign-in code email failed.", sent.error);
+    return { status: 500, body: { error: "We couldn't email your code. Try again in a minute." } };
+  }
+  return { status: 200, body: sentBody };
+}
+
+/**
+ * Step 2: the PIN. Requires the real account from step 1 (its access token),
+ * then mints the opaque staff token — tied to that account so it can't be
+ * bound by any other database session.
+ */
+async function login(supabase: SupabaseClient, body: Record<string, unknown>): Promise<Result> {
   const pin = body.pin;
-  if (!isEmail(email) || !isPin(pin)) return { status: 400, body: { error: "Enter your email and 4-digit PIN." } };
-  if (loginRateLimited(email)) return { status: 429, body: { error: "Too many tries. Wait 15 minutes, then try again." } };
-  const { data: staff } = await supabase
-    .from("staff")
-    .select("id, full_name, email, role, active, must_change_pin, pin_hash, employee_id, failed_attempts, locked_until")
-    .eq("email", email)
-    .maybeSingle();
-  // Identical response for unknown email and wrong PIN — no email probing.
+  if (!isPin(pin)) return { status: 400, body: { error: "Your PIN is exactly 4 digits." } };
+  const authUser = await realUserFromAccessToken(supabase, body.accessToken);
+  if (!authUser) {
+    return { status: 401, body: { error: "Confirm your email first.", emailRequired: true } };
+  }
+  const { data: staff } = await supabase.from("staff").select(STAFF_COLUMNS).eq("auth_user_id", authUser.id).maybeSingle();
   if (!staff || !staff.active) {
-    return { status: 401, body: { error: "That email and PIN don't match." } };
+    return { status: 401, body: { error: "This email doesn't have office access.", emailRequired: true } };
+  }
+  if (loginRateLimited(staff.id)) {
+    return { status: 429, body: { error: "Too many tries. Wait 15 minutes, then try again." } };
   }
   const locked = lockoutResponse(staff as StaffRow);
   if (locked) return locked;
   if (!verifyPin(pin as string, staff.pin_hash)) {
-    return recordPinMiss(supabase, staff as StaffRow, "That email and PIN don't match.");
+    return recordPinMiss(supabase, staff as StaffRow, "That PIN doesn't match.");
   }
-  loginAttempts.delete(email);
+  loginAttempts.delete(staff.id);
   await clearPinMisses(supabase, staff.id);
   const token = generateToken();
   await supabase.from("staff_sessions").insert({
     token,
     staff_id: staff.id,
+    auth_user_id: authUser.id,
     expires_at: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
   });
   return { status: 200, body: { token, ...publicStaff(staff as StaffRow) } };
@@ -312,6 +400,10 @@ async function updateEmail(supabase: SupabaseClient, body: Record<string, unknow
   if (!isEmail(newEmail)) return { status: 400, body: { error: "Enter a valid email address." } };
   const { data: clash } = await supabase.from("staff").select("id").eq("email", newEmail).maybeSingle();
   if (clash && clash.id !== caller.id) return { status: 409, body: { error: "Another account already uses that email." } };
+  if (caller.auth_user_id) {
+    const { error } = await supabase.auth.admin.updateUserById(caller.auth_user_id, { email: newEmail, email_confirm: true });
+    if (error) return { status: 409, body: { error: "Another account already uses that email." } };
+  }
   await supabase.from("staff").update({ email: newEmail }).eq("id", caller.id);
   return { status: 200, body: { ok: true, email: newEmail } };
 }
@@ -321,6 +413,8 @@ async function handleStaffAction(body: unknown): Promise<Result> {
   if (!supabase) return { status: 503, body: { error: "Office login backend is not configured." } };
   const payload = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
   switch (payload.action) {
+    case "send-code":
+      return sendCode(supabase, payload);
     case "login":
       return login(supabase, payload);
     case "validate":
@@ -381,6 +475,47 @@ async function sendStaffPinEmail(opts: { email: string; fullName: string; pin: s
       to: opts.email,
       subject: "Your Rejunk Office Login",
       html: buildStaffPinEmailHtml(opts),
+    });
+    if (error) return { sent: false, error: error.message };
+    return { sent: true };
+  } catch (error) {
+    return { sent: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function buildSignInCodeEmailHtml(opts: { fullName: string; code: string }) {
+  const greetingName = opts.fullName.split(" ")[0] || "there";
+  return `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f4f6f3;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#1c1c1c">
+    <div style="max-width:520px;margin:0 auto;padding:24px 16px">
+      <div style="background:#ffffff;border-radius:12px;border:1px solid #e2e6df;overflow:hidden">
+        <img src="${DEFAULT_BASE_URL}/rejunk-email-header.png" alt="Rejunk" width="520" style="display:block;width:100%;height:auto" />
+        <div style="padding:28px 24px">
+          <h1 style="margin:0 0 12px;font-size:20px">Your Rejunk sign-in code</h1>
+          <p style="margin:0 0 16px;font-size:15px;line-height:1.5">Hi ${greetingName}, enter this code on the sign-in screen, then your 4-digit PIN:</p>
+          <div style="background:#f0f4ec;border:1px dashed #155e3f;border-radius:10px;padding:18px;text-align:center;margin:0 0 20px">
+            <span style="font-family:'SF Mono',Menlo,Consolas,monospace;font-size:28px;font-weight:700;letter-spacing:6px;color:#155e3f">${opts.code}</span>
+          </div>
+          <p style="margin:0;font-size:13px;color:#5b6357;line-height:1.5">The code works once and expires in an hour. You only need it the first time on each computer or phone. Didn't try to sign in? Ignore this email.</p>
+        </div>
+      </div>
+      <p style="text-align:center;font-size:12px;color:#8a917f;margin:16px 0 0">Rejunk · Phoenix, AZ</p>
+    </div>
+  </body>
+</html>`;
+}
+
+async function sendSignInCodeEmail(opts: { email: string; fullName: string; code: string }): Promise<{ sent: boolean; error?: string }> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return { sent: false, error: "RESEND_API_KEY is not configured on the server." };
+  try {
+    const resend = new Resend(apiKey);
+    const { error } = await resend.emails.send({
+      from: process.env.RESEND_FROM || DEFAULT_FROM,
+      to: opts.email,
+      subject: `Your Rejunk sign-in code: ${opts.code}`,
+      html: buildSignInCodeEmailHtml(opts),
     });
     if (error) return { sent: false, error: error.message };
     return { sent: true };

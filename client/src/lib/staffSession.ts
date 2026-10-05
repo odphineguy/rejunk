@@ -8,11 +8,20 @@ import { clearFinancialCaches } from "@/lib/financialCache";
  * (lib/staffApi.ts → server/staffAccess.ts / api/staff.ts). The server verifies
  * the PIN and returns an opaque session token, stored here in localStorage.
  *
+ * Since MCP Phase 1b every office person also has a REAL Supabase account. A new
+ * device proves the email first (requestEmailCode → confirmEmailCode, a 6-digit
+ * emailed code); after that the device stays signed in to that account and only
+ * the PIN (loginWithPin) is asked for. The PIN token is tied to the account.
+ *
  * Staff and driver sessions are fully independent — logging in as one grants
  * nothing for the other.
  */
 
-import { clearDatabaseIdentity } from "@/lib/supabase";
+import {
+  clearDatabaseIdentity,
+  getOfficeAccount,
+  verifyEmailCode,
+} from "@/lib/supabase";
 import { postStaff } from "@/lib/staffApi";
 
 const SESSION_KEY = "rejunk_staff_session";
@@ -33,6 +42,8 @@ export type StoredStaffSession = {
   role: string;
   token: string;
   mustChangePin?: boolean;
+  /** Real auth account the token belongs to; absent on pre-Phase 1b logins. */
+  authUserId?: string;
   expiresAt: number;
 };
 
@@ -70,9 +81,11 @@ export function isOwner(session: StoredStaffSession | null = getStoredStaffSessi
   return session?.role === "owner";
 }
 
-export function clearStaffSession() {
+/** Signs out of the office app. `forgetDevice` also signs the email account out
+ * of this device, so the next sign-in needs a fresh email code. */
+export function clearStaffSession(options: { forgetDevice?: boolean } = {}) {
   clearFinancialCaches();
-  void clearDatabaseIdentity();
+  void clearDatabaseIdentity(options);
   const stored = readJson<StoredStaffSession>(SESSION_KEY);
   if (stored?.token) void postStaff("logout", { token: stored.token });
   if (!canUseLocalStorage()) return;
@@ -88,6 +101,13 @@ export function clearStaffSession() {
 export async function validateStoredStaffSession(): Promise<StaffSessionCheck> {
   const stored = getStoredStaffSession();
   if (!stored) return "missing";
+
+  // A token minted for a real account is useless once that account is signed
+  // out of this device (or another one signed in) — ask for the sign-in again.
+  if (stored.authUserId && (await getOfficeAccount())?.id !== stored.authUserId) {
+    clearStaffSession();
+    return "invalid";
+  }
 
   const res = await postStaff<{ valid: boolean; role?: string; fullName?: string; email?: string; mustChangePin?: boolean }>(
     "validate",
@@ -111,15 +131,33 @@ export async function validateStoredStaffSession(): Promise<StaffSessionCheck> {
   return "valid";
 }
 
-/** Email + PIN sign-in. Locked out for 15 minutes after 5 misses. */
-export async function loginWithEmailPin(email: string, pin: string): Promise<StoredStaffSession> {
+/** Thrown when the PIN step needs a confirmed email account on this device first. */
+export class EmailRequiredError extends Error {}
+
+/** New-device step 1: emails a sign-in code (the server answers the same for unknown emails). */
+export async function requestEmailCode(email: string): Promise<void> {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail.includes("@")) throw new Error("Enter the email address on your staff account.");
+  const res = await postStaff("send-code", { email: normalizedEmail });
+  if (!res.ok) throw new Error(res.error || "We couldn't send a code. Try again.");
+}
+
+/** New-device step 2: the emailed code signs this device in to the real account. */
+export async function confirmEmailCode(email: string, code: string): Promise<void> {
+  if (!/^\d{6,8}$/.test(code)) throw new Error("Enter the code from the email.");
+  const ok = await verifyEmailCode(email.trim().toLowerCase(), code);
+  if (!ok) throw new Error("That code didn't work. Check the newest email, or send a new code.");
+}
+
+/** PIN step. Locked out for 15 minutes after 5 misses. */
+export async function loginWithPin(pin: string): Promise<StoredStaffSession> {
   const lockedForMs = pinLockoutRemainingMs();
   if (lockedForMs > 0) {
     throw new Error(`Too many tries. Wait ${Math.ceil(lockedForMs / 60000)} minutes, then try again.`);
   }
-  const normalizedEmail = email.trim().toLowerCase();
-  if (!normalizedEmail.includes("@")) throw new Error("Enter the email address on your staff account.");
   if (!/^\d{4}$/.test(pin)) throw new Error("Your PIN is exactly 4 digits.");
+  const account = await getOfficeAccount();
+  if (!account) throw new EmailRequiredError("Confirm your email first.");
 
   const res = await postStaff<{
     token: string;
@@ -128,9 +166,12 @@ export async function loginWithEmailPin(email: string, pin: string): Promise<Sto
     email: string;
     role: string;
     mustChangePin?: boolean;
-  }>("login", { email: normalizedEmail, pin });
+    authUserId?: string;
+    emailRequired?: boolean;
+  }>("login", { pin, accessToken: account.accessToken });
 
   if (!res.ok || !res.data.token) {
+    if (res.data.emailRequired) throw new EmailRequiredError(res.error || "Confirm your email first.");
     // The server owns the real lockout (counted on the staff row, survives
     // reloads and other devices). Mirror it locally so the login page can show
     // a countdown; wrong creds also tick the local counter as a fallback.
@@ -140,7 +181,7 @@ export async function loginWithEmailPin(email: string, pin: string): Promise<Sto
     } else if (res.status === 401) {
       recordFailedPinAttempt();
     }
-    throw new Error(res.error || "That email and PIN don't match.");
+    throw new Error(res.error || "That PIN doesn't match.");
   }
 
   const session: StoredStaffSession = {
@@ -150,6 +191,7 @@ export async function loginWithEmailPin(email: string, pin: string): Promise<Sto
     role: res.data.role,
     token: res.data.token,
     mustChangePin: res.data.mustChangePin,
+    authUserId: res.data.authUserId ?? account.id,
     expiresAt: Date.now() + SESSION_TTL_MS,
   };
   clearFinancialCaches();

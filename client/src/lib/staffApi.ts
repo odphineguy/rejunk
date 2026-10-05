@@ -8,6 +8,7 @@
  */
 
 export type StaffAction =
+  | "send-code"
   | "login"
   | "validate"
   | "logout"

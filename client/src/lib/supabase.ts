@@ -27,6 +27,8 @@ export const isSupabaseConfigured = supabase !== null;
 function loginCredential(): {
   staff_token?: string;
   driver_token?: string;
+  /** Office tokens minted since Phase 1b belong to one real auth account. */
+  account?: string;
 } | null {
   try {
     const driver = isDriverDatabaseContext();
@@ -39,7 +41,7 @@ function loginCredential(): {
         ? { driver_token: stored.sessionToken }
         : null;
     return stored?.token && stored.expiresAt > Date.now()
-      ? { staff_token: stored.token }
+      ? { staff_token: stored.token, account: stored.authUserId || undefined }
       : null;
   } catch {
     return null;
@@ -64,14 +66,20 @@ export async function ensureSession(): Promise<boolean> {
   }
   pending = (async () => {
     const existing = await supabase.auth.getSession();
+    // A real office account is never replaced by an anonymous stand-in; only
+    // drivers and legacy (pre-Phase 1b) office logins use anonymous sessions.
     const session =
       existing.data.session ??
-      (await supabase.auth.signInAnonymously()).data.session;
+      (credential.account
+        ? null
+        : (await supabase.auth.signInAnonymously()).data.session);
     if (!session) return false;
+    if (credential.account && session.user.id !== credential.account) return false;
     if (boundCredential === key && boundUser === session.user.id) return true;
+    const { account: _account, ...rpcArgs } = credential;
     const { data, error } = await supabase.rpc(
       "bind_business_identity",
-      credential
+      rpcArgs
     );
     if (error || data !== true) {
       boundCredential = "";
@@ -92,12 +100,51 @@ export async function ensureSession(): Promise<boolean> {
 }
 
 /** Drop the database binding before signing out. The auth API also revokes the
- * underlying opaque token, so captured transport JWTs lose access immediately. */
-export async function clearDatabaseIdentity(): Promise<void> {
+ * underlying opaque token, so captured transport JWTs lose access immediately.
+ * A real office account stays signed in on this device unless `forgetDevice`
+ * is set, so next time only the PIN is needed — without a PIN-minted token
+ * bound to it, that account alone can't read any business data. */
+export async function clearDatabaseIdentity(
+  options: { forgetDevice?: boolean } = {}
+): Promise<void> {
   boundCredential = "";
   boundUser = "";
   if (!supabase) return;
   if (pending) await pending.catch(() => false);
   await supabase.rpc("bind_business_identity", {});
-  await supabase.auth.signOut({ scope: "local" });
+  const { data } = await supabase.auth.getSession();
+  if (options.forgetDevice || !data.session || data.session.user.is_anonymous) {
+    await supabase.auth.signOut({ scope: "local" });
+  }
+}
+
+/** The real (non-anonymous) office account signed in on this device, if any. */
+export async function getOfficeAccount(): Promise<{
+  id: string;
+  email: string;
+  accessToken: string;
+} | null> {
+  if (!supabase || isDriverDatabaseContext()) return null;
+  const { data } = await supabase.auth.getSession();
+  const session = data.session;
+  if (!session || session.user.is_anonymous || !session.user.email) return null;
+  return {
+    id: session.user.id,
+    email: session.user.email,
+    accessToken: session.access_token,
+  };
+}
+
+/** Redeems the emailed sign-in code; the staffer's real account becomes this
+ * device's database session (replacing any anonymous stand-in). */
+export async function verifyEmailCode(email: string, code: string): Promise<boolean> {
+  if (!supabase) return false;
+  boundCredential = "";
+  boundUser = "";
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token: code,
+    type: "email",
+  });
+  return !error && Boolean(data.session) && !data.session?.user.is_anonymous;
 }
