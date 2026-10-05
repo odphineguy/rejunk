@@ -204,6 +204,10 @@ async function settle(db, session, attempt, eventId) {
 async function invoicePayment(body) {
   const { stripe, db, live, origin } = paymentConfig();
   const company = await ownerCompany(db, body.token);
+  if (body.action === "status") {
+    await stripeAccount(stripe);
+    return { ready: true, livemode: live, collectingBusiness: "Abe Media" };
+  }
   if (!["create", "refresh", "cancel"].includes(String(body.action)) || typeof body.invoiceId !== "string" || body.invoiceId.length > 200)
     throw new PaymentError(400, "Choose an invoice and payment action.");
   const invoiceId = body.invoiceId;

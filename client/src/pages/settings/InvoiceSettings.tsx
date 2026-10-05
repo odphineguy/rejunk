@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FileText, Zap } from "lucide-react";
 import { toast } from "sonner";
 
@@ -13,12 +13,14 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
   loadSettingsSection,
-  saveSettingsSection,
+  saveSettingsSectionConfirmed,
 } from "@/lib/settingsStorage";
 import {
   DEFAULT_INVOICE_SETTINGS,
   type InvoiceSettingsState,
 } from "@/lib/invoiceSettings";
+
+import { getStoredStaffSession } from "@/lib/staffSession";
 
 const SECTION = "invoices";
 
@@ -30,19 +32,61 @@ export default function InvoiceSettings() {
   const update = (patch: Partial<InvoiceSettingsState>) =>
     setSettings(prev => ({ ...prev, ...patch }));
 
-  const save = () => {
-    saveSettingsSection(SECTION, {
-      ...settings,
-      acceptCardPayments: false,
-      autoInvoicing: false,
-    });
-    toast.success("Settings saved");
+  const [payment, setPayment] = useState<{
+    ready: boolean;
+    livemode?: boolean;
+    collectingBusiness?: string;
+    error?: string;
+  } | null>(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/pay", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "status",
+        token: getStoredStaffSession()?.token,
+      }),
+    })
+      .then(async response => {
+        const data = await response.json();
+        if (active)
+          setPayment(response.ok ? data : { ready: false, error: data.error });
+      })
+      .catch(() => {
+        if (active)
+          setPayment({
+            ready: false,
+            error: "Could not check card payment setup. Reload to retry.",
+          });
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await saveSettingsSectionConfirmed(SECTION, {
+        ...settings,
+        autoInvoicing: false,
+      });
+      toast.success("Settings saved");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Settings could not be saved."
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <SettingsShell
       title="Invoice Settings"
-      actions={<SettingsSaveButton onClick={save} />}
+      actions={<SettingsSaveButton onClick={() => void save()} />}
     >
       <div className="grid items-start gap-5 lg:grid-cols-2">
         <div className="space-y-5">
@@ -115,11 +159,22 @@ export default function InvoiceSettings() {
               />
               <SettingsToggleRow
                 label="Accept Payments via Credit Card / Stripe"
-                help="Card collection is unavailable until a Stripe account is connected."
+                help={
+                  !payment
+                    ? "Checking card payment setup…"
+                    : payment.ready
+                      ? payment.livemode
+                        ? `Card payments are collected by ${payment.collectingBusiness} for Progressive.`
+                        : `Sandbox ready through ${payment.collectingBusiness}. Test cards only; no real money is collected.`
+                      : payment.error || "Card payments are not configured."
+                }
                 control={
                   <Switch
-                    checked={false}
-                    disabled
+                    checked={settings.acceptCardPayments}
+                    disabled={!payment?.ready || saving}
+                    onCheckedChange={checked =>
+                      update({ acceptCardPayments: checked })
+                    }
                     aria-label="Accept card payments"
                   />
                 }

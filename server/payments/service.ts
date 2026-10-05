@@ -156,6 +156,10 @@ async function settle(
 export async function invoicePayment(body: Record<string, unknown>) {
   const { stripe, db, live, origin } = paymentConfig();
   const company = await ownerCompany(db, body.token);
+  if (body.action === "status") {
+    await stripeAccount(stripe);
+    return { ready: true, livemode: live, collectingBusiness: "Abe Media" };
+  }
   if (
     !["create", "refresh", "cancel"].includes(String(body.action)) ||
     typeof body.invoiceId !== "string" ||

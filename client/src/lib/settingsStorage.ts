@@ -51,6 +51,22 @@ export function saveSettingsSection<T extends object>(
   return value;
 }
 
+/** Payment settings need a confirmed server save before showing success. */
+export async function saveSettingsSectionConfirmed<T extends object>(section: string, value: T): Promise<T> {
+  if (!isOwner()) throw new Error("Owner access required.");
+  const identity = currentStaffIdentity();
+  if (!supabase || !(await ensureSession())) throw new Error("Sign in and reconnect before saving settings.");
+  const { error } = await supabase.from("app_settings").upsert(
+    { key: section, value: value as Json, updated_at: new Date().toISOString() },
+    { onConflict: "key" }
+  );
+  if (error) throw new Error("Settings could not be saved. Try again.");
+  if (identity !== currentStaffIdentity()) throw new Error("Your account changed. Reload settings.");
+  if (canUseLocalStorage()) window.localStorage.setItem(keyFor(section), JSON.stringify(value));
+  dispatchSettingsEvent(section);
+  return value;
+}
+
 /** Fire-and-forget upsert; a failed sync keeps the localStorage copy intact. */
 async function pushSection(section: string, value: object) {
   if (!supabase) return;

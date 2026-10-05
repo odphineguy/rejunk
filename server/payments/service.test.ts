@@ -208,3 +208,23 @@ describe("invoice settings ownership", () => {
     expect(fixtures.reserve).not.toHaveBeenCalled();
   });
 });
+
+describe("collection setup status", () => {
+  it("returns sandbox status for a verified owner without an invoice", async () => {
+    await expect(
+      invoicePayment({ action: "status", token: request.token })
+    ).resolves.toEqual({
+      ready: true,
+      livemode: false,
+      collectingBusiness: "Abe Media",
+    });
+    expect(fixtures.createSession).not.toHaveBeenCalled();
+  });
+  it("does not expose setup status to an office account", async () => {
+    fixtures.rows.staff[0].role = "office";
+    await expect(
+      invoicePayment({ action: "status", token: request.token })
+    ).rejects.toThrow("Owner access required");
+    expect(fixtures.retrieveAccount).not.toHaveBeenCalled();
+  });
+});
