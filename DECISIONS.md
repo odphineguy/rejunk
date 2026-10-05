@@ -10,6 +10,32 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
 
 ---
 
+## 2026-10-05 — MCP connector foundation
+
+**Decision**
+- Office staff move to real Supabase Auth accounts (email login). PIN stays as a quick unlock. Drivers stay on PIN for now.
+- Claude/ChatGPT connector uses Supabase's OAuth 2.1 Server, so it hands the AI a pass for a real user and existing RLS applies.
+- MCP server is a Vercel function under api/ with its own mcp/ folder, not a Next.js route (Rejunk is Vite + Vercel functions).
+- Multi-tenant foundation is shared by the connector, Sol's Stripe billing, and a future iOS driver app: one companies table, one memberships table (user ↔ company ↔ role), tenant_id on every core table, RLS driven by memberships.
+- Connector is office-only at launch. No tools that move money.
+
+**Rejected**
+- Building a custom login bridge instead of real Supabase users. More code, second identity system, breaks the "RLS just works" benefit.
+- Reusing the pipeline's businesses table as-is. It belongs to rejunk-webhook-services; companies must be owned by the app and agreed with Sol.
+- Anthropic Console "App Integrations" for the driver app. That's for apps calling the Anthropic API directly, not for connecting to Rejunk.
+
+**Constraints**
+- Phase 1 changes tables the pipeline repo writes. Both repos must ship tenant_id together.
+- Admin (service-role) key is used in 12 files under api/ and server/. Tool code must live in a separate folder with an import guard.
+- 49 hard-coded "company = progressive" rules across 7 migrations must be rewritten, not patched.
+- Supabase OAuth Server is beta; supports DCR only, no CIMD yet.
+
+**Open risks**
+- Migrating 41 anonymous stand-in users to real accounts without breaking active sessions.
+- ChatGPT plan access for custom MCP servers is inconsistently reported; verify in Abe's own account.
+- Driver web app exposes customer phone + office internal notes to drivers; "I called dispatch" and some chat updates may be broken. Logged as out-of-scope known issues.
+
+
 ## 2026-10-02 — Invoice branding comes from Company Settings
 
 **Decision**
