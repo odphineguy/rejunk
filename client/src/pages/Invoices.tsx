@@ -46,6 +46,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { InvoicePaymentPanel } from "@/components/InvoicePaymentPanel";
 import {
   deleteInvoice,
   getInvoice,
@@ -774,12 +775,14 @@ function InvoiceDetails({
                 className="h-10 w-24 rounded-lg"
               />
             </div>
-            {isOwner() && <Link
-              href="/settings/invoices"
-              className="text-sm text-[#155e3f] underline"
-            >
-              Invoice Settings
-            </Link>}
+            {isOwner() && (
+              <Link
+                href="/settings/invoices"
+                className="text-sm text-[#155e3f] underline"
+              >
+                Invoice Settings
+              </Link>
+            )}
           </div>
           <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_auto]">
             <div>
@@ -1029,10 +1032,16 @@ function InvoiceDetails({
                 }
               />
               <p className="mt-2 text-xs text-muted-foreground">
-                Enter payments received outside this invoice. Card collection is
-                not connected here.
+                Enter payments received outside this invoice. Confirmed card
+                payments update this amount automatically.
               </p>
             </Panel>
+
+            <InvoicePaymentPanel
+              invoice={invoice}
+              enabled={settings.acceptCardPayments}
+              isNew={isNew}
+            />
 
             <Panel>
               <SectionHeader icon={ClipboardList} title="Summary" />

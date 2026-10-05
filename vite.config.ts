@@ -527,6 +527,20 @@ function vitePluginVisionApi(): Plugin {
   };
 }
 
+function vitePluginPaymentApi(): Plugin {
+  return {
+    name: "rejunk-payment-api",
+    configureServer(server) {
+      for (const [route, webhook] of [["/api/pay", false], ["/api/stripe-webhook", true]] as const) {
+        server.middlewares.use(route, async (req, res) => {
+          const { dispatchPaymentRequest } = await import("./server/payments/handlers");
+          await dispatchPaymentRequest(req, res, webhook);
+        });
+      }
+    },
+  };
+}
+
 const plugins = [
   react(),
   tailwindcss(),
@@ -539,6 +553,7 @@ const plugins = [
   vitePluginStaffApi(),
   vitePluginLeadApi(),
   vitePluginVisionApi(),
+  vitePluginPaymentApi(),
 ];
 
 export default defineConfig(({ mode }) => {
@@ -560,6 +575,11 @@ export default defineConfig(({ mode }) => {
     "SUPABASE_SERVICE_ROLE_KEY",
     "APP_BASE_URL",
     "OPENAI_API_KEY",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_ACCOUNT_ID",
+    "STRIPE_LIVE_ENABLED",
+    "PAYMENT_BASE_URL",
   ]) {
     if (!process.env[key] && env[key]) {
       process.env[key] = env[key];

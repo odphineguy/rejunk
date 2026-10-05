@@ -1,3 +1,4 @@
+import { dispatchPaymentRequest } from "./payments/handlers";
 import officeQuoteHandler from "./officeQuote";
 import express from "express";
 import { createServer } from "http";
@@ -13,6 +14,9 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
   const app = express();
   const server = createServer(app);
+
+  app.post("/api/pay", (req, res) => void dispatchPaymentRequest(req, res));
+  app.post("/api/stripe-webhook", (req, res) => void dispatchPaymentRequest(req, res, true));
 
   app.use("/api/driver", express.json(), driverActivationRouter);
   app.use("/api/lead", express.json(), leadRouter);

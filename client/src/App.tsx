@@ -10,6 +10,7 @@ import { isPublicPath } from "./pages/landing/publicPaths";
 // downloads the office or driver apps (and none of the Supabase/maps code
 // they pull in). Each lazy module owns its own providers and routing.
 const Landing = lazy(() => import("./pages/landing/SiteRouter"));
+const PaymentResult = lazy(() => import("./pages/PaymentResult"));
 const StaffApp = lazy(() => import("./StaffApp"));
 const DriverApp = lazy(() => import("./DriverApp"));
 
@@ -59,7 +60,11 @@ function App() {
         defaultTheme="light"
         // switchable
       >
-        {isLandingRoute ? (
+        {location === "/payment-result" ? (
+          <Suspense fallback={<AppFallback />}>
+            <PaymentResult />
+          </Suspense>
+        ) : isLandingRoute ? (
           <Suspense fallback={<LandingFallback />}>
             <Landing />
           </Suspense>

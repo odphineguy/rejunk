@@ -107,7 +107,7 @@ export async function saveInvoice(
     },
     { onConflict: "id" }
   );
-  if (error) throw error;
+  if (error) throw new Error(error.message || "Could not save invoice.");
   invoices = [invoice, ...invoices.filter(row => row.id !== invoice.id)];
   notify();
   return invoice;
@@ -120,7 +120,7 @@ export async function deleteInvoice(invoiceId: string): Promise<void> {
     .from("app_invoices")
     .delete()
     .eq("id", invoiceId);
-  if (error) throw error;
+  if (error) throw new Error(error.message || "Could not delete invoice.");
   invoices = invoices.filter(invoice => invoice.id !== invoiceId);
   notify();
 }

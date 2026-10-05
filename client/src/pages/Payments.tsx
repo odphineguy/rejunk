@@ -168,7 +168,7 @@ export default function Payments() {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => removePayment(payment.id)} aria-label={`Delete ${payment.customerName} payment`}>
+                      <Button variant="ghost" size="icon" disabled={payment.id.startsWith("stripe:")} title={payment.id.startsWith("stripe:") ? "Stripe payment history is retained" : undefined} onClick={() => removePayment(payment.id)} aria-label={`Delete ${payment.customerName} payment`}>
                         <Trash2 className="size-4 text-destructive" />
                       </Button>
                     </TableCell>

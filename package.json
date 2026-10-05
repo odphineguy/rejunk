@@ -5,14 +5,15 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite --host",
-    "build": "node scripts/security/build-office-quote.mjs && vite build && tsx scripts/prerender.ts && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "build": "node scripts/security/build-office-quote.mjs && node scripts/security/build-payment-api.mjs && vite build && tsx scripts/prerender.ts && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "prerender": "tsx scripts/prerender.ts",
     "start": "NODE_ENV=production node dist/index.js",
     "preview": "vite preview --host",
     "check": "tsc --noEmit",
     "test": "vitest run",
     "format": "prettier --write .",
-    "build:quote-api": "node scripts/security/build-office-quote.mjs"
+    "build:quote-api": "node scripts/security/build-office-quote.mjs",
+    "build:payment-api": "node scripts/security/build-payment-api.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -65,6 +66,7 @@
     "resend": "^6.12.4",
     "sonner": "^2.0.7",
     "streamdown": "^1.4.0",
+    "stripe": "23.0.0",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
