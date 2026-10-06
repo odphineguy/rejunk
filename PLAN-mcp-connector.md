@@ -93,6 +93,10 @@ Sol builds Stripe on top of it.
   the signed-in user's membership, or the driver session's company. Server and pipeline writes
   stamp the company explicitly. If nobody can be identified, the save fails instead of landing in
   Progressive. (Abe, 2026-10-05.)
+- **Pipeline one-off scripts use tenant keys too.** Ship 2 converted the 12 live functions only.
+  The manual scripts in `rejunk-webhook-services/scripts/` (backfills, pricebook import, replays,
+  OAuth helpers) still filter and stamp the slug. After the switch they fail loudly rather than
+  mis-tag, but convert them in ship 4 at the latest.
 - **The pipeline repo stamps `tenant_id` on every row it writes, and both repos are deployed
   together.**
 - Progressive's app looks and works exactly as before.
