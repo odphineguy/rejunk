@@ -422,6 +422,8 @@ the existing exception.)
 - `OPENAI_API_KEY` — **server-side only**; used by `/api/vision-analyze` (see *Vision AI endpoint*).
 - `RESEND_API_KEY` / `RESEND_FROM` — Resend transactional email (driver activation keys + office-login
   PINs + website-lead notifications).
+- `SITE_COMPANY_SLUG` — **server-only**; which company owns the public website (`companies.slug`,
+  `progressive` today). Website quote-form leads are saved under it; unset = emailed but not saved.
 - `BUILT_IN_FORGE_API_URL` / `BUILT_IN_FORGE_API_KEY` — Manus asset storage proxy (dev only).
 - `VITE_OAUTH_PORTAL_URL` / `VITE_APP_ID` — referenced by `client/src/const.ts` `getLoginUrl()`, but no
   auth flow uses them.

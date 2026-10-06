@@ -102,10 +102,11 @@ type StaffRow = {
   locked_until: string | null;
   auth_user_id: string | null;
   code_sent_at: string | null;
+  tenant_id: string;
 };
 
 const STAFF_COLUMNS =
-  "id, full_name, email, role, active, must_change_pin, pin_hash, employee_id, failed_attempts, locked_until, auth_user_id, code_sent_at";
+  "id, full_name, email, role, active, must_change_pin, pin_hash, employee_id, failed_attempts, locked_until, auth_user_id, code_sent_at, tenant_id";
 
 type Result = { status: number; body: Record<string, unknown> };
 
@@ -284,6 +285,8 @@ async function login(supabase: SupabaseClient, body: Record<string, unknown>): P
     token,
     staff_id: staff.id,
     auth_user_id: authUser.id,
+    // The session belongs to the signed-in person's company (no DB default).
+    tenant_id: staff.tenant_id,
     expires_at: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
   });
   return { status: 200, body: { token, ...publicStaff(staff as StaffRow) } };
@@ -346,7 +349,7 @@ async function grant(supabase: SupabaseClient, body: Record<string, unknown>): P
   } else {
     await supabase
       .from("staff")
-      .insert({ full_name: fullName, email, role, employee_id: employeeId, pin_hash: pinHash, active: true, must_change_pin: true, failed_attempts: 0, locked_until: null });
+      .insert({ full_name: fullName, email, role, employee_id: employeeId, pin_hash: pinHash, active: true, must_change_pin: true, failed_attempts: 0, locked_until: null, tenant_id: caller.tenant_id });
   }
 
   const sent = await sendStaffPinEmail({ email, fullName, pin, role });

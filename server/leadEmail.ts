@@ -285,8 +285,24 @@ export async function recordLeadInCrm(
     const supabase = createClient(url, key, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    // The public site belongs to one company, named by a single setting
+    // (SITE_COMPANY_SLUG = companies.slug). No setting or no match = no CRM
+    // row (the email still goes out) — never a guess at a company.
+    const siteCompany = (process.env.SITE_COMPANY_SLUG ?? "").trim();
+    if (!siteCompany) {
+      return { recorded: false, error: "SITE_COMPANY_SLUG is not set." };
+    }
+    const { data: company } = await supabase
+      .from("companies")
+      .select("id")
+      .eq("slug", siteCompany)
+      .maybeSingle();
+    if (!company) {
+      return { recorded: false, error: `No company with slug '${siteCompany}'.` };
+    }
     const { error } = await supabase.from("clients").insert({
       id,
+      tenant_id: company.id,
       created_by: null,
       kind: "lead",
       first_name: firstName,

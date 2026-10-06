@@ -94,7 +94,7 @@ const isEmail = (value: unknown): value is string =>
 
 // ---------------------------------------------------------------- staff token
 
-export type StaffCaller = { id: string; role: string; employeeId: string | null };
+export type StaffCaller = { id: string; role: string; employeeId: string | null; tenantId: string };
 
 /** Resolves an office (staff) session token to an ACTIVE staff row, or null. */
 export async function resolveStaffToken(supabase: SupabaseClient, token: unknown): Promise<StaffCaller | null> {
@@ -107,11 +107,11 @@ export async function resolveStaffToken(supabase: SupabaseClient, token: unknown
   if (!session || new Date(session.expires_at).getTime() < Date.now()) return null;
   const { data: staff } = await supabase
     .from("staff")
-    .select("id, role, active, employee_id")
+    .select("id, role, active, employee_id, tenant_id")
     .eq("id", session.staff_id)
     .maybeSingle();
   if (!staff || !staff.active) return null;
-  return { id: staff.id, role: staff.role, employeeId: staff.employee_id };
+  return { id: staff.id, role: staff.role, employeeId: staff.employee_id, tenantId: staff.tenant_id };
 }
 
 const STAFF_REQUIRED: Result = { status: 401, body: { error: "Sign in to the office app to manage driver access." } };
@@ -132,10 +132,11 @@ type ActivationRow = {
   pin_hash: string | null;
   failed_attempts: number;
   locked_until: string | null;
+  tenant_id: string;
 };
 
 const ACTIVATION_COLUMNS =
-  "id, employee_id, employee_name, email_sent_to, status, expires_at, activated_at, created_by, created_at, pin_hash, failed_attempts, locked_until";
+  "id, employee_id, employee_name, email_sent_to, status, expires_at, activated_at, created_by, created_at, pin_hash, failed_attempts, locked_until, tenant_id";
 
 function publicActivation(row: ActivationRow) {
   return {
@@ -161,6 +162,8 @@ async function createSession(supabase: SupabaseClient, activation: ActivationRow
       activation_id: activation.id,
       session_token_hash: sha256(sessionToken),
       display_name: activation.employee_name,
+      // A driver session belongs to the company that activated the driver.
+      tenant_id: activation.tenant_id,
       is_online: false,
       last_seen_at: new Date().toISOString(),
     })
@@ -254,6 +257,7 @@ async function createActivation(supabase: SupabaseClient, body: Record<string, u
       status: "pending",
       expires_at: expiresAt,
       created_by: caller.id,
+      tenant_id: caller.tenantId,
     })
     .select(ACTIVATION_COLUMNS)
     .single();
