@@ -398,15 +398,22 @@ async function list(supabase: SupabaseClient, body: Record<string, unknown>): Pr
 async function contacts(supabase: SupabaseClient, body: Record<string, unknown>): Promise<Result> {
   const caller = await resolveToken(supabase, body.token);
   if (!caller) return { status: 401, body: { error: "Your session expired. Sign in again." } };
-  const { data, error } = await supabase
-    .from("app_contact_overrides")
-    .select("negotiation_id, phone, email")
-    .eq("tenant_id", "progressive");
+  // tenant_id is moving from the text slug to the company uuid (MCP Phase 1
+  // part 2, step 2), so match either form here instead of filtering in SQL —
+  // a slug filter fails against a uuid column and vice versa.
+  const [{ data: company }, { data, error }] = await Promise.all([
+    supabase.from("companies").select("id").eq("slug", "progressive").maybeSingle(),
+    supabase.from("app_contact_overrides").select("tenant_id, negotiation_id, phone, email"),
+  ]);
   if (error) {
     console.error("[staff-api] Contact overrides load failed.", error.message);
     return { status: 500, body: { error: "Customer contact details could not be loaded." } };
   }
-  return { status: 200, body: { contacts: data ?? [] } };
+  const tenants = new Set(["progressive", company?.id].filter(Boolean));
+  const contacts = (data ?? [])
+    .filter(row => tenants.has(String(row.tenant_id)))
+    .map(({ negotiation_id, phone, email }) => ({ negotiation_id, phone, email }));
+  return { status: 200, body: { contacts } };
 }
 
 async function updatePin(supabase: SupabaseClient, body: Record<string, unknown>): Promise<Result> {

@@ -16,7 +16,6 @@ import { businessRows } from "@/lib/businessAccess";
 import { ensureSession, isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { postStaff } from "@/lib/staffApi";
 import { getStoredStaffSession, STAFF_SESSION_EVENT } from "@/lib/staffSession";
-import { APP_TENANT_ID } from "@/lib/tenant";
 
 const LEADS_KEY = "junk_estimator_thumbtack_leads_v1";
 /** Clients & Leads shows the trailing window (spec acceptance: last 60 days). */
@@ -180,7 +179,7 @@ export async function setClientSource(
   if (!isSupabaseConfigured || !supabase) return;
   if (!(await ensureSession())) return;
   const { error } = await supabase.from("app_client_meta").upsert(
-    { tenant_id: APP_TENANT_ID, phone, source, updated_at: new Date().toISOString() },
+    { phone, source, updated_at: new Date().toISOString() },
     { onConflict: "tenant_id,phone" }
   );
   if (error) throw new Error(error.message);

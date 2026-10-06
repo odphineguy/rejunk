@@ -2,7 +2,6 @@ import { facilityFromRow, vehicleFromRow, materialFromRow, defaultsFromRow, benc
 import { businessRows } from "@/lib/businessAccess";
 import { isOwner } from "@/lib/staffSession";
 import { supabase, ensureSession } from "@/lib/supabase";
-import { APP_TENANT_ID } from "@/lib/tenant";
 import type { Database } from "@/types/database.types";
 import type {
   Facility,
@@ -451,8 +450,7 @@ export async function loadEmployeesRemote(): Promise<EmployeeRecord[] | null> {
 
   const { data, error } = await supabase
     .from("app_employees")
-    .select("*")
-    .eq("tenant_id", APP_TENANT_ID);
+    .select("*");
   if (error) {
     console.error("[dataStore] Failed to load employees:", error.message);
     return null;
@@ -470,7 +468,6 @@ export async function upsertEmployeeRemote(employee: EmployeeRecord): Promise<vo
 
   const { error } = await supabase.from("app_employees").upsert({
     id: employee.id,
-    tenant_id: APP_TENANT_ID,
     first_name: employee.firstName ?? "",
     last_name: employee.lastName ?? "",
     role: employee.role,
@@ -486,7 +483,7 @@ export async function deleteEmployeeRemote(id: string): Promise<void> {
   if (!supabase) return;
   const ok = await ensureSession();
   if (!ok) return;
-  const { error } = await supabase.from("app_employees").delete().eq("id", id).eq("tenant_id", APP_TENANT_ID);
+  const { error } = await supabase.from("app_employees").delete().eq("id", id);
   if (error) throw error;
 }
 
@@ -573,7 +570,6 @@ function pricebookItemToRow(
     photo_required: it.photoRequired ?? false,
     add_to_online_booking: it.addToOnlineBooking,
     taxable: it.taxable,
-    tenant_id: APP_TENANT_ID,
   };
 }
 

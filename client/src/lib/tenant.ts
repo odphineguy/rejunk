@@ -1,9 +1,11 @@
 /**
- * The business this app instance runs for. rejunk-prod is multi-tenant on the
- * webhook side (`businesses` table: progressive / wellsentry / unknown) and a
- * few tables the app shares with that pipeline carry a `tenant_id`
- * (`pricebook_items`, `thumbtack_*`, `hcp_appointments`, `voice_calls`, …).
- * Every app read of a tenant-scoped table filters on this, and every write
- * stamps it — otherwise `pricebook_items.tenant_id` defaults to 'wellsentry'.
+ * The business slug this app instance runs for (`companies.slug`). The browser
+ * no longer stamps or filters `tenant_id` itself: the database fills it in
+ * (column defaults) and row-level security limits every read and write to this
+ * business. That keeps the app working while the shared tables move from the
+ * text slug to the company uuid (MCP Phase 1 part 2, step 2).
+ *
+ * Still passed as `p_tenant` to the dashboard / labor-hours RPCs, which take
+ * the slug.
  */
 export const APP_TENANT_ID = "progressive";
