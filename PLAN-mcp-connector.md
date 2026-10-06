@@ -86,6 +86,13 @@ Sol builds Stripe on top of it.
 - An owner can't edit billing columns or promote a membership; office and crew can't do either.
 - Drivers still see only their assigned jobs, only in their own company.
 - No live access rule still names `'progressive'`.
+- **No column default names a company.** Steps 1 and 2 use Progressive as a temporary default
+  (22 app tables from `20261005000003`; `pricebook_items` / `pricebook_categories` /
+  `app_employees` / `app_client_meta` / `customer_notifications` / `voice_calls` / `bookings`).
+  The uuid switch (step 2, ship 3) replaces every one with "the company of whoever is saving":
+  the signed-in user's membership, or the driver session's company. Server and pipeline writes
+  stamp the company explicitly. If nobody can be identified, the save fails instead of landing in
+  Progressive. (Abe, 2026-10-05.)
 - **The pipeline repo stamps `tenant_id` on every row it writes, and both repos are deployed
   together.**
 - Progressive's app looks and works exactly as before.
