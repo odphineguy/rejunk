@@ -86,21 +86,23 @@ Sol builds Stripe on top of it.
 - An owner can't edit billing columns or promote a membership; office and crew can't do either.
 - Drivers still see only their assigned jobs, only in their own company.
 - No live access rule still names `'progressive'`.
-- **No column default names a company.** Steps 1 and 2 use Progressive as a temporary default
-  (22 app tables from `20261005000003`; `pricebook_items` / `pricebook_categories` /
-  `app_employees` / `app_client_meta` / `customer_notifications` / `voice_calls` / `bookings`).
-  The uuid switch (step 2, ship 3) replaces every one with "the company of whoever is saving":
-  the signed-in user's membership, or the driver session's company. Server and pipeline writes
-  stamp the company explicitly. If nobody can be identified, the save fails instead of landing in
-  Progressive. (Abe, 2026-10-05.)
-- **Pipeline one-off scripts use tenant keys too.** Ship 2 converted the 12 live functions only.
-  The manual scripts in `rejunk-webhook-services/scripts/` (backfills, pricebook import, replays,
-  OAuth helpers) still filter and stamp the slug. After the switch they fail loudly rather than
-  mis-tag. Convert them BEFORE ship 3: the OAuth store script is the one you'd need in a hurry
-  (Fable, 2026-10-05).
-- **`supabase/config.toml` says `thumbtack-send` verify_jwt = true; live is false (correct).**
-  Fix the repo file to match live before the next CLI deploy, so a deploy can't flip it. Fable
-  offered to do it.
+- **The uuid switch is LIVE (step 2, ship 3, 2026-10-06, migration `20261006200614`; undo in
+  `supabase/undo/`).** All 30 text `tenant_id` columns are now company uuids linked to `companies`;
+  `pipeline_tenant_keys()` hands out uuids; the 31 rules mean exactly what they did (Progressive's
+  id instead of the word). The 'wellsentry' / 'unknown' / voice_calls / bookings defaults are gone
+  (the pipeline stamps those).
+- **No column default names a company (Part B, NEXT).** Progressive's uuid is still a temporary
+  default on the 22 app tables from `20261005000003` plus `pricebook_items` /
+  `pricebook_categories` / `app_employees` / `app_client_meta` / `customer_notifications`.
+  Part B replaces every one with "the company of whoever is saving": the signed-in user's
+  membership, or the driver session's company. Server and pipeline writes stamp the company
+  explicitly — including the 4 DB functions that insert without it (`driver_update_job_status`,
+  `driver_create_thread`, `owner_set_job_time`, `send_missed_start_reminders`), the staff/driver
+  sign-in endpoints, and the pipeline's conditional `tenant_id` spreads on jobs / job_photos /
+  app_settings / dispatch_*. If nobody can be identified, the save fails instead of landing in
+  Progressive. (Abe, 2026-10-05; split out of ship 3 by Abe 2026-10-06.)
+- **Pipeline one-off scripts use tenant keys too.** Done by Fable before the switch (pipeline
+  d9e204e), along with `supabase/config.toml` now matching live verify_jwt for all 12 functions.
 - **The pipeline repo stamps `tenant_id` on every row it writes, and both repos are deployed
   together.**
 - Progressive's app looks and works exactly as before.
