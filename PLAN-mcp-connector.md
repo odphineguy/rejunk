@@ -226,6 +226,10 @@ MCP Apps widgets (schedule, estimate builder) and a Rejunk skills plugin.
 - **The issue report form is unused.** `reportJobIssue` isn't wired to any driver screen.
 - **Not a bug:** `job_time_events` and `customer_notifications` have no browser access rules on
   purpose. They are server-only.
+- **Leftover Discord code in the pipeline (cleanup later, found 2026-10-05).** We don't use
+  Discord. `postDiscord()` is still in `thumbtack-webhook`, `thumbtack-responder` and
+  `thumbtack-sweeper` (rejunk-webhook-services). No `DISCORD_WEBHOOK_URL` secret is set, so it
+  does nothing today. Remove the code; don't touch it before then (Abe).
 
 ---
 
