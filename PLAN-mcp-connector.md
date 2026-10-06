@@ -91,7 +91,11 @@ Sol builds Stripe on top of it.
   `pipeline_tenant_keys()` hands out uuids; the 31 rules mean exactly what they did (Progressive's
   id instead of the word). The 'wellsentry' / 'unknown' / voice_calls / bookings defaults are gone
   (the pipeline stamps those).
-- **No column default names a company (Part B, NEXT).** Progressive's uuid is still a temporary
+- **DONE 2026-10-06 — Part B (ship 1 8168eec app deploy, ship 2 migration `20261006210248`, undo in
+  `supabase/undo/`): every tenant_id default is now `app_private.require_company()` (signed-in office
+  person's or driver's company, else the save fails); job-driven functions copy the job's company;
+  website leads use `SITE_COMPANY_SLUG`.** Original requirement, for the record:
+  **No column default names a company.** Progressive's uuid is still a temporary
   default on the 22 app tables from `20261005000003` plus `pricebook_items` /
   `pricebook_categories` / `app_employees` / `app_client_meta` / `customer_notifications`.
   Part B replaces every one with "the company of whoever is saving": the signed-in user's
@@ -101,6 +105,9 @@ Sol builds Stripe on top of it.
   sign-in endpoints, and the pipeline's conditional `tenant_id` spreads on jobs / job_photos /
   app_settings / dispatch_*. If nobody can be identified, the save fails instead of landing in
   Progressive. (Abe, 2026-10-05; split out of ship 3 by Abe 2026-10-06.)
+- **Known blockers for a second company (step 3/4):** `pricing_defaults` is a single row (id=1),
+  and settings upsert on `key` alone. Website leads: `SITE_COMPANY_SLUG` is one setting per
+  deployment; each tenant's own website will need its own value.
 - **Pipeline one-off scripts use tenant keys too.** Done by Fable before the switch (pipeline
   d9e204e), along with `supabase/config.toml` now matching live verify_jwt for all 12 functions.
 - **The pipeline repo stamps `tenant_id` on every row it writes, and both repos are deployed
