@@ -96,7 +96,11 @@ Sol builds Stripe on top of it.
 - **Pipeline one-off scripts use tenant keys too.** Ship 2 converted the 12 live functions only.
   The manual scripts in `rejunk-webhook-services/scripts/` (backfills, pricebook import, replays,
   OAuth helpers) still filter and stamp the slug. After the switch they fail loudly rather than
-  mis-tag, but convert them in ship 4 at the latest.
+  mis-tag. Convert them BEFORE ship 3: the OAuth store script is the one you'd need in a hurry
+  (Fable, 2026-10-05).
+- **`supabase/config.toml` says `thumbtack-send` verify_jwt = true; live is false (correct).**
+  Fix the repo file to match live before the next CLI deploy, so a deploy can't flip it. Fable
+  offered to do it.
 - **The pipeline repo stamps `tenant_id` on every row it writes, and both repos are deployed
   together.**
 - Progressive's app looks and works exactly as before.
