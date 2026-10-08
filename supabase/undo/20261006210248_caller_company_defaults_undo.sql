@@ -1,4 +1,4 @@
--- UNDO for 20261006210000_caller_company_defaults.sql (Part B ship 2).
+-- UNDO for 20261006210248_caller_company_defaults.sql (Part B ship 2).
 -- Puts the temporary Progressive default back on every table that now uses
 -- require_company(), and restores the 5 functions to their pre-Part-B bodies.
 -- caller_company()/require_company() are left in place (harmless, unused).

@@ -16,7 +16,7 @@
 --    settle_invoice_checkout (Stripe webhook, service role) stamps the checkout
 --    attempt's company (Abe OK'd editing Sol's function, 2026-10-06).
 --
--- Undo: supabase/undo/20261006210000_caller_company_defaults_undo.sql
+-- Undo: supabase/undo/20261006210248_caller_company_defaults_undo.sql
 begin;
 
 create or replace function app_private.caller_company()
