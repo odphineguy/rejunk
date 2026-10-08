@@ -273,16 +273,17 @@ async function runPair(viewerCompany, otherCompany) {
     }
   }
 
-  // 6. Settings share one global name list ("calendar", "invoices", …): a
-  // second company saving one must not overwrite the first company's.
+  // 6. Settings are one copy per (company, name): a second company saving
+  // "calendar" gets its own row and never touches the first company's.
   // (Skipped for Progressive's tester — that would be a real own-company save.)
-  const calendar = await admin.from("app_settings").select("*").eq("key", "calendar").maybeSingle();
-  if (viewerCompany.slug !== "progressive" && calendar.data && calendar.data.tenant_id !== viewerCompany.id) {
+  const calendar = await admin.from("app_settings").select("*").eq("key", "calendar").neq("tenant_id", viewerCompany.id).limit(1).maybeSingle();
+  if (viewerCompany.slug !== "progressive" && calendar.data) {
     const before = JSON.stringify(calendar.data);
-    const setting = await db.from("app_settings").upsert({ key: "calendar", value: { isolationTest: runId } }, { onConflict: "key" });
+    const setting = await db.from("app_settings").upsert({ key: "calendar", value: { isolationTest: runId } }, { onConflict: "tenant_id,key" }).select("id, tenant_id").maybeSingle();
+    if (setting.data?.id) cleanup.rows.push(["app_settings", "id", setting.data.id]);
     const after = await restoreIfChanged("app_settings", "id", calendar.data.id, before);
     check(before === after, "settings save can't overwrite another company's", setting.error ? `refused: ${setting.error.message}` : "accepted");
-    if (setting.error) note("KNOWN GAP app_settings", `this company can't save its own "calendar" setting while another company has one`);
+    check(!setting.error && setting.data?.tenant_id === viewerCompany.id, "company can save its own copy of a setting another company has", setting.error?.message ?? `saved under ${setting.data?.tenant_id}`);
   }
   console.log(`own rows visible: ${JSON.stringify(visible)}`);
 }
