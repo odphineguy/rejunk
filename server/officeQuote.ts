@@ -86,7 +86,6 @@ export async function quoteForStaff(
     db
       .from("pricing_defaults")
       .select("*")
-      .eq("id", 1)
       .eq("tenant_id", staff.tenant_id)
       .maybeSingle(),
     db.from("volume_benchmarks").select("*").eq("tenant_id", staff.tenant_id),

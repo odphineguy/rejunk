@@ -82,8 +82,11 @@ function getSupabaseAdmin(): SupabaseClient | null {
   return adminClient;
 }
 
-/** Resolves an office session token to an ACTIVE staff id, or null. */
-async function resolveStaffToken(supabase: SupabaseClient, token: string): Promise<string | null> {
+/** Resolves an office session token to an ACTIVE staff member (id + company), or null. */
+async function resolveStaffToken(
+  supabase: SupabaseClient,
+  token: string
+): Promise<{ id: string; tenantId: string } | null> {
   if (!token) return null;
   const { data: session } = await supabase
     .from("staff_sessions")
@@ -93,11 +96,19 @@ async function resolveStaffToken(supabase: SupabaseClient, token: string): Promi
   if (!session || new Date(session.expires_at).getTime() < Date.now()) return null;
   const { data: staff } = await supabase
     .from("staff")
-    .select("id, active")
+    .select("id, active, tenant_id")
     .eq("id", session.staff_id)
     .maybeSingle();
-  if (!staff || !staff.active) return null;
-  return staff.id as string;
+  if (!staff || !staff.active || !staff.tenant_id) return null;
+  return { id: staff.id as string, tenantId: staff.tenant_id as string };
+}
+
+/** The company that owns the public website (SITE_COMPANY_SLUG), or null. */
+async function resolveSiteCompany(supabase: SupabaseClient): Promise<string | null> {
+  const slug = (process.env.SITE_COMPANY_SLUG ?? "").trim();
+  if (!slug) return null;
+  const { data } = await supabase.from("companies").select("id").eq("slug", slug).maybeSingle();
+  return (data?.id as string | undefined) ?? null;
 }
 
 // ------------------------------------------------------------ vision config
@@ -113,10 +124,15 @@ function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
 
-/** Loads the business's Vision settings from app_settings (key "vision") and
+/** Loads the company's Vision settings from app_settings (key "vision") and
  * sanitises them. Returns null when the row is missing or has no prompt. */
-async function loadVisionConfig(supabase: SupabaseClient): Promise<VisionConfig | null> {
-  const { data } = await supabase.from("app_settings").select("value").eq("key", "vision").maybeSingle();
+async function loadVisionConfig(supabase: SupabaseClient, companyId: string): Promise<VisionConfig | null> {
+  const { data } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("tenant_id", companyId)
+    .eq("key", "vision")
+    .maybeSingle();
   const v = (data?.value && typeof data.value === "object" ? data.value : {}) as Record<string, unknown>;
   const systemInstructions =
     typeof v.systemInstructions === "string" ? v.systemInstructions.trim().slice(0, MAX_PROMPT_CHARS) : "";
@@ -155,9 +171,16 @@ async function handleVisionRequest(body: unknown, ip: string): Promise<VisionRun
     return { status: 503, body: { error: "Vision AI is not configured on the server." } };
   }
 
-  const staffId = payload.source === "public" ? null : await resolveStaffToken(supabase, payload.staffToken);
-  if (payload.source !== "public" && !staffId) {
+  const staff = payload.source === "public" ? null : await resolveStaffToken(supabase, payload.staffToken);
+  if (payload.source !== "public" && !staff) {
     return { status: 401, body: { error: "Please sign in to the office app to use Vision AI." } };
+  }
+  const staffId = staff?.id ?? null;
+  // Office calls use the caller's company settings; the public page uses the
+  // website's company. Never a guess at a company.
+  const companyId = staff ? staff.tenantId : await resolveSiteCompany(supabase);
+  if (!companyId) {
+    return { status: 503, body: { error: "Vision AI is not configured on the server." } };
   }
   try {
     const { data, error } = await supabase.rpc("reserve_vision_analysis", {
@@ -177,7 +200,7 @@ async function handleVisionRequest(body: unknown, ip: string): Promise<VisionRun
     return { status: 503, body: { error: "Estimate limits are temporarily unavailable. Please try again later." } };
   }
 
-  const visionConfig = await loadVisionConfig(supabase);
+  const visionConfig = await loadVisionConfig(supabase, companyId);
   if (!visionConfig) {
     return {
       status: 503,

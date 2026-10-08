@@ -509,7 +509,7 @@ async function quoteForStaff(db, body) {
     db.from("facilities").select("*").eq("id", body.facilityId).eq("tenant_id", staff.tenant_id).eq("is_active", true).maybeSingle(),
     db.from("vehicles").select("*").eq("id", body.vehicleId).eq("tenant_id", staff.tenant_id).eq("is_active", true).maybeSingle(),
     db.from("material_pricing_rules").select("*").eq("id", body.materialId).eq("tenant_id", staff.tenant_id).eq("is_active", true).maybeSingle(),
-    db.from("pricing_defaults").select("*").eq("id", 1).eq("tenant_id", staff.tenant_id).maybeSingle(),
+    db.from("pricing_defaults").select("*").eq("tenant_id", staff.tenant_id).maybeSingle(),
     db.from("volume_benchmarks").select("*").eq("tenant_id", staff.tenant_id)
   ]);
   if (responses.some((r) => r.error))

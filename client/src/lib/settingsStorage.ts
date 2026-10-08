@@ -58,7 +58,7 @@ export async function saveSettingsSectionConfirmed<T extends object>(section: st
   if (!supabase || !(await ensureSession())) throw new Error("Sign in and reconnect before saving settings.");
   const { error } = await supabase.from("app_settings").upsert(
     { key: section, value: value as Json, updated_at: new Date().toISOString() },
-    { onConflict: "key" }
+    { onConflict: "tenant_id,key" }
   );
   if (error) throw new Error("Settings could not be saved. Try again.");
   if (identity !== currentStaffIdentity()) throw new Error("Your account changed. Reload settings.");
@@ -73,7 +73,7 @@ async function pushSection(section: string, value: object) {
   if (!(await ensureSession())) return;
   const { error } = await supabase.from("app_settings").upsert(
     { key: section, value: value as Json, updated_at: new Date().toISOString() },
-    { onConflict: "key" }
+    { onConflict: "tenant_id,key" }
   );
   if (error) {
     console.error(`[settings] Failed to sync "${section}" to Supabase:`, error.message);

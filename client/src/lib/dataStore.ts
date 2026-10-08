@@ -261,7 +261,6 @@ export async function saveAllSettings(
 
   const d = settings.defaults;
   const { error } = await supabase.from("pricing_defaults").upsert({
-    id: 1,
     fuel_price_per_gallon: d.fuelPricePerGallon,
     workers: d.workers,
     hourly_labor_cost: d.hourlyLaborCost,
@@ -269,7 +268,7 @@ export async function saveAllSettings(
     target_margin_decimal: d.targetMarginDecimal,
     minimum_profit_dollars: d.minimumProfitDollars,
     default_facility_rate_per_ton: d.defaultFacilityRatePerTon,
-  });
+  }, { onConflict: "tenant_id" });
   if (error) throw error;
 }
 

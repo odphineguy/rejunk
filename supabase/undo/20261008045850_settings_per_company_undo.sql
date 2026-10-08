@@ -1,4 +1,4 @@
--- UNDO for 20261008050000_settings_per_company.sql (settings fix part 1).
+-- UNDO for 20261008045850_settings_per_company.sql (settings fix part 1).
 -- Only safe before part 3 ships: the app/pipeline upserts on these rules after that.
 begin;
 
