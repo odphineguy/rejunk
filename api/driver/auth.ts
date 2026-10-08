@@ -172,17 +172,19 @@ async function createSession(supabase: SupabaseClient, activation: ActivationRow
 }
 
 /** Marks every pending/activated key for the employee revoked and signs out all sessions. */
-async function revokeEmployee(supabase: SupabaseClient, employeeId: string) {
+async function revokeEmployee(supabase: SupabaseClient, employeeId: string, tenantId: string) {
   await Promise.all([
     supabase
       .from("driver_activations")
       .update({ status: "revoked" })
       .eq("employee_id", employeeId)
+      .eq("tenant_id", tenantId)
       .in("status", ["pending", "activated"]),
     supabase
       .from("driver_sessions")
       .update({ session_token_hash: null, is_online: false })
-      .eq("employee_id", employeeId),
+      .eq("employee_id", employeeId)
+      .eq("tenant_id", tenantId),
   ]);
 }
 
@@ -232,8 +234,17 @@ async function createActivation(supabase: SupabaseClient, body: Record<string, u
   if (!employeeId) return { status: 400, body: { error: "An employee id is required." } };
   if (!isEmail(email)) return { status: 400, body: { error: "This employee has no valid email on file. Add one first." } };
 
+  // Only employees of the caller's own company.
+  const { data: employee } = await supabase
+    .from("app_employees")
+    .select("id")
+    .eq("id", employeeId)
+    .eq("tenant_id", caller.tenantId)
+    .maybeSingle();
+  if (!employee) return { status: 404, body: { error: "That employee wasn't found." } };
+
   // A resend invalidates everything that came before it.
-  await revokeEmployee(supabase, employeeId);
+  await revokeEmployee(supabase, employeeId, caller.tenantId);
 
   const activationKey = generateActivationKey();
   const expiresAt = new Date(Date.now() + ACTIVATION_EXPIRY_HOURS * 60 * 60 * 1000).toISOString();
@@ -262,7 +273,7 @@ async function revoke(supabase: SupabaseClient, body: Record<string, unknown>): 
   if (caller.role !== "owner") return { status: 403, body: { error: "Only an owner can manage driver access." } };
   const employeeId = typeof body.employeeId === "string" ? body.employeeId.trim() : "";
   if (!employeeId) return { status: 400, body: { error: "An employee id is required." } };
-  await revokeEmployee(supabase, employeeId);
+  await revokeEmployee(supabase, employeeId, caller.tenantId);
   return { status: 200, body: { ok: true } };
 }
 

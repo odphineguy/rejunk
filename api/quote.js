@@ -494,7 +494,7 @@ async function quoteForStaff(db, body) {
   const { data: session, error: sessionError } = await db.from("staff_sessions").select("staff_id,expires_at").eq("token", body.token).maybeSingle();
   if (sessionError || !session || new Date(session.expires_at).getTime() <= Date.now())
     return { status: 401, body: { error: "Sign in required." } };
-  const { data: staff, error: staffError } = await db.from("staff").select("id,role,active").eq("id", session.staff_id).maybeSingle();
+  const { data: staff, error: staffError } = await db.from("staff").select("id,role,active,tenant_id").eq("id", session.staff_id).maybeSingle();
   if (staffError || !staff?.active || !["owner", "office"].includes(staff.role))
     return { status: 403, body: { error: "Office access required." } };
   if (["facilityId", "vehicleId", "materialId"].some(
@@ -506,11 +506,11 @@ async function quoteForStaff(db, body) {
     };
   }
   const responses = await Promise.all([
-    db.from("facilities").select("*").eq("id", body.facilityId).eq("is_active", true).maybeSingle(),
-    db.from("vehicles").select("*").eq("id", body.vehicleId).eq("is_active", true).maybeSingle(),
-    db.from("material_pricing_rules").select("*").eq("id", body.materialId).eq("is_active", true).maybeSingle(),
-    db.from("pricing_defaults").select("*").eq("id", 1).maybeSingle(),
-    db.from("volume_benchmarks").select("*")
+    db.from("facilities").select("*").eq("id", body.facilityId).eq("tenant_id", staff.tenant_id).eq("is_active", true).maybeSingle(),
+    db.from("vehicles").select("*").eq("id", body.vehicleId).eq("tenant_id", staff.tenant_id).eq("is_active", true).maybeSingle(),
+    db.from("material_pricing_rules").select("*").eq("id", body.materialId).eq("tenant_id", staff.tenant_id).eq("is_active", true).maybeSingle(),
+    db.from("pricing_defaults").select("*").eq("id", 1).eq("tenant_id", staff.tenant_id).maybeSingle(),
+    db.from("volume_benchmarks").select("*").eq("tenant_id", staff.tenant_id)
   ]);
   if (responses.some((r) => r.error))
     return {

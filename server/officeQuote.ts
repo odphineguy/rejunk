@@ -41,7 +41,7 @@ export async function quoteForStaff(
     return { status: 401, body: { error: "Sign in required." } };
   const { data: staff, error: staffError } = await db
     .from("staff")
-    .select("id,role,active")
+    .select("id,role,active,tenant_id")
     .eq("id", session.staff_id)
     .maybeSingle();
   if (staffError || !staff?.active || !["owner", "office"].includes(staff.role))
@@ -59,28 +59,37 @@ export async function quoteForStaff(
       body: { error: "Select a material, vehicle, and facility." },
     };
   }
-  // IDs select trusted configuration; client-supplied costs/margins are ignored.
+  // IDs select trusted configuration from the caller's own company;
+  // client-supplied costs/margins are ignored.
   const responses = await Promise.all([
     db
       .from("facilities")
       .select("*")
       .eq("id", body.facilityId)
+      .eq("tenant_id", staff.tenant_id)
       .eq("is_active", true)
       .maybeSingle(),
     db
       .from("vehicles")
       .select("*")
       .eq("id", body.vehicleId)
+      .eq("tenant_id", staff.tenant_id)
       .eq("is_active", true)
       .maybeSingle(),
     db
       .from("material_pricing_rules")
       .select("*")
       .eq("id", body.materialId)
+      .eq("tenant_id", staff.tenant_id)
       .eq("is_active", true)
       .maybeSingle(),
-    db.from("pricing_defaults").select("*").eq("id", 1).maybeSingle(),
-    db.from("volume_benchmarks").select("*"),
+    db
+      .from("pricing_defaults")
+      .select("*")
+      .eq("id", 1)
+      .eq("tenant_id", staff.tenant_id)
+      .maybeSingle(),
+    db.from("volume_benchmarks").select("*").eq("tenant_id", staff.tenant_id),
   ]);
   if (responses.some(r => r.error))
     return {
