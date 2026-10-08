@@ -87,15 +87,21 @@ async function ownerCompany(db: SupabaseClient, token: unknown) {
   const staff = await checked(
     db
       .from("staff")
-      .select("active,role,auth_user_id")
+      .select("active,role,auth_user_id,tenant_id")
       .eq("id", session.staff_id)
       .maybeSingle()
   );
   if (!staff?.active || staff.role !== "owner" || !staff.auth_user_id)
     throw new PaymentError(403, "Owner access required.");
-  // Explicit interim account assignment; no request-selected account/company.
+  // Resolve the company from verified staff, never from request fields or a slug.
+  if (!staff.tenant_id)
+    throw new PaymentError(403, "Company owner access required.");
   const company = await checked(
-    db.from("companies").select("id,slug").eq("slug", "progressive").single()
+    db
+      .from("companies")
+      .select("id,slug")
+      .eq("id", staff.tenant_id)
+      .maybeSingle()
   );
   if (!company)
     throw new PaymentError(503, "Company configuration is missing.");
@@ -167,6 +173,16 @@ export async function invoicePayment(body: Record<string, unknown>) {
   )
     throw new PaymentError(400, "Choose an invoice and payment action.");
   const invoiceId = body.invoiceId;
+  const ownedInvoice = await checked(
+    db
+      .from("app_invoices")
+      .select("data")
+      .eq("id", invoiceId)
+      .eq("tenant_id", company.id)
+      .maybeSingle()
+  );
+  if (!ownedInvoice)
+    throw new PaymentError(404, "Invoice not found for this company.");
   const binding = await checked(
     db
       .from("invoice_payment_ownership")
@@ -182,6 +198,7 @@ export async function invoicePayment(body: Record<string, unknown>) {
       .from("invoice_checkout_attempts")
       .select("*")
       .eq("invoice_id", invoiceId)
+      .eq("company_id", company.id)
       .eq("livemode", live)
       .in("state", ["creating", "open"])
       .maybeSingle()
@@ -229,28 +246,25 @@ export async function invoicePayment(body: Record<string, unknown>) {
   }
   if (body.action !== "create") return { paid: false, livemode: live };
   const invoiceRow = await checked(
-    db.from("app_invoices").select("data").eq("id", invoiceId).single()
+    db
+      .from("app_invoices")
+      .select("data")
+      .eq("id", invoiceId)
+      .eq("tenant_id", company.id)
+      .maybeSingle()
   );
   if (!invoiceRow) throw new PaymentError(404, "Invoice not found.");
   const { invoice, cents } = payableInvoice(invoiceRow.data);
   if (invoice.id !== invoiceId)
     throw new PaymentError(409, "Invoice record is inconsistent.");
-  // Read both today's key-only schema and Claude's upcoming company schema.
-  // Legacy settings are allowed only while Progressive is the sole company.
-  const settingsRows = await checked(
-    db.from("app_settings").select("*").eq("key", "invoices")
+  const settings = await checked(
+    db
+      .from("app_settings")
+      .select("value")
+      .eq("key", "invoices")
+      .eq("tenant_id", company.id)
+      .maybeSingle()
   );
-  let settings = settingsRows?.find(row => row.tenant_id === company.id);
-  if (
-    !settings &&
-    settingsRows?.some(row => !row.tenant_id || row.tenant_id === "progressive")
-  ) {
-    const companies = await checked(db.from("companies").select("id").limit(2));
-    if (companies?.length === 1 && companies[0].id === company.id)
-      settings = settingsRows.find(
-        row => !row.tenant_id || row.tenant_id === "progressive"
-      );
-  }
   if (settings?.value?.acceptCardPayments !== true)
     throw new PaymentError(
       409,

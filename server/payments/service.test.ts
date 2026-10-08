@@ -71,7 +71,15 @@ beforeEach(() => {
         expires_at: new Date(Date.now() + 60_000).toISOString(),
       },
     ],
-    staff: [{ id: "staff", active: true, role: "owner", auth_user_id: "user" }],
+    staff: [
+      {
+        id: "staff",
+        active: true,
+        role: "owner",
+        auth_user_id: "user",
+        tenant_id: "progressive-id",
+      },
+    ],
     companies: [{ id: "progressive-id", slug: "progressive" }],
     memberships: [
       {
@@ -84,6 +92,7 @@ beforeEach(() => {
     app_invoices: [
       {
         id: "invoice",
+        tenant_id: "progressive-id",
         data: {
           id: "invoice",
           invoiceNumber: 1,
@@ -162,6 +171,57 @@ describe("server collection authorization", () => {
     ).rejects.toThrow("Invoice not found for this company");
     expect(fixtures.retrieveAccount).not.toHaveBeenCalled();
   });
+  it("rejects an invoice whose tenant disagrees with the ownership bridge", async () => {
+    fixtures.rows.app_invoices[0].tenant_id = "other-company";
+    await expect(invoicePayment(request)).rejects.toThrow(
+      "Invoice not found for this company"
+    );
+    expect(fixtures.retrieveAccount).not.toHaveBeenCalled();
+  });
+  it.each([undefined, null, "missing-company"])(
+    "fails closed for an absent staff company: %s",
+    async tenant_id => {
+      fixtures.rows.staff[0].tenant_id = tenant_id;
+      await expect(invoicePayment(request)).rejects.toThrow(
+        /Company (owner access required|configuration is missing)/
+      );
+      expect(fixtures.retrieveAccount).not.toHaveBeenCalled();
+    }
+  );
+  it("cannot substitute another membership for the staff company", async () => {
+    fixtures.rows.staff[0].tenant_id = "other-company";
+    fixtures.rows.companies.push({ id: "other-company", slug: "other" });
+    await expect(
+      invoicePayment({ ...request, companyId: "progressive-id" })
+    ).rejects.toThrow("Company owner access required");
+    expect(fixtures.retrieveAccount).not.toHaveBeenCalled();
+  });
+  it("uses a second company's staff identity, membership, invoice and settings", async () => {
+    fixtures.rows.companies.push({ id: "other-company", slug: "other" });
+    fixtures.rows.staff[0].tenant_id = "other-company";
+    fixtures.rows.memberships[0].tenant_id = "other-company";
+    fixtures.rows.app_invoices[0].tenant_id = "other-company";
+    fixtures.rows.invoice_payment_ownership[0].company_id = "other-company";
+    fixtures.rows.app_settings = [
+      {
+        key: "invoices",
+        tenant_id: "progressive-id",
+        value: { acceptCardPayments: false },
+      },
+      {
+        key: "invoices",
+        tenant_id: "other-company",
+        value: { acceptCardPayments: true },
+      },
+    ];
+    await expect(
+      invoicePayment({ ...request, companyId: "progressive-id" })
+    ).rejects.toThrow("Payment records could not be loaded or saved");
+    expect(fixtures.reserve).toHaveBeenCalledWith(
+      "reserve_invoice_checkout",
+      expect.objectContaining({ target_company: "other-company" })
+    );
+  });
   it("rejects a key for the wrong collecting account", async () => {
     process.env.STRIPE_ACCOUNT_ID = "acct_expected";
     await expect(invoicePayment(request)).rejects.toThrow(
@@ -172,28 +232,34 @@ describe("server collection authorization", () => {
 });
 
 describe("invoice settings ownership", () => {
-  it.each([undefined, "progressive", "progressive-id"])(
-    "accepts settings bound by %s",
+  it("uses settings for the verified staff company", async () => {
+    fixtures.rows.app_settings = [
+      {
+        key: "invoices",
+        tenant_id: "progressive-id",
+        value: { acceptCardPayments: true },
+      },
+    ];
+    await expect(invoicePayment(request)).rejects.toThrow(
+      "Payment records could not be loaded or saved"
+    );
+    expect(fixtures.reserve).toHaveBeenCalledWith(
+      "reserve_invoice_checkout",
+      expect.objectContaining({ target_company: "progressive-id" })
+    );
+  });
+  it.each([undefined, null, "progressive"])(
+    "rejects legacy settings bound by %s even with one company",
     async tenant_id => {
       fixtures.rows.app_settings = [
         { key: "invoices", tenant_id, value: { acceptCardPayments: true } },
       ];
       await expect(invoicePayment(request)).rejects.toThrow(
-        "Payment records could not be loaded or saved"
+        "Enable Card payments"
       );
-      expect(fixtures.reserve).toHaveBeenCalled();
+      expect(fixtures.reserve).not.toHaveBeenCalled();
     }
   );
-  it("rejects legacy shared settings after a second company exists", async () => {
-    fixtures.rows.app_settings = [
-      { key: "invoices", value: { acceptCardPayments: true } },
-    ];
-    fixtures.rows.companies.push({ id: "other", slug: "other" });
-    await expect(invoicePayment(request)).rejects.toThrow(
-      "Enable Card payments"
-    );
-    expect(fixtures.reserve).not.toHaveBeenCalled();
-  });
   it("never uses another company's settings", async () => {
     fixtures.rows.app_settings = [
       {

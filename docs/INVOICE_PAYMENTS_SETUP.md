@@ -26,18 +26,21 @@ Deployment and live activation have not been performed.
 No changes to `companies` or `memberships`. The migration adds server-only
 `invoice_payment_ownership` and `invoice_checkout_attempts`, plus service-only RPCs.
 
-The ownership migration explicitly binds existing invoices to Progressive only
-while Progressive is the sole company. New invoices use `app_invoices.tenant_id`
-when present; without it, they are accepted only while the database still has
-one company. Company B therefore cannot create an ambiguously owned invoice.
+The company UUID foundation and caller-company defaults are now applied.
+Payment requests resolve the company from the verified staff record's `tenant_id`
+and require a current owner membership for that same company. Request-supplied
+company IDs do not select the company. Invoice reads and Invoice Settings reads
+are scoped to that UUID; null and text `progressive` settings are no longer used.
 
-Before Claude introduces Company B, coordinate `app_invoices.tenant_id` backfill
-with `invoice_payment_ownership`. The invoice company cannot change after the
-ownership link exists. The API verifies that link before any Stripe request.
-Invoice settings currently use the key-only `app_settings` schema. The server
-also accepts company UUID settings when that column is introduced. Legacy
-key-only or text `progressive` settings are usable only while Progressive is
-the sole company; they fail closed once a second company exists.
+The `invoice_payment_ownership` bridge remains as an additional consistency guard
+and is still used by the checkout RPCs. The API checks both `app_invoices.tenant_id`
+and the bridge before contacting Stripe, and scopes open attempts to the company.
+Retiring the bridge requires a coordinated database change, not just deleting
+its API check. Service-role inserts must explicitly stamp `tenant_id`; preserve
+`attempt.company_id` in `settle_invoice_checkout` when redefining that function.
+
+This is company-aware authorization, not per-company Stripe collection setup:
+the configured collecting account remains Abe Media until Connect is implemented.
 
 ## Setup
 
@@ -98,7 +101,7 @@ invoice/accounting behavior. No live invoice was altered during development.
 ## Validation
 
 - `pnpm check`
-- `pnpm test` (63 passing tests, including payment safety/authorization tests)
+- `pnpm test` (71 passing tests, including payment safety/authorization tests)
 - `pnpm build`
 - `psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/security/test-invoice-checkout.sql`
   **Only use an empty disposable database**; this script creates fixture

@@ -160,12 +160,14 @@ async function ownerCompany(db, token) {
   if (!session || !Number.isFinite(Date.parse(session.expires_at)) || Date.parse(session.expires_at) <= Date.now())
     throw new PaymentError(401, "Sign in required.");
   const staff = await checked(
-    db.from("staff").select("active,role,auth_user_id").eq("id", session.staff_id).maybeSingle()
+    db.from("staff").select("active,role,auth_user_id,tenant_id").eq("id", session.staff_id).maybeSingle()
   );
   if (!staff?.active || staff.role !== "owner" || !staff.auth_user_id)
     throw new PaymentError(403, "Owner access required.");
+  if (!staff.tenant_id)
+    throw new PaymentError(403, "Company owner access required.");
   const company = await checked(
-    db.from("companies").select("id,slug").eq("slug", "progressive").single()
+    db.from("companies").select("id,slug").eq("id", staff.tenant_id).maybeSingle()
   );
   if (!company)
     throw new PaymentError(503, "Company configuration is missing.");
@@ -211,6 +213,11 @@ async function invoicePayment(body) {
   if (!["create", "refresh", "cancel"].includes(String(body.action)) || typeof body.invoiceId !== "string" || body.invoiceId.length > 200)
     throw new PaymentError(400, "Choose an invoice and payment action.");
   const invoiceId = body.invoiceId;
+  const ownedInvoice = await checked(
+    db.from("app_invoices").select("data").eq("id", invoiceId).eq("tenant_id", company.id).maybeSingle()
+  );
+  if (!ownedInvoice)
+    throw new PaymentError(404, "Invoice not found for this company.");
   const binding = await checked(
     db.from("invoice_payment_ownership").select("company_id").eq("invoice_id", invoiceId).maybeSingle()
   );
@@ -218,7 +225,7 @@ async function invoicePayment(body) {
     throw new PaymentError(404, "Invoice not found for this company.");
   const accountId = await stripeAccount(stripe);
   const previous = await checked(
-    db.from("invoice_checkout_attempts").select("*").eq("invoice_id", invoiceId).eq("livemode", live).in("state", ["creating", "open"]).maybeSingle()
+    db.from("invoice_checkout_attempts").select("*").eq("invoice_id", invoiceId).eq("company_id", company.id).eq("livemode", live).in("state", ["creating", "open"]).maybeSingle()
   );
   if (previous) {
     if (previous.account_id !== accountId)
@@ -259,23 +266,15 @@ async function invoicePayment(body) {
   }
   if (body.action !== "create") return { paid: false, livemode: live };
   const invoiceRow = await checked(
-    db.from("app_invoices").select("data").eq("id", invoiceId).single()
+    db.from("app_invoices").select("data").eq("id", invoiceId).eq("tenant_id", company.id).maybeSingle()
   );
   if (!invoiceRow) throw new PaymentError(404, "Invoice not found.");
   const { invoice, cents } = payableInvoice(invoiceRow.data);
   if (invoice.id !== invoiceId)
     throw new PaymentError(409, "Invoice record is inconsistent.");
-  const settingsRows = await checked(
-    db.from("app_settings").select("*").eq("key", "invoices")
+  const settings = await checked(
+    db.from("app_settings").select("value").eq("key", "invoices").eq("tenant_id", company.id).maybeSingle()
   );
-  let settings = settingsRows?.find((row) => row.tenant_id === company.id);
-  if (!settings && settingsRows?.some((row) => !row.tenant_id || row.tenant_id === "progressive")) {
-    const companies = await checked(db.from("companies").select("id").limit(2));
-    if (companies?.length === 1 && companies[0].id === company.id)
-      settings = settingsRows.find(
-        (row) => !row.tenant_id || row.tenant_id === "progressive"
-      );
-  }
   if (settings?.value?.acceptCardPayments !== true)
     throw new PaymentError(
       409,
