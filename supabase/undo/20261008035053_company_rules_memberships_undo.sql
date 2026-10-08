@@ -1,4 +1,4 @@
--- UNDO for 20261008025419_company_rules_memberships.sql (step 3).
+-- UNDO for 20261008035053_company_rules_memberships.sql (step 3).
 -- Puts back the pre-step-3 rules (Progressive id in 31 rules, no company_scope)
 -- and the function bodies exactly as they were live on 2026-10-07.
 -- Memberships rows are left as they are (harmless; Abe's existed before).

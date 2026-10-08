@@ -18,7 +18,7 @@
 -- 5. Job photo files: office access only to the caller's company's jobs.
 -- 6. profiles (legacy, unused by the app): each person sees only their own row.
 --
--- Undo: supabase/undo/20261008025419_company_rules_memberships_undo.sql
+-- Undo: supabase/undo/20261008035053_company_rules_memberships_undo.sql
 begin;
 
 -- 1. Memberships follow the staff table -----------------------------------------
