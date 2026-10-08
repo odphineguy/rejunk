@@ -1,4 +1,4 @@
--- UNDO for 20261008060000_settings_drop_single_copy.sql (settings fix part 4).
+-- UNDO for 20261008053812_settings_drop_single_copy.sql (settings fix part 4).
 -- Only works while no second company has its own setting / pricing defaults row:
 -- the old rules allow one copy in total. Remove extra rows first if needed.
 begin;
