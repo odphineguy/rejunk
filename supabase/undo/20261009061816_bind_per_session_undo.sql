@@ -1,4 +1,4 @@
--- Undo 20261009060000_bind_per_session: back to one binding per auth user.
+-- Undo 20261009061816_bind_per_session: back to one binding per auth user.
 -- Rows can't be reduced to one per user safely, so all are cleared; each device
 -- re-binds on its next page load.
 

@@ -11,7 +11,7 @@
 -- becomes a view that only shows the caller's current session. Only the writer,
 -- bind_business_identity, changes. Existing rows can't be tied to a session, so
 -- they are cleared; each device re-binds on its next page load.
--- Undo: supabase/undo/20261009060000_bind_per_session_undo.sql
+-- Undo: supabase/undo/20261009061816_bind_per_session_undo.sql
 
 create function app_private.jwt_session()
 returns uuid
