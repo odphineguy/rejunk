@@ -244,6 +244,13 @@ MCP Apps widgets (schedule, estimate builder) and a Rejunk skills plugin.
 ---
 
 ## Known Issues (found in Step 1; out of scope for this plan)
+- **No "sign out everywhere" for yourself (follow-up, 2026-10-08).** Since the unlock became
+  per-sign-in (migration 20261009061816), signing out only signs out that one device, and
+  changing your PIN doesn't sign out the others either. The owner can still cut off an office person
+  everywhere (remove access, or Resend Login Email = new temp PIN), but nobody can do it for
+  themselves, the owner included. Fix later: a "Sign out all devices" button on My Profile
+  (delete the person's staff_sessions server-side; unlocks drop with them). Also consider doing it
+  automatically on PIN change. Until then, Claude can do it from the database on request.
 - **Drivers see too much.** `get_driver_today` sends the customer's phone number and the
   office's internal notes to the driver app.
 - **"I called dispatch" likely fails.** `driver_confirm_dispatch_called` still uses the old
