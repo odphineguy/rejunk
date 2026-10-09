@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useStaffSession } from "@/hooks/useStaffSession";
 import NotFound from "@/pages/NotFound";
+import OAuthConsent from "@/pages/OAuthConsent";
 import { AppShell } from "./components/OperationsShell";
 import { StaffSessionGate } from "./components/StaffSessionGate";
 import { appDataReady } from "./lib/appHydration";
@@ -143,6 +144,7 @@ export default function StaffApp() {
       <Toaster />
       <Switch>
         <Route path={"/login"} component={StaffLogin} />
+        <Route path={"/oauth/consent"} component={OAuthConsent} />
         <Route>
           <StaffSessionGate>
             <AppShell>

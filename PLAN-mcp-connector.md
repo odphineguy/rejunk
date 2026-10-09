@@ -128,6 +128,12 @@ pass for that user.
 **Done when** opening an authorize link shows the Rejunk login and then a Rejunk consent screen
 ("Claude wants to read jobs…"), and clicking Approve returns a code.
 
+**Progress (2026-10-08):** approve page `client/src/pages/OAuthConsent.tsx` + route built
+(needs the full email-code + PIN sign-in; Approve only for return hosts that exactly match
+claude.ai / chatgpt.com / localhost / 127.0.0.1 — `lib/oauthTrust.ts`, tested). With dynamic
+registration there is no project-wide redirect allowlist; that host list plays that role.
+Dashboard switches + live test still to do.
+
 ## Phase 3 — MCP server skeleton
 **Goal:** a working MCP endpoint that checks the AI's pass and queries as that user.
 
@@ -136,6 +142,10 @@ pass for that user.
 - New `mcp/` folder: pass check, a Supabase client that acts as the logged-in user, and the tool
   list.
 - `vercel.json`: serve `/.well-known/oauth-protected-resource`.
+- **Gotcha found in Phase 2:** the database only lets a real account see business data after a
+  PIN token is bound to it (`bind_business_identity`). An AI pass carries no PIN token, so this
+  phase must add a rule that accepts an approved AI pass for a company member (read-only), or the
+  AI sees nothing.
 - An import guard script, run inside `pnpm check`. It fails if anything in `mcp/` imports
   `server/*` or reads `SUPABASE_SERVICE_ROLE_KEY`.
 - `package.json`: the MCP dependencies.
