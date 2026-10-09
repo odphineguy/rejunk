@@ -132,7 +132,12 @@ pass for that user.
 (needs the full email-code + PIN sign-in; Approve only for return hosts that exactly match
 claude.ai / chatgpt.com / localhost / 127.0.0.1 — `lib/oauthTrust.ts`, tested). With dynamic
 registration there is no project-wide redirect allowlist; that host list plays that role.
-Dashboard switches + live test still to do.
+OAuth Server + DCR turned ON 2026-10-08 (Site URL still `http://localhost:3000` — must become
+`https://rejunk.vercel.app` when the page is pushed). Local test passed: approve → code → pass for
+Abe; deny → access_denied; look-alike host blocked. That test found AI passes inherited the PIN
+unlock (keyed by account) — fixed by migration 20261009061816 (unlock bound to the signing-in
+session; also closes "email-code-only device inherits the PIN"). After the fix an AI pass reads 0
+rows; isolation test 347/0. Remaining: push + Site URL switch.
 
 ## Phase 3 — MCP server skeleton
 **Goal:** a working MCP endpoint that checks the AI's pass and queries as that user.
@@ -142,10 +147,9 @@ Dashboard switches + live test still to do.
 - New `mcp/` folder: pass check, a Supabase client that acts as the logged-in user, and the tool
   list.
 - `vercel.json`: serve `/.well-known/oauth-protected-resource`.
-- **Gotcha found in Phase 2:** the database only lets a real account see business data after a
-  PIN token is bound to it (`bind_business_identity`). An AI pass carries no PIN token, so this
-  phase must add a rule that accepts an approved AI pass for a company member (read-only), or the
-  AI sees nothing.
+- **From Phase 2:** business data needs a PIN unlock bound to the caller's own session
+  (migration 20261009061816). An AI pass has its own session and no PIN, so it sees nothing — this
+  phase must add a deliberate read-only rule for approved AI passes of company members.
 - An import guard script, run inside `pnpm check`. It fails if anything in `mcp/` imports
   `server/*` or reads `SUPABASE_SERVICE_ROLE_KEY`.
 - `package.json`: the MCP dependencies.
