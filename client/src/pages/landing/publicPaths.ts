@@ -12,6 +12,7 @@ export const PUBLIC_PATHS = [
   "/piano-moving",
   "/assembly-handyman",
   "/estimate",
+  "/book",
   "/instant-estimate",
   "/terms",
   "/privacy",

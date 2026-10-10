@@ -91,6 +91,11 @@ export const PAGE_META = {
     description:
       "Furniture, shelving, bed frame, desk, and outdoor furniture assembly across Phoenix. Patient, careful, senior-friendly service.",
   },
+  book: {
+    title: "Book Online | Progressive Transportation Services Phoenix",
+    description:
+      "Book your move, junk removal, or cargo van delivery online — pick a service, see the price, and choose an arrival window.",
+  },
   estimate: {
     title: "Get a Free Estimate | Progressive Transportation Services Phoenix",
     description:

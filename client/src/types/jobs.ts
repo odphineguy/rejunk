@@ -22,8 +22,11 @@ export type JobStatus = LegacyJobStatus | DriverJobStatus;
 
 export type PaymentStatus = "unpaid" | "deposit_paid" | "paid" | "refunded";
 
-/** `thumbtack` = created by the pipeline's ticket extractor from a booked Thumbtack thread. */
-export type JobSource = "manual" | "estimate" | "demo" | "thumbtack";
+/**
+ * `thumbtack` = created by the pipeline's ticket extractor from a booked Thumbtack thread.
+ * `website` = booked by the customer on the public /book page (server/booking/handler.ts).
+ */
+export type JobSource = "manual" | "estimate" | "demo" | "thumbtack" | "website";
 
 export type JobLeadSource = "thumbtack" | "phone" | "repeat_customer" | "referral" | "website" | "housecall_pro" | "other";
 
@@ -76,7 +79,8 @@ export interface JobQuote {
   low: number;
   high: number;
   includedHours?: number;
-  source: "david" | "estimate" | "manual";
+  /** `booking` = priced by the public /book page from shared/bookingCatalog.ts. */
+  source: "david" | "estimate" | "manual" | "booking";
 }
 
 export interface JobTvInstall {

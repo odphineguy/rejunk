@@ -550,3 +550,22 @@ Jackie/Jacqueline Gilliam's invoice/job matches and prior received totals before
 recording either payment; do not collect the same funds again.
 ACH collection, refunds/disputes and Progressive Connect remain later work;
 live collection is not activated by this feature. Push only on explicit request.
+
+### Online booking /book (October 9, 2026 — built, not linked yet)
+
+ONLINE_BOOKING_SPEC phase 1. Public `/book` (`pages/landing/BookPage.tsx`): ZIP (850xx–853xx) →
+service → Loading/Unloading (or one) address with flights of stairs → contact + SMS consent → arrival
+window (8–10am / 12–2pm Arizona) → confirm. Menu + prices + stairs rule: `shared/bookingCatalog.ts`
+(moving from `movingRates.ts`; junk prices copied from the Progressive pricebook). `POST /api/book`
+(`server/booking/handler.ts`, bundled to the generated `api/book.js` by
+`scripts/security/build-booking-api.mjs`; dev middleware in `vite.config.ts`) with actions
+`options` / `availability` / `book`. Company = `SITE_COMPANY_SLUG`. Availability
+(`server/booking/availability.ts`, tested) counts `jobs` + `hcp_appointments` per truck/van half-day.
+A booking writes a client (matched by phone/email), a `jobs` ticket (`source = website`,
+`quote.source = booking`, BOX-01 on truck moves, empty crew → Dispatch Center) and a draft
+`app_invoices` row; the $50 deposit is collected by the office and recorded with Record payment
+received (no card online yet). Alerts: Resend email to `LEAD_TO`, confirmation email to the customer,
+and an owner text via Twilio when `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` /
+`BOOKING_ALERT_PHONES` are set on Vercel. Settings → Online Booking controls on/off, same-day, lead
+time and which services show. The site's "Book online" buttons still go to HCP (`bookingUrl()`).
+

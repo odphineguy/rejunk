@@ -19,35 +19,33 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { getPricebook } from "@/lib/pricebookStorage";
+import { BOOKING_DEPOSIT, BOOKING_REFUND_HOURS, BOOKING_SERVICES } from "@shared/bookingCatalog";
 import { loadSettingsSection, saveSettingsSection } from "@/lib/settingsStorage";
 
 const SECTION = "online-booking";
 
 const LEAD_TIMES = ["1 hour", "2 hours", "4 hours", "Next day"] as const;
 
+/** Read by /api/book (server/booking/handler.ts) — keep the field names in sync. */
 type OnlineBookingState = {
   enabled: boolean;
-  requirePayment: boolean;
   allowSameDay: boolean;
   leadTime: string;
-  /** null means "all services enabled" (categories load dynamically). */
-  enabledServiceIds: string[] | null;
+  /** Booking catalog ids (shared/bookingCatalog.ts); null = every service. */
+  bookableServiceIds: string[] | null;
 };
 
 const DEFAULTS: OnlineBookingState = {
   enabled: true,
-  requirePayment: false,
   allowSameDay: true,
   leadTime: "2 hours",
-  enabledServiceIds: null,
+  bookableServiceIds: null,
 };
 
 export default function OnlineBooking() {
   const [settings, setSettings] = useState<OnlineBookingState>(() =>
     loadSettingsSection(SECTION, DEFAULTS)
   );
-  const [categories] = useState(() => getPricebook().categories);
 
   const update = (patch: Partial<OnlineBookingState>) =>
     setSettings((prev) => ({ ...prev, ...patch }));
@@ -57,19 +55,16 @@ export default function OnlineBooking() {
     toast.success("Settings saved");
   };
 
-  const isServiceEnabled = (categoryId: string) =>
-    settings.enabledServiceIds === null || settings.enabledServiceIds.includes(categoryId);
+  const isServiceEnabled = (serviceId: string) =>
+    !settings.bookableServiceIds || settings.bookableServiceIds.includes(serviceId);
 
-  const toggleService = (categoryId: string, checked: boolean) => {
+  const toggleService = (serviceId: string, checked: boolean) => {
     setSettings((prev) => {
-      const current =
-        prev.enabledServiceIds === null
-          ? categories.map((category) => category.id)
-          : prev.enabledServiceIds;
+      const current = prev.bookableServiceIds ?? BOOKING_SERVICES.map((service) => service.id);
       const next = checked
-        ? Array.from(new Set([...current, categoryId]))
-        : current.filter((id) => id !== categoryId);
-      return { ...prev, enabledServiceIds: next };
+        ? Array.from(new Set([...current, serviceId]))
+        : current.filter((id) => id !== serviceId);
+      return { ...prev, bookableServiceIds: next };
     });
   };
 
@@ -86,17 +81,6 @@ export default function OnlineBooking() {
                   checked={settings.enabled}
                   onCheckedChange={(checked) => update({ enabled: checked })}
                   aria-label="Enable online booking"
-                />
-              }
-            />
-            <SettingsToggleRow
-              label="Require Payment on Booking"
-              help="Collect a payment method before the booking is confirmed."
-              control={
-                <Switch
-                  checked={settings.requirePayment}
-                  onCheckedChange={(checked) => update({ requirePayment: checked })}
-                  aria-label="Require payment on booking"
                 />
               }
             />
@@ -137,36 +121,30 @@ export default function OnlineBooking() {
 
             <SettingsField
               label="Available Services"
-              help="Choose which Pricebook categories customers can book online."
+              help="Choose which services customers can book on the website's booking page."
             >
-              {categories.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No Pricebook categories found. Add categories on the Pricebook page first.
-                </p>
-              ) : (
-                <div className="space-y-2.5 rounded-lg border border-border p-4">
-                  {categories.map((category) => (
-                    <label
-                      key={category.id}
-                      className="flex cursor-pointer items-center gap-3 text-sm text-foreground"
-                    >
-                      <Checkbox
-                        checked={isServiceEnabled(category.id)}
-                        onCheckedChange={(checked) =>
-                          toggleService(category.id, checked === true)
-                        }
-                        aria-label={`Offer ${category.name} online`}
-                      />
-                      {category.name}
-                    </label>
-                  ))}
-                </div>
-              )}
+              <div className="space-y-2.5 rounded-lg border border-border p-4">
+                {BOOKING_SERVICES.map((service) => (
+                  <label
+                    key={service.id}
+                    className="flex cursor-pointer items-center gap-3 text-sm text-foreground"
+                  >
+                    <Checkbox
+                      checked={isServiceEnabled(service.id)}
+                      onCheckedChange={(checked) => toggleService(service.id, checked === true)}
+                      aria-label={`Offer ${service.name} online`}
+                    />
+                    {service.name}
+                  </label>
+                ))}
+              </div>
             </SettingsField>
 
             <InfoCallout>
-              The customer-facing booking page isn't live yet — these settings will apply as
-              soon as it launches.
+              The booking page is at /book. Arrival windows are 8–10am and 12–2pm, and open times
+              count Rejunk jobs and Housecall Pro appointments. Customers are told a ${BOOKING_DEPOSIT}{" "}
+              deposit holds the spot (refundable {BOOKING_REFUND_HOURS}+ hours ahead) — no card is taken
+              online yet, so collect it and use Record payment received on the booking's invoice.
             </InfoCallout>
           </div>
         </SettingsCard>

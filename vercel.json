@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "node scripts/security/build-office-quote.mjs && node scripts/security/build-payment-api.mjs && node scripts/security/build-mcp.mjs && vite build && tsx scripts/prerender.ts",
+  "buildCommand": "node scripts/security/build-office-quote.mjs && node scripts/security/build-payment-api.mjs && node scripts/security/build-mcp.mjs && node scripts/security/build-booking-api.mjs && vite build && tsx scripts/prerender.ts",
   "outputDirectory": "dist/public",
   "framework": "vite",
   "rewrites": [

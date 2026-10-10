@@ -10,6 +10,36 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
 
 ---
 
+## 2026-10-09 — Online booking (/book) v1
+
+**Decision**
+- `/book` is built and in the repo but NOT linked from the website yet; `bookingUrl()` still points at HCP
+  until Abe tests a real booking and says to switch.
+- The booking menu is a code catalog (`shared/bookingCatalog.ts`), not the pricebook: the pricebook has
+  old generic rows next to Progressive's, and Abe's answer was "the rate-card lineup" (moving packages,
+  hourly, labor only, pianos, van flats, junk loads). Moving prices come from `movingRates.ts`; junk
+  prices mirror the Progressive pricebook rows by hand.
+- One service per booking (no HCP-style cart yet); "Something else?" goes to /estimate.
+- Arrival windows 8–10am / 12–2pm. Capacity = the slot board (one AM + one PM per truck crew / van),
+  counting Rejunk tickets AND `hcp_appointments`. 2BR / Small House take the whole truck day. Labor-only
+  uses the truck crew. The window is re-checked at submit and again after the insert (race backout).
+- Stairs: $75 per extra flight per address on flat moves, $75 per location for pianos, priced on /book only
+  (`MOVING_RATES.chargeStairs` is still false for the Estimate Builder / pipeline — not changed yet).
+- No card in v1: the $50 deposit is collected by the office and recorded with "Record payment received"
+  on the draft invoice each booking creates.
+- Alerts: email to LEAD_TO + customer confirmation email (Resend); owner text sent straight from the
+  endpoint through Twilio when `TWILIO_*` + `BOOKING_ALERT_PHONES` are set (not via the pipeline).
+
+**Rejected**
+- Pricebook subcategories + `bookable` flags now (migration + cleanup of the messy pricebook; too slow for
+  the HCP exit). A `booking_availability` SQL function (same rules live in one TS file, testable).
+
+**Open risks**
+- No closed-days setting: Oct 10–11 show open while the business is closed until Oct 12.
+- In-memory rate limits only (per warm Vercel instance) + honeypot.
+
+---
+
 ## 2026-10-05 — Shared company foundation agreed with Sol
 
 **Decision**

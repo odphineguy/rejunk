@@ -10,6 +10,8 @@ import ServicePage from "./ServicePage";
 // Supabase-backed pricing/settings cache, the OpenAI call, jsPDF) that the rest
 // of the marketing site avoids — keep them out of the home-page chunk.
 const InstantEstimatePage = lazy(() => import("./InstantEstimatePage"));
+// Online booking pulls in the rate card; keep it out of the home-page chunk.
+const BookPage = lazy(() => import("./BookPage"));
 
 /**
  * Router for the public marketing site (the lazy "Landing" bundle). App.tsx
@@ -36,6 +38,13 @@ export default function SiteRouter() {
         {() => <ServicePage slug="assembly-handyman" />}
       </Route>
       <Route path="/estimate" component={EstimatePage} />
+      <Route path="/book">
+        {() => (
+          <Suspense fallback={null}>
+            <BookPage />
+          </Suspense>
+        )}
+      </Route>
       <Route path="/instant-estimate">
         {() => (
           <Suspense fallback={null}>

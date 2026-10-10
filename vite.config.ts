@@ -558,6 +558,35 @@ function vitePluginMcpApi(): Plugin {
   };
 }
 
+// Dev-server twin of the Vercel api/book.js function (public online booking,
+// shared logic in server/booking/handler.ts).
+function vitePluginBookingApi(): Plugin {
+  return {
+    name: "rejunk-booking-api",
+    configureServer(server) {
+      server.middlewares.use("/api/book", (req, res) => {
+        let body = "";
+        req.on("data", chunk => { body += chunk; if (body.length > 32768) req.destroy(); });
+        req.on("end", async () => {
+          res.setHeader("Content-Type", "application/json");
+          res.setHeader("Cache-Control", "no-store");
+          if (req.method !== "POST") { res.statusCode = 405; res.end('{"error":"Use POST."}'); return; }
+          try {
+            const { handleBooking, clientIp } = await import("./server/booking/handler");
+            const result = await handleBooking(JSON.parse(body || "{}"), clientIp(req as any));
+            res.statusCode = result.status;
+            res.end(JSON.stringify(result.body));
+          } catch (error) {
+            console.error("[book-api]", error);
+            res.statusCode = 503;
+            res.end('{"error":"Booking service unavailable."}');
+          }
+        });
+      });
+    },
+  };
+}
+
 const plugins = [
   react(),
   tailwindcss(),
@@ -572,6 +601,7 @@ const plugins = [
   vitePluginVisionApi(),
   vitePluginPaymentApi(),
   vitePluginMcpApi(),
+  vitePluginBookingApi(),
 ];
 
 export default defineConfig(({ mode }) => {
@@ -598,6 +628,11 @@ export default defineConfig(({ mode }) => {
     "STRIPE_WEBHOOK_SECRET",
     "STRIPE_ACCOUNT_ID",
     "STRIPE_LIVE_ENABLED",
+    "SITE_COMPANY_SLUG",
+    "TWILIO_ACCOUNT_SID",
+    "TWILIO_AUTH_TOKEN",
+    "TWILIO_PHONE_NUMBER",
+    "BOOKING_ALERT_PHONES",
     "PAYMENT_BASE_URL",
   ]) {
     if (!process.env[key] && env[key]) {

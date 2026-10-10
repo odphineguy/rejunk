@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite --host",
-    "build": "node scripts/security/build-office-quote.mjs && node scripts/security/build-payment-api.mjs && node scripts/security/build-mcp.mjs && vite build && tsx scripts/prerender.ts && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "build": "node scripts/security/build-office-quote.mjs && node scripts/security/build-payment-api.mjs && node scripts/security/build-mcp.mjs && node scripts/security/build-booking-api.mjs && vite build && tsx scripts/prerender.ts && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "prerender": "tsx scripts/prerender.ts",
     "start": "NODE_ENV=production node dist/index.js",
     "preview": "vite preview --host",
@@ -14,7 +14,8 @@
     "format": "prettier --write .",
     "build:quote-api": "node scripts/security/build-office-quote.mjs",
     "build:payment-api": "node scripts/security/build-payment-api.mjs",
-    "build:mcp-api": "node scripts/security/build-mcp.mjs"
+    "build:mcp-api": "node scripts/security/build-mcp.mjs",
+    "build:booking-api": "node scripts/security/build-booking-api.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

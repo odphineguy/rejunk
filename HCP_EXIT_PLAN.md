@@ -103,6 +103,10 @@ reconciliation and safe collection before online booking.
   it must not gain payment-writing or service-role access.
 
 ### 3. Online booking + $50 deposit (ONLINE_BOOKING_SPEC phases 1–2; the biggest HCP hinge)
+> **October 9, 2026 — v1 built (Claude), not yet linked from the site.** `/book` + `/api/book` +
+> `shared/bookingCatalog.ts`; see AGENTS.md "Online booking" and DECISIONS.md 2026-10-09. The deposit is
+> recorded by the office (no card yet). The plan below is the original; v1 skipped the pricebook
+> subcategories, the cart and photo upload.
 - Add subcategories to the pricebook (a `parent_id` on categories) and a "bookable online" switch on each
   pricebook item.
 - New `booking_availability` database function. It must count both Rejunk jobs and HCP appointments, or the
