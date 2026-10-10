@@ -166,7 +166,10 @@ far) via `app_private.ai_reader()`, which needs the pass's session to belong to 
 app (`auth.sessions.oauth_client_id`), a live approval, and exactly one owner/office company.
 `bind_business_identity` refuses AI passes. Isolation test now gets a real AI pass per company:
 403 pass / 0 fail. Also fixed: Site URL lacked `https://`, so approvals went to a broken address.
-Next: step 2 = `mcp/` handler + `api/mcp.js` + import guard + Inspector test.
+Step 2 (2026-10-09, e238a53): `mcp/` endpoint + `api/mcp.js` + import guard in `pnpm check`;
+isolation test 423 / 0 with endpoint checks per company. Abe's own test PASSED locally: MCP Inspector
+→ live approve page (email code + PIN) → Approve → Connected → `rejunk_whoami` = Progressive, owner,
+22 jobs. Remaining: push + repeat the Inspector check against https://rejunk.vercel.app/api/mcp.
 
 ## Phase 4 — Read tools
 **Goal:** the AI can look things up safely.
