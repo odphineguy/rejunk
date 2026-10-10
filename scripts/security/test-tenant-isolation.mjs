@@ -8,6 +8,8 @@
 // Pairs tested (viewer → other company):
 //   WellSentry → Progressive, Progressive → WellSentry,
 //   Test Company B (created for the run) → Progressive, Progressive → B.
+// Each pair also checks an approved AI app pass (MCP connector Phase 3): it
+// reads only through mcp_* functions, only its own company, never unlocks.
 //
 // Runs against the real rejunk-prod project. It creates temporary test logins
 // (emails isolation-test-…@example.invalid, no usable PIN), one temporary
@@ -17,7 +19,7 @@
 // re-read afterwards to prove it.
 //
 // Usage: node --env-file=.env --import tsx scripts/security/test-tenant-isolation.mjs
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { handleStaffAction } from "../../server/staffAccess.ts";
 import { handleOfficeQuote } from "../../server/officeQuote.ts";
@@ -31,6 +33,8 @@ if (!url || !serviceKey || !anonKey) {
   process.exit(2);
 }
 const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
+// The MCP endpoint AI apps ask for (sent as `resource`; Supabase doesn't put it in the pass).
+const MCP_RESOURCE = "https://rejunk.vercel.app/api/mcp";
 const runId = `${Date.now().toString(36)}${randomBytes(2).toString("hex")}`;
 
 // Tables with a tenant_id the app or pipeline uses. Every row a viewer can
@@ -60,7 +64,7 @@ const fail = (name, detail = "") => results.push({ pair, name, ok: false, detail
 const note = (name, detail = "") => results.push({ pair, name, ok: true, note: true, detail });
 const check = (cond, name, detail) => (cond ? pass(name, detail) : fail(name, detail));
 
-const cleanup = { authUsers: [], companies: [], rows: [] };
+const cleanup = { authUsers: [], companies: [], rows: [], oauthClients: [] };
 let testerCount = 0;
 
 async function must(query, what) {
@@ -103,7 +107,63 @@ async function makeTester(company, role) {
   if (signed.error) throw new Error(`sign-in: ${signed.error.message}`);
   const bound = await client.rpc("bind_business_identity", { staff_token: token });
   if (bound.error || bound.data !== true) throw new Error(`bind: ${bound.error?.message ?? bound.data}`);
-  return { client, token, staffId: staff.id, email, company, role };
+  return { client, token, staffId: staff.id, userId, email, company, role };
+}
+
+/** A fresh sign-in for an existing tester: email code only, no PIN unlock. */
+async function plainSignIn(email) {
+  const client = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const link = await admin.auth.admin.generateLink({ type: "magiclink", email });
+  const signed = await client.auth.verifyOtp({ email, token: link.data?.properties?.email_otp, type: "email" });
+  if (signed.error) throw new Error(`plain sign-in: ${signed.error.message}`);
+  return client;
+}
+
+const b64url = (bytes) => Buffer.from(bytes).toString("base64url");
+
+/**
+ * A real AI pass for `tester`, through the same steps Claude takes: register an
+ * app (dynamic registration), ask for approval with PKCE, the tester approves
+ * (as /oauth/consent does), the app swaps the code for the pass.
+ */
+async function getAiPass(tester) {
+  const redirect = "http://localhost:53682/callback";
+  const reg = await fetch(`${url}/auth/v1/oauth/clients/register`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ client_name: `isolation-test-${runId}`, redirect_uris: [redirect], token_endpoint_auth_method: "none",
+      grant_types: ["authorization_code", "refresh_token"], response_types: ["code"] }),
+  });
+  const app = await reg.json();
+  if (!reg.ok) throw new Error(`register AI app: ${reg.status} ${JSON.stringify(app)}`);
+  cleanup.oauthClients.push(app.client_id);
+
+  const verifier = b64url(randomBytes(32));
+  const challenge = b64url(createHash("sha256").update(verifier).digest());
+  const query = new URLSearchParams({ response_type: "code", client_id: app.client_id, redirect_uri: redirect, state: "iso",
+    code_challenge: challenge, code_challenge_method: "S256", resource: MCP_RESOURCE, scope: "openid email" });
+  const asked = await fetch(`${url}/auth/v1/oauth/authorize?${query}`, { redirect: "manual" });
+  const authorizationId = new URL(asked.headers.get("location") ?? "", "http://x").searchParams.get("authorization_id");
+  if (!authorizationId) throw new Error(`authorize: ${asked.status} ${await asked.text()}`);
+
+  const approver = await plainSignIn(tester.email);
+  const details = await approver.auth.oauth.getAuthorizationDetails(authorizationId);
+  if (details.error) throw new Error(`approval details: ${details.error.message}`);
+  const approved = await approver.auth.oauth.approveAuthorization(authorizationId, { skipBrowserRedirect: true });
+  if (approved.error) throw new Error(`approve: ${approved.error.message}`);
+  const code = new URL(approved.data.redirect_url ?? approved.data.redirect_to).searchParams.get("code");
+
+  const swap = await fetch(`${url}/auth/v1/oauth/token`, {
+    method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: redirect, client_id: app.client_id,
+      code_verifier: verifier, resource: MCP_RESOURCE }),
+  });
+  const pass = await swap.json();
+  if (!swap.ok) throw new Error(`code swap: ${swap.status} ${JSON.stringify(pass)}`);
+  const client = createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${pass.access_token}` } },
+  });
+  return { client, pass: pass.access_token, clientId: app.client_id, approver };
 }
 
 /** One real row id per write-target table belonging to `company` (admin read). */
@@ -286,6 +346,78 @@ async function runPair(viewerCompany, otherCompany) {
     check(!setting.error && setting.data?.tenant_id === viewerCompany.id, "company can save its own copy of a setting another company has", setting.error?.message ?? `saved under ${setting.data?.tenant_id}`);
   }
   console.log(`own rows visible: ${JSON.stringify(visible)}`);
+
+  await runAiPass(office, viewerCompany, other);
+}
+
+/**
+ * 7. An approved AI app pass (MCP connector Phase 3). It reads only through the
+ * mcp_* functions and only its own company; tables stay closed, it can't
+ * unlock, and it stops working when the login or the approval goes away.
+ * Run last: it deactivates `tester`.
+ */
+async function runAiPass(tester, viewerCompany, other) {
+  const ai = await getAiPass(tester);
+  const db = ai.client;
+
+  const ownJobs = (await admin.from("jobs").select("id", { count: "exact", head: true }).eq("tenant_id", viewerCompany.id)).count;
+  const who = await db.rpc("mcp_whoami");
+  check(!who.error && who.data?.company?.slug === viewerCompany.slug && who.data?.role === tester.role,
+    "AI pass: whoami is own company", who.error?.message ?? `${who.data?.company?.slug} as ${who.data?.role}`);
+  check(!who.error && who.data?.jobs === ownJobs, "AI pass: job count is own company only",
+    who.error?.message ?? `${who.data?.jobs} (own company has ${ownJobs})`);
+
+  let opened = 0;
+  for (const table of TABLES) {
+    const rows = await db.from(table).select("tenant_id", { count: "exact", head: true });
+    if (!rows.error && rows.count > 0) { opened += 1; fail(`AI pass: direct read ${table}`, `${rows.count} rows`); }
+  }
+  check(opened === 0, "AI pass: every table stays closed", `${TABLES.length} tables, ${opened} readable`);
+
+  const rowsRpc = await db.rpc("business_rows", { resource: "jobs" });
+  check(Boolean(rowsRpc.error), "AI pass: business_rows refused", rowsRpc.error?.message ?? `${rowsRpc.data?.length} rows`);
+  const dash = await db.rpc("dashboard_metrics", { p_tenant: viewerCompany.slug, p_date: "2026-09-20" });
+  check(Boolean(dash.error), "AI pass: dashboard refused", dash.error?.message ?? "RETURNED DATA");
+  const own = await sampleRows(viewerCompany);
+  for (const [label, rows] of [["own", own], ["other company's", other]]) {
+    if (!rows.jobs) continue;
+    const before = await rowSnapshot("jobs", "id", rows.jobs);
+    const save = await db.rpc("office_save_job", { value: { id: rows.jobs, customerName: "ISOLATION TEST AI" } });
+    await db.from("jobs").update({ data: {} }).eq("id", rows.jobs);
+    await db.from("jobs").delete().eq("id", rows.jobs);
+    const after = await restoreIfChanged("jobs", "id", rows.jobs, before);
+    check(Boolean(save.error) && before === after, `AI pass: can't change ${label} job`,
+      `${save.error?.message ?? "SAVE ACCEPTED"}; row ${before === after ? "unchanged" : "CHANGED"}`);
+  }
+  const forged = await db.from("jobs").insert({ id: `ZZ-ISO-${runId}-ai`, data: {} });
+  cleanup.rows.push(["jobs", "id", `ZZ-ISO-${runId}-ai`]);
+  check(Boolean(forged.error), "AI pass: can't add a job", forged.error?.message ?? "INSERTED");
+
+  const unlock = await db.rpc("bind_business_identity", { staff_token: tester.token });
+  check(Boolean(unlock.error), "AI pass: can't unlock with a valid office token", unlock.error?.message ?? `returned ${unlock.data}`);
+  const stillLocked = await db.from("jobs").select("id", { count: "exact", head: true });
+  check(!stillLocked.count, "AI pass: still locked after unlock attempt", `${stillLocked.count ?? 0} jobs visible`);
+
+  const plainWho = await ai.approver.rpc("mcp_whoami");
+  check(Boolean(plainWho.error), "plain sign-in (no AI app, no PIN): mcp_whoami refused", plainWho.error?.message ?? "ALLOWED");
+
+  const otherCompanyId = (await must(admin.from("companies").select("id").neq("id", viewerCompany.id).limit(1).single(), "another company")).id;
+  await must(admin.from("memberships").insert({ user_id: tester.userId, tenant_id: otherCompanyId, role: "office" }), "second membership");
+  const twoWho = await db.rpc("mcp_whoami");
+  check(Boolean(twoWho.error), "AI pass: person in two companies is refused", twoWho.error?.message ?? "ALLOWED");
+  await admin.from("memberships").delete().eq("user_id", tester.userId).eq("tenant_id", otherCompanyId);
+
+  // Approval revoked (the person removes the app) → this pass stops working.
+  const second = await getAiPass(tester);
+  await second.approver.auth.oauth.revokeGrant({ clientId: second.clientId });
+  const revokedWho = await second.client.rpc("mcp_whoami");
+  check(Boolean(revokedWho.error), "AI pass: refused after the approval is revoked", revokedWho.error?.message ?? "ALLOWED");
+
+  // Office login switched off → membership goes → the pass stops working.
+  await must(admin.from("staff").update({ active: false }).eq("id", tester.staffId), "deactivate tester");
+  const offWho = await db.rpc("mcp_whoami");
+  check(Boolean(offWho.error), "AI pass: refused once the office login is switched off", offWho.error?.message ?? "ALLOWED");
+  note("AI pass: audience", "Supabase passes carry aud 'authenticated', not our MCP URL (Known Issue in PLAN)");
 }
 
 async function removeTestData() {
@@ -301,6 +433,7 @@ async function removeTestData() {
     await admin.auth.admin.deleteUser(id);
   }
   for (const id of cleanup.companies) await admin.from("companies").delete().eq("id", id);
+  for (const id of cleanup.oauthClients) await admin.auth.admin.oauth.deleteClient(id);
   const leftovers = await admin.from("staff").select("id", { count: "exact", head: true }).like("email", "isolation-test-%");
   const leftJobs = await admin.from("jobs").select("id", { count: "exact", head: true }).like("id", "ZZ-ISO-%");
   console.log(`\ncleanup: test logins left ${leftovers.count}, test jobs left ${leftJobs.count}`);
