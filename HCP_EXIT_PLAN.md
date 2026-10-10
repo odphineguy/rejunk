@@ -1,68 +1,106 @@
 # Rejunk: road to turning off Housecall Pro (and tenant-ready)
 
-## Context
-Abe wants Rejunk to replace Housecall Pro (HCP) for Progressive, and later sell Rejunk to other companies by
-subscription. A scan on 2026-09-29 found:
-- **Settings:** only 4 of 18 cards actually drive anything: Company, Invoice, Estimate Settings, and Pricebook.
-  The rest save values that nothing reads (Online Booking, Tips, Tax Rates, SMS, Email Templates, Reviews,
-  Job, Calendar, Phone) or are mockups (Subscription, Affiliate, Contact Form, Phone Numbers).
-- **Money:** invoices are in the database now (GPT-6 Sol, a61415e), but there's no Stripe, no way to record a
-  payment, and no way to send an invoice or estimate to a customer. You can only download the PDF.
-- **Tenants:** the app is single-company. Logins and about 30 tables (jobs, clients, invoices, settings, fleet)
-  have no company tag. The security rules hardcode `'progressive'`. The pipeline's `businesses` table is
-  already multi-company and is the natural tenant list.
+## Current status — October 9, 2026
 
-Abe's answers:
-- Build Stripe tenant-keyed from day one, then lay the tenant foundation right after.
-- Hide the dead Settings cards.
-- Must-haves before HCP is off: send estimate/invoice, appointment reminders, review requests, and online
-  booking with the $50 deposit. Booking is the biggest one, because David and every Thumbtack message link
-  to HCP's booking page.
+Abe wants Rejunk to replace Housecall Pro (HCP) for Progressive, then sell it to other
+companies by subscription. The September 29 scan and original build order are now
+partly superseded by the October 5 shared-foundation decision in `DECISIONS.md`.
 
-## Build order (each numbered build = one cloud session)
+- **Deployed:** Supabase invoices, company UUIDs and memberships, company-scoped
+  database rules/defaults and settings, sandbox invoice Checkout/webhook handling,
+  and owner-only recording of payments already received. Release `a0d4ac1` includes
+  received-payment migration `20261010024211`; payment and invoice balance updates
+  commit together, and linked invoices drive job balance summaries.
+- **Received-payment methods:** Zelle, cash, check, externally collected card and
+  cleared bank payments. A saved invoice is required, including for job deposits.
+  This records existing funds; it does not collect money. Venmo is not implemented.
+- **Still open:** confirm Juan Molano and Jackie/Jacqueline Gilliam's invoice/job
+  matches, received amounts and any existing invoice baseline before recording.
+  Neither was entered during this release. Complete an authenticated owner check
+  of the deployed UI before the first customer entry.
+- **Collection is not ready for Progressive live use:** the interim Stripe sandbox
+  uses Abe Media. Progressive Connect onboarding, ACH collection with a Processing
+  state, and refund/dispute reconciliation remain unfinished.
+- **HCP exit still depends on:** customer estimate/invoice delivery, online booking
+  with the $50 deposit, appointment reminders, review requests and a verified full
+  job lifecycle. Keep HCP until these replacement flows are accepted.
+
+The September 29 settings scan found many unused cards or mockups. That historical
+inventory is not a fresh audit; verify each card before treating its cleanup as done.
+Abe requested hiding unused settings cards and identified booking as the biggest HCP
+hinge because David and the Thumbtack messages link to HCP's booking page.
+
+## Remaining build order
+
+The shared company foundation shipped before payment completion. Build 1 is partial;
+Build 2 below records that foundation and its remaining checks. Continue payment
+reconciliation and safe collection before online booking.
 
 ### 0. Clean-up (small, can run in parallel with 1)
 - Take these cards off the Settings grid (`client/src/pages/Settings.tsx`), keeping their routes: Phone
   Settings, Phone Numbers, Affiliate, Contact Form, Calendar, Tips, and Subscription. Bring each back when its
   feature ships.
-- Fix out-of-date docs: AGENTS.md and ONLINE_BOOKING_SPEC.md still say invoices are localStorage.
+- Invoice persistence descriptions in AGENTS.md are updated; review ONLINE_BOOKING_SPEC.md
+  for any remaining localStorage assumptions before implementing booking.
 - Fix the "Estimate saved locally" message, which is wrong because estimates save to the database.
 - Make Tax Rates feed the invoice tax picker (`Invoices.tsx`), instead of a typed-in number on each invoice.
 
 ### 1. Stripe payments, set up per company — **OWNER: GPT Sol (not Claude)**
 > Built by GPT Sol. Other agents must not edit Stripe / payment files while this build is in progress.
 
-- **Recommended: Stripe Connect.** Rejunk gets one "platform" Stripe account, and each company (Progressive
-  first) connects its own Stripe account through a sign-up link. We store only Progressive's Stripe account
-  ID on its company record, so no company's secret keys live in our database, and money goes straight to
-  that company. This is the standard setup for software sold by subscription (Jobber and HCP work the same
-  way).
-- It adds a server-only table of payment settings for each company: Stripe account ID, deposit amount
-  ($50), who pays the card fee. Only the server can read it, and it points at `businesses.id`.
-- New `/api/pay` endpoint, built the same three-place way as `/api/staff` (shared file in `server/`, a copy
-  for Vercel in `api/`, and a hook in the Vite dev server). It creates a payment for an invoice (a pay link),
-  and a deposit payment for booking.
-- New Stripe webhook endpoint. When a payment succeeds it writes a row to `app_payments` and updates the
-  invoice's amount paid and status. These are the first payments the app itself ever records.
-- **"Record payment" button** on the invoice for cash, check, Zelle and Venmo, which also writes to
-  `app_payments`. The Payments page stops being empty.
-- The "Card payments" switch in Invoice Settings (`InvoiceSettings.tsx`) goes live.
-- Abe does: open the Rejunk platform Stripe account, then connect Progressive's.
+**Deployed**
 
-### 2. Tenant foundation (no signup or billing yet)
-- Logins get a company. Add `tenant_id` to `staff`, `staff_sessions`, `driver_activations` and
-  `driver_sessions`, and add a database function (`app_private.current_tenant()`) that works out the company
-  from the login.
-- Add `tenant_id` to every business table and fill it with `'progressive'`. For settings, each company gets
-  its own copy of each section, instead of one shared row per section.
-- Replace the hardcoded `'progressive'` in the security rules and report functions with `current_tenant()`.
-  The worst ones are in `20260910043256_restrict_business_data.sql` and the owner-financial migrations.
-- `client/src/lib/tenant.ts` takes the company from the login. Also fix the two hardcoded `'progressive'`
-  values in `api/staff.ts:280` and `server/staffAccess.ts:314`.
-- Move Company Settings (name, phone, logo, time zone) onto the company record, where the PDFs and emails
-  read it.
-- **Must pass before going live:** a test that creates a fake second company and proves it can't see any
-  Progressive data.
+- `/api/pay` and the signed Stripe webhook implement sandbox invoice Checkout and
+  settlement. Shared payment source generates the Vercel API files; keep the Vite
+  and production handlers aligned.
+- The Invoice Settings card-payment switch saves confirmed settings and displays
+  setup/test/live status. Sandbox readiness is not permission to collect live funds.
+- **Record payment received** on invoices and Payments saves company-stamped history
+  and balances atomically. Owner session and membership are verified server-side;
+  retries are idempotent. Stale balances, overpayments, duplicate references and
+  active Checkout links are rejected. History is retained; invoice notes remain
+  editable. See `docs/RECEIVED_PAYMENTS_SETUP.md` for the exact workflow and limits.
+
+**Next steps, in order**
+
+1. Check the deployed workflow with an authenticated owner. Confirm customer,
+   invoice/job, amount, received date/reference and previously recorded totals
+   before reconciling Juan or Jackie. A payout/transfer is not another payment.
+2. Add ACH collection and retain **Processing** until final provider confirmation;
+   recording an already-cleared bank payment is a separate feature.
+3. Add refund/dispute reconciliation and correction history before unattended live
+   collection. The received-payment release does not provide corrections or refunds.
+4. Complete owner-only Progressive Stripe Connect onboarding, account/environment
+   status, and verified company routing before enabling Progressive live collection.
+   Test the full payment/refund lifecycle in sandbox first.
+
+**Shared architecture**
+
+- Rejunk's platform Stripe account and each company's connected merchant account
+  have separate purposes. Company subscription customer IDs must never be used as
+  that company's invoice customers.
+- Payment/billing ownership references app-owned `companies.id` (UUID), with an
+  explicit mapping to pipeline-owned `businesses`; do not create a second tenant
+  foundation or key new billing tables directly to `businesses.id`.
+- Only company owners manage Connect/billing. Keep provider mappings and credentials
+  server-controlled; no company secret keys in browser code. Booking deposit
+  collection still depends on the remaining payment work.
+
+### 2. Shared company foundation — deployed; retain remaining checks
+- UUID company keys, memberships, tenant columns, caller-derived company defaults,
+  membership-based access rules and per-company settings are deployed. The pipeline
+  stamps company IDs on its writes. See `PLAN-mcp-connector.md` and the applied
+  migrations rather than recreating the original September 29 schema proposal.
+- Payment endpoints resolve company scope from the verified owner session and
+  current membership, not request fields or a fixed Progressive key.
+- Company branding currently lives in company-scoped `app_settings`, not directly
+  on `companies`. Revisit the branding-record move only as a deliberate change.
+- Preserve driver PIN/session and assigned-job boundaries; office/owner financial
+  masking must remain intact. Re-run meaningful cross-company checks for future
+  changes. Claude's October 9 AI-reader rollout records 403 checks / 0 failures;
+  the received-payment rollout also passed rollback-only live company/access checks.
+- The AI reader rule is deployed, but the MCP server is still separate pending work;
+  it must not gain payment-writing or service-role access.
 
 ### 3. Online booking + $50 deposit (ONLINE_BOOKING_SPEC phases 1–2; the biggest HCP hinge)
 - Add subcategories to the pricebook (a `parent_id` on categories) and a "bookable online" switch on each
@@ -85,8 +123,8 @@ Abe's answers:
   arrival windows, refund rule, and who gets booking alerts.
 
 ### 4. Send estimate and invoice to the customer
-> **Depends on Build 1:** can't start until the Stripe build is merged, because the invoice link needs the
-> Pay button and payment recording.
+> **Depends on Build 1 for live Pay:** received-payment recording is deployed, but
+> customer delivery and the live payment boundary still require implementation and verification.
 
 - A private customer link for each estimate or invoice (a hard-to-guess token in the URL, no login) showing
   a public view of it.
@@ -133,6 +171,8 @@ Abe's answers:
 ## Critical files
 - `client/src/pages/Settings.tsx`, `client/src/pages/settings/*`, `client/src/lib/settingsStorage.ts`
 - `client/src/lib/invoiceStorage.ts`, `client/src/pages/Invoices.tsx`, `client/src/lib/paymentStorage.ts`
+- `server/payments/*`, generated `api/pay.js` / `api/stripe-webhook.js`,
+  `client/src/components/RecordPaymentDialog.tsx`, `docs/RECEIVED_PAYMENTS_SETUP.md`
 - `client/src/lib/tenant.ts`, `supabase/migrations/20260910043256_restrict_business_data.sql`
 - `server/staffAccess.ts` and `api/staff.ts`: the pattern new endpoints follow
 - `lib/scheduleSlots.ts`, `lib/jobShape.ts`, `lib/jobStorage.ts` (`ticketFieldsFromEstimate`)

@@ -1,8 +1,8 @@
 # Record customer payments already received
 
-Prepared locally from the October 8 payment handoff. This feature records money
+Implemented from the October 8 payment handoff. This feature records money
 already received; it does not charge a card, debit a bank account, or transfer
-money. Production migration 20261010024211 is applied; deployment is authorized with this release.
+money. Production migration `20261010024211` and app release `a0d4ac1` are deployed.
 
 ## Use
 
@@ -43,7 +43,8 @@ status badge and explain that an invoice is needed for balance tracking.
 
 ## Rollout
 
-Review/apply ONLY `supabase/migrations/20261010024211_manual_invoice_payments.sql`
+Already applied to rejunk-prod: `supabase/migrations/20261010024211_manual_invoice_payments.sql`.
+For a new environment, review/apply ONLY that migration
 after confirming the company UUID, memberships, staff session and invoice-checkout
 foundation in the target project. Do not push all historical migrations. Apply the
 additive migration before deploying the UI/API, then verify using an approved
@@ -80,3 +81,9 @@ Rollback-only live tests verified owner recording, retained balances, idempotent
 retries, overpayment/company/invalid-owner rejection and no browser/AI-role access
 to the ledger or recording RPC. Temporary invoice/payment fixtures were rolled back.
 Claude's mcp_whoami rule remains present. No actual customer payment was recorded.
+
+Release `a0d4ac1` reached READY in Vercel deployment
+`dpl_A88o6MYdP389eitGZYSDkS4y9xLx` and serves `rejunk.vercel.app`. The deployed
+login page returned HTTP 200; a valid-shaped invalid-owner recording request
+returned HTTP 401. An authenticated owner submission through the deployed UI
+remains to be checked before the first real customer entry.

@@ -77,11 +77,16 @@ This is **NOT** a localStorage-only app anymore. Backend is **Supabase** (Postgr
 BOTH the live site (Vercel env) and local dev (`.env`). It is shared with the **`rejunk-webhook-services`**
 pipeline (Thumbtack leads, HCP appointments, voice calls, bookings…) — so `localhost:3000` is no longer a
 throwaway playground: writes hit the real business's tables. The old `get-junk-quote` test project
-(`nglmgglrexxumjndhyzo`) is retired. Shared tables carry a `tenant_id`; the app always filters/stamps
-`APP_TENANT_ID = "progressive"` (`lib/tenant.ts`) — `pricebook_items` defaults to `'wellsentry'`
-otherwise, and `app_settings` also holds the pipeline's `thumbtack_*` rows (the app never loads them).
-There is **no Express/REST API** — the browser talks to the DB directly, guarded by row-level security.
-Two distinct persistence patterns coexist:
+(`nglmgglrexxumjndhyzo`) is retired. Shared tables now carry UUID `tenant_id` values
+referencing app-owned `companies.id`; memberships and verified staff/driver identities
+determine database access and caller-derived defaults. Server and pipeline writes
+stamp the company explicitly. `APP_TENANT_ID = "progressive"` (`lib/tenant.ts`) remains
+a business slug for legacy report RPC parameters, not permission to stamp rows.
+`app_settings` is keyed by `(tenant_id, key)` and also holds the pipeline's
+`thumbtack_*` rows (the app never loads them). See `PLAN-mcp-connector.md` for the
+shared rollout; older single-company descriptions below are historical.
+Most browser persistence talks directly to Supabase through RLS; privileged auth,
+quote and payment operations use server endpoints. Several persistence patterns coexist:
 
 1. **Supabase-backed modules** (the important data): `utils/pricingStorage.ts`, `lib/jobStorage.ts`,
    `lib/pricebookStorage.ts`, `lib/clientStorage.ts`, `lib/dispatchOperations.ts`, `lib/driverStorage.ts`,
@@ -96,7 +101,10 @@ Two distinct persistence patterns coexist:
    - localStorage (keys `junk_estimator_*`) is now only a **warm cache / offline fallback**, plus a
      one-time demo-seed promotion into an empty DB (e.g. `hydrateJobs`).
 2. **localStorage-only modules** (newer ops features, not yet on Supabase):
-   `eventStorage.ts`, `invoiceStorage.ts`. Same `*-updated` window-event convention, but no remote sync.
+   `eventStorage.ts`. Same `*-updated` window-event convention, but no remote sync.
+   Invoices use Supabase `app_invoices` with an account-scoped memory cache
+   (`invoiceStorage.ts`); localStorage is only a one-time legacy migration source,
+   not the current invoice store.
    (`employeeStorage.ts` moved to Supabase on 2026-09-12 — table `app_employees`, snapshot pattern,
    hydrated by `appHydration.ts`, event `employees-updated`; drivers never read it. `paymentStorage.ts`
    is owner-only `app_payments`.)
@@ -498,7 +506,8 @@ No ETA (the pipeline has no Maps key) — the text says "on the way … now".
 ### Service + photos on the ticket (September 26, 2026)
 
 BOOKING_TO_CREW_SPEC deliverable 3 (minus the draft invoice — Abe: invoices move to the database in their
-own session first; `invoiceStorage.ts` is still demo localStorage). The Job page's top card edits the
+own session first). Invoices have since moved to Supabase `app_invoices`; automatic
+draft creation when the crew finishes remains deferred. The Job page's top card edits the
 service line (`quote.tier` = David's sentence, `quote.includedHours`). Migration
 `20260926000002_driver_included_hours.sql` adds ONE field, `includedHours`, to `get_driver_today` — drivers see
 "Moving · Studio/1BR · 2 hrs included", never `quote` or dollars. Photos: `components/TicketPhotos.tsx` on
@@ -511,10 +520,12 @@ the ticket (office "Add photos" → `<job>/office/…`) and the driver page shar
 Invoice PDFs use the logo saved in Company Settings (`company.logoDataUrl`), alongside the
 company name and contact details. No Progressive logo is loaded by the invoice generator.
 The approved blue/green document layout remains shared; logos, payment instructions, and
-service terms are configurable settings. This uses the existing single-company settings
-store; per-tenant company records remain Build 2 in `HCP_EXIT_PLAN.md`.
+service terms are configurable settings. Branding still comes from the `company`
+section in `app_settings`, now scoped by
+`(tenant_id, key)`; it has not moved onto the `companies` row. The shared UUID company
+foundation is deployed; see `HCP_EXIT_PLAN.md` for remaining work.
 
-### Received customer payments (October 9, 2026 — database applied; deployment authorized)
+### Received customer payments (October 9, 2026 — deployed)
 
 See `docs/RECEIVED_PAYMENTS_SETUP.md`. Owners can record already-received Zelle,
 cash, check, external card and cleared bank payments against saved invoices,
@@ -526,7 +537,16 @@ Request UUIDs and company/method/reference uniqueness prevent duplicate entries;
 active Checkout links, stale balances and overpayments are rejected. Invoice
 and payment history guards retain records; notes stay editable. Linked invoice
 balances drive job summaries/badges rather than manually marking a job paid.
-The new migration `20261010024211_manual_invoice_payments.sql` was applied to rejunk-prod via the authenticated SQL editor, with migration
-history recorded. Production rollback-only compatibility checks passed. No real customer payment has been entered.
+Migration `20261010024211_manual_invoice_payments.sql` is applied to rejunk-prod,
+with its exact version and SQL recorded in migration history. Release `a0d4ac1`
+is deployed to production (Vercel `dpl_A88o6MYdP389eitGZYSDkS4y9xLx`).
+Typecheck, 87 tests and build passed; desktop/390px form checks used mocked data.
+Live rollback-only checks verified recording, retained balances, retries,
+overpayment/company/invalid-owner rejection and denied browser/AI-role RPC access.
+Post-deploy `/api/pay` rejected a valid-shaped invalid-owner request with HTTP 401.
+An authenticated owner submission through the deployed UI remains to be checked;
+no real customer payment has been entered. Confirm Juan Molano and
+Jackie/Jacqueline Gilliam's invoice/job matches and prior received totals before
+recording either payment; do not collect the same funds again.
 ACH collection, refunds/disputes and Progressive Connect remain later work;
 live collection is not activated by this feature. Push only on explicit request.
