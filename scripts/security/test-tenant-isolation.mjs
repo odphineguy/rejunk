@@ -24,6 +24,8 @@ import { createClient } from "@supabase/supabase-js";
 import { handleStaffAction } from "../../server/staffAccess.ts";
 import { handleOfficeQuote } from "../../server/officeQuote.ts";
 import { handleDriverAction } from "../../server/driverAccess.ts";
+import { createServer } from "node:http";
+import { handleMcpRequest } from "../../mcp/handler.ts";
 
 const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -109,6 +111,28 @@ async function makeTester(company, role) {
   if (bound.error || bound.data !== true) throw new Error(`bind: ${bound.error?.message ?? bound.data}`);
   return { client, token, staffId: staff.id, userId, email, company, role };
 }
+
+// The MCP endpoint, run locally for the endpoint-level AI checks.
+let mcpBase = null;
+async function startMcp() {
+  const server = createServer((req, res) => handleMcpRequest(req, res));
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  cleanup.mcpServer = server;
+  mcpBase = `http://127.0.0.1:${server.address().port}`;
+}
+async function mcpCall(token, method, params = {}) {
+  const res = await fetch(`${mcpBase}/api/mcp`, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json, text/event-stream",
+      ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  const text = await res.text();
+  let body = null;
+  try { body = JSON.parse(text); } catch { body = text; }
+  return { status: res.status, auth: res.headers.get("www-authenticate"), body };
+}
+const MCP_INIT = { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "isolation-test", version: "1" } };
 
 /** A fresh sign-in for an existing tester: email code only, no PIN unlock. */
 async function plainSignIn(email) {
@@ -393,6 +417,26 @@ async function runAiPass(tester, viewerCompany, other) {
   cleanup.rows.push(["jobs", "id", `ZZ-ISO-${runId}-ai`]);
   check(Boolean(forged.error), "AI pass: can't add a job", forged.error?.message ?? "INSERTED");
 
+  // Endpoint level (mcp/handler.ts): the same pass through /api/mcp.
+  const noPass = await mcpCall(null, "initialize", MCP_INIT);
+  check(noPass.status === 401 && /resource_metadata="[^"]+\/\.well-known\/oauth-protected-resource"/.test(noPass.auth ?? ""),
+    "MCP endpoint: no pass → 401 pointing at the login metadata", `${noPass.status} ${noPass.auth}`);
+  const plainSession = (await ai.approver.auth.getSession()).data.session?.access_token;
+  const plainCall = await mcpCall(plainSession, "initialize", MCP_INIT);
+  check(plainCall.status === 401, "MCP endpoint: normal sign-in (not an AI app) → 401", `${plainCall.status}`);
+  const forgedCall = await mcpCall(`${ai.pass.slice(0, -4)}AAAA`, "initialize", MCP_INIT);
+  check(forgedCall.status === 401, "MCP endpoint: tampered pass → 401", `${forgedCall.status}`);
+  const init = await mcpCall(ai.pass, "initialize", MCP_INIT);
+  const tools = await mcpCall(ai.pass, "tools/list");
+  const names = (tools.body?.result?.tools ?? []).map((t) => t.name);
+  check(init.status === 200 && names.join() === "rejunk_whoami" && tools.body.result.tools[0].annotations?.readOnlyHint === true,
+    "MCP endpoint: AI pass connects; only the read-only whoami tool", `${init.status}; tools ${names.join()}`);
+  const called = await mcpCall(ai.pass, "tools/call", { name: "rejunk_whoami", arguments: {} });
+  let viaEndpoint = null;
+  try { viaEndpoint = JSON.parse(called.body?.result?.content?.[0]?.text ?? "null"); } catch { /* checked below */ }
+  check(viaEndpoint?.company?.slug === viewerCompany.slug && viaEndpoint?.jobs === ownJobs,
+    "MCP endpoint: whoami shows own company only", JSON.stringify(viaEndpoint ?? called.body));
+
   const unlock = await db.rpc("bind_business_identity", { staff_token: tester.token });
   check(Boolean(unlock.error), "AI pass: can't unlock with a valid office token", unlock.error?.message ?? `returned ${unlock.data}`);
   const stillLocked = await db.from("jobs").select("id", { count: "exact", head: true });
@@ -434,6 +478,7 @@ async function removeTestData() {
   }
   for (const id of cleanup.companies) await admin.from("companies").delete().eq("id", id);
   for (const id of cleanup.oauthClients) await admin.auth.admin.oauth.deleteClient(id);
+  cleanup.mcpServer?.close();
   const leftovers = await admin.from("staff").select("id", { count: "exact", head: true }).like("email", "isolation-test-%");
   const leftJobs = await admin.from("jobs").select("id", { count: "exact", head: true }).like("id", "ZZ-ISO-%");
   console.log(`\ncleanup: test logins left ${leftovers.count}, test jobs left ${leftJobs.count}`);
@@ -444,6 +489,7 @@ let crashed = null;
 try {
   const progressive = await companyBySlug("progressive");
   const wellsentry = await companyBySlug("wellsentry");
+  await startMcp();
   const companyB = await must(
     admin.from("companies").insert({ slug: `isolation-test-${runId}`, name: "Isolation Test Company B" }).select("id, slug, name").single(),
     "create Company B",

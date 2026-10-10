@@ -1,9 +1,17 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "node scripts/security/build-office-quote.mjs && node scripts/security/build-payment-api.mjs && vite build && tsx scripts/prerender.ts",
+  "buildCommand": "node scripts/security/build-office-quote.mjs && node scripts/security/build-payment-api.mjs && node scripts/security/build-mcp.mjs && vite build && tsx scripts/prerender.ts",
   "outputDirectory": "dist/public",
   "framework": "vite",
   "rewrites": [
+    {
+      "source": "/.well-known/oauth-protected-resource",
+      "destination": "/api/mcp?resource-metadata"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource/api/mcp",
+      "destination": "/api/mcp?resource-metadata"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"

@@ -541,6 +541,23 @@ function vitePluginPaymentApi(): Plugin {
   };
 }
 
+// Dev-server twin of the Vercel api/mcp.js function (the AI connector endpoint,
+// shared logic in mcp/handler.ts) plus its OAuth protected-resource metadata.
+function vitePluginMcpApi(): Plugin {
+  return {
+    name: "rejunk-mcp-api",
+    configureServer(server) {
+      for (const route of ["/api/mcp", "/.well-known/oauth-protected-resource"]) {
+        server.middlewares.use(route, async (req, res) => {
+          if (route !== "/api/mcp") req.url = `${route}${req.url === "/" ? "" : req.url}`;
+          const { handleMcpRequest } = await import("./mcp/handler");
+          await handleMcpRequest(req, res);
+        });
+      }
+    },
+  };
+}
+
 const plugins = [
   react(),
   tailwindcss(),
@@ -554,6 +571,7 @@ const plugins = [
   vitePluginLeadApi(),
   vitePluginVisionApi(),
   vitePluginPaymentApi(),
+  vitePluginMcpApi(),
 ];
 
 export default defineConfig(({ mode }) => {
@@ -572,6 +590,7 @@ export default defineConfig(({ mode }) => {
     "LEAD_TO",
     "SUPABASE_URL",
     "VITE_SUPABASE_URL",
+    "VITE_SUPABASE_ANON_KEY",
     "SUPABASE_SERVICE_ROLE_KEY",
     "APP_BASE_URL",
     "OPENAI_API_KEY",
