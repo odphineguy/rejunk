@@ -1,7 +1,8 @@
+import { cacheReceivedInvoice } from "@/lib/invoiceStorage";
 import { currentStaffIdentity } from "@/lib/financialCache";
 import type { PaymentRecord } from "@/types/payments";
 import { supabase, ensureSession } from "@/lib/supabase";
-import { isOwner } from "@/lib/staffSession";
+import { getStoredStaffSession, isOwner } from "@/lib/staffSession";
 
 const LEGACY_KEY = "junk_estimator_payments_v1";
 let payments: PaymentRecord[] = [];
@@ -66,3 +67,50 @@ window.addEventListener("business-cache-reset", () => {
   payments = [];
   notify();
 });
+
+export class ReceivedPaymentError extends Error {
+  constructor(
+    message: string,
+    public status: number
+  ) {
+    super(message);
+  }
+}
+
+/** Durable save first; retries keep the same request ID and never create a charge. */
+export async function recordReceivedPayment(input: {
+  requestId: string;
+  invoiceId: string;
+  method: string;
+  amount: number;
+  expectedPaid: number;
+  receivedDate: string;
+  reference: string;
+}): Promise<{ payment: PaymentRecord; duplicate: boolean }> {
+  if (!isOwner()) throw new Error("Owner access required.");
+  const identity = currentStaffIdentity();
+  const response = await fetch("/api/pay", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...input,
+      action: "record-received",
+      token: getStoredStaffSession()?.token,
+    }),
+  });
+  const result = await response.json();
+  if (!response.ok)
+    throw new ReceivedPaymentError(
+      result.error || "Could not record payment.",
+      response.status
+    );
+  if (identity !== currentStaffIdentity())
+    throw new Error("Account changed. Sign in and check Payments.");
+  payments = [
+    result.payment,
+    ...payments.filter(payment => payment.id !== result.payment.id),
+  ];
+  notify();
+  cacheReceivedInvoice(result.invoice);
+  return result;
+}

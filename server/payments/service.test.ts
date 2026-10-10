@@ -294,3 +294,77 @@ describe("collection setup status", () => {
     expect(fixtures.retrieveAccount).not.toHaveBeenCalled();
   });
 });
+
+const received = {
+  action: "record-received",
+  token: request.token,
+  invoiceId: "invoice",
+  requestId: "00000000-0000-4000-8000-000000000001",
+  method: "Zelle",
+  amount: 0.5,
+  expectedPaid: 0,
+  receivedDate: "2026-10-05",
+  reference: "zelle-ref",
+};
+describe("payments already received", () => {
+  it("works without Stripe keys and uses only the verified company", async () => {
+    delete process.env.STRIPE_SECRET_KEY;
+    delete process.env.PAYMENT_BASE_URL;
+    fixtures.reserve.mockResolvedValue({
+      data: { duplicate: false },
+      error: null,
+    });
+    await expect(
+      invoicePayment({ ...received, companyId: "other-company" })
+    ).resolves.toEqual({ duplicate: false });
+    expect(fixtures.reserve).toHaveBeenCalledWith(
+      "record_received_invoice_payment",
+      expect.objectContaining({
+        target_company: "progressive-id",
+        amount_cents: 50,
+        owner_token: request.token,
+      })
+    );
+    expect(fixtures.retrieveAccount).not.toHaveBeenCalled();
+    expect(fixtures.createSession).not.toHaveBeenCalled();
+  });
+  it.each(["office", "crew"])("rejects %s recording", async role => {
+    fixtures.rows.staff[0].role = role;
+    await expect(invoicePayment(received)).rejects.toThrow(
+      "Owner access required"
+    );
+    expect(fixtures.reserve).not.toHaveBeenCalled();
+  });
+  it("requires a current owner membership", async () => {
+    fixtures.rows.memberships[0].role = "office";
+    await expect(invoicePayment(received)).rejects.toThrow(
+      "Company owner access required"
+    );
+    expect(fixtures.reserve).not.toHaveBeenCalled();
+  });
+  it.each([0, -1, 0.001, 1000000, NaN, Infinity])(
+    "rejects invalid amount %s",
+    async amount => {
+      await expect(invoicePayment({ ...received, amount })).rejects.toThrow(
+        "valid amount"
+      );
+      expect(fixtures.reserve).not.toHaveBeenCalled();
+    }
+  );
+  it.each(["2026-02-30", "bad"])(
+    "rejects invalid received date %s",
+    async receivedDate => {
+      await expect(
+        invoicePayment({ ...received, receivedDate })
+      ).rejects.toThrow("valid amount");
+      expect(fixtures.reserve).not.toHaveBeenCalled();
+    }
+  );
+  it("returns a duplicate conflict without leaking DB detail", async () => {
+    fixtures.reserve.mockResolvedValue({
+      data: null,
+      error: { code: "RJP03", message: "private customer data" },
+    });
+    await expect(invoicePayment(received)).rejects.toThrow("already recorded");
+  });
+});

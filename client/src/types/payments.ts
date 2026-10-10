@@ -1,4 +1,10 @@
-export type PaymentMethod = "Cash" | "Offline Credit Card" | "Credit Card" | "Check" | "ACH";
+export type PaymentMethod =
+  | "Zelle"
+  | "Cash"
+  | "Offline Credit Card"
+  | "Credit Card"
+  | "Check"
+  | "ACH";
 
 export interface PaymentRecord {
   id: string;
@@ -13,4 +19,7 @@ export interface PaymentRecord {
   clientId?: string;
   createdAt: string;
   updatedAt: string;
+  reference?: string;
+  source?: "manual";
+  recordedBy?: string;
 }

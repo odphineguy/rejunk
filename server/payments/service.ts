@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { receivedPaymentInput } from "./received";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   CheckoutAttempt,
@@ -159,7 +160,60 @@ async function settle(
   );
 }
 
+function paymentDatabase() {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key)
+    throw new PaymentError(503, "Payment storage needs server configuration.");
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
+export async function recordReceivedPayment(body: Record<string, unknown>) {
+  const input = receivedPaymentInput.safeParse(body);
+  if (!input.success)
+    throw new PaymentError(
+      400,
+      "Choose an invoice, valid amount, received date, method and reference."
+    );
+  const db = paymentDatabase();
+  const company = await ownerCompany(db, body.token);
+  const { data, error } = await db.rpc("record_received_invoice_payment", {
+    owner_token: body.token,
+    target_company: company.id,
+    request_id: input.data.requestId,
+    target_invoice: input.data.invoiceId,
+    received_method: input.data.method,
+    amount_cents: Math.round(input.data.amount * 100),
+    received_date: input.data.receivedDate,
+    payment_reference: input.data.reference,
+    expected_paid_cents: Math.round(input.data.expectedPaid * 100),
+  });
+  if (error) {
+    const messages: Record<string, string> = {
+      RJP01: "Sign in again with a current company owner account.",
+      RJP02: "Invoice not found for this company.",
+      RJP03:
+        "This payment was already recorded, or its reference is already in use. Check Payments before trying again.",
+      RJP04:
+        "Invoice balance changed. Refresh and check payments already received before recording another.",
+      RJP05:
+        "Cancel any active payment link before recording a payment received elsewhere.",
+      RJP06:
+        "The amount exceeds the saved remaining balance, or this invoice is not available for payment.",
+      RJP07:
+        "Payment details are invalid. Check the amount, date, method and reference.",
+    };
+    throw new PaymentError(
+      error.code === "RJP01" ? 403 : messages[error.code] ? 409 : 503,
+      messages[error.code] ||
+        "Could not save payment. Retry with the same details; do not create a second entry."
+    );
+  }
+  return data;
+}
+
 export async function invoicePayment(body: Record<string, unknown>) {
+  if (body.action === "record-received") return recordReceivedPayment(body);
   const { stripe, db, live, origin } = paymentConfig();
   const company = await ownerCompany(db, body.token);
   if (body.action === "status") {

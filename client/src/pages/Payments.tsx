@@ -3,6 +3,8 @@ import { Link } from "wouter";
 import { Banknote, ChevronLeft, ChevronRight, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
+import { RecordPaymentDialog } from "@/components/RecordPaymentDialog";
+import { getInvoices } from "@/lib/invoiceStorage";
 import { OperationsShell } from "@/components/OperationsShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +31,7 @@ function paymentTotal(payment: Pick<PaymentRecord, "baseAmount" | "tip">) {
 
 export default function Payments() {
   const [payments, setPayments] = useState<PaymentRecord[]>(() => getPayments());
+  const [invoices, setInvoices] = useState(() => getInvoices());
   const [clients, setClients] = useState(() => getClients());
   const [query, setQuery] = useState("");
   const [pageSize, setPageSize] = useState("10");
@@ -36,11 +39,14 @@ export default function Payments() {
 
   useEffect(() => {
     const refresh = () => setPayments(getPayments());
+    const refreshInvoices = () => setInvoices(getInvoices());
+    window.addEventListener("invoices-updated", refreshInvoices);
     const refreshClients = () => setClients(getClients());
     window.addEventListener("payments-updated", refresh);
     window.addEventListener("clients-updated", refreshClients);
     return () => {
       window.removeEventListener("payments-updated", refresh);
+      window.removeEventListener("invoices-updated", refreshInvoices);
       window.removeEventListener("clients-updated", refreshClients);
     };
   }, []);
@@ -60,6 +66,7 @@ export default function Payments() {
       const searchable = [
         payment.customerName,
         payment.method,
+        payment.reference,
         payment.baseAmount,
         payment.tip,
         paymentTotal(payment),
@@ -103,6 +110,7 @@ export default function Payments() {
                 </button>
               )}
             </div>
+            <RecordPaymentDialog invoices={invoices} />
             <Select value={pageSize} onValueChange={setPageSize}>
               <SelectTrigger className="h-10 w-20 rounded-lg bg-card">
                 <SelectValue />
@@ -127,6 +135,7 @@ export default function Payments() {
                   <TableHead>Tip</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead>Date</TableHead>
+                  <TableHead>Reference</TableHead>
                   <TableHead>Job ID</TableHead>
                   <TableHead>Invoice ID</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -149,6 +158,7 @@ export default function Payments() {
                     <TableCell>{money.format(payment.tip)}</TableCell>
                     <TableCell>{money.format(paymentTotal(payment))}</TableCell>
                     <TableCell>{formatPaymentDate(payment.paidAt)}</TableCell>
+                    <TableCell className="max-w-48 break-all">{payment.reference || "—"}</TableCell>
                     <TableCell>
                       {payment.jobId ? (
                         <Link href={`/jobs/${payment.jobId}`} className="text-[#155e3f] underline underline-offset-2">
@@ -168,7 +178,7 @@ export default function Payments() {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" disabled={payment.id.startsWith("stripe:")} title={payment.id.startsWith("stripe:") ? "Stripe payment history is retained" : undefined} onClick={() => removePayment(payment.id)} aria-label={`Delete ${payment.customerName} payment`}>
+                      <Button variant="ghost" size="icon" disabled={(payment.id.startsWith("stripe:") || payment.id.startsWith("manual:"))} title={(payment.id.startsWith("stripe:") || payment.id.startsWith("manual:")) ? "Recorded payment history is retained" : undefined} onClick={() => removePayment(payment.id)} aria-label={`Delete ${payment.customerName} payment`}>
                         <Trash2 className="size-4 text-destructive" />
                       </Button>
                     </TableCell>
@@ -176,7 +186,7 @@ export default function Payments() {
                 ))}
                 {filteredPayments.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="h-24 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={10} className="h-24 text-center text-sm text-muted-foreground">
                       No payments found.
                     </TableCell>
                   </TableRow>

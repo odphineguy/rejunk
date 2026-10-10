@@ -5,8 +5,9 @@ import { Link, useLocation, useRoute } from "wouter";
 import { ArrowLeft, BarChart3, CalendarClock, CopyPlus, Download, MessageSquare, Receipt, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { JobStatusBadge, JobWarningBadge, PaymentStatusBadge, jobStatusLabels, paymentStatusLabels } from "@/components/JobBadges";
+import { JobStatusBadge, JobWarningBadge, PaymentStatusBadge, jobStatusLabels } from "@/components/JobBadges";
 import { loadMapScript } from "@/components/Map";
+import { JobPaymentSummary } from "@/components/JobPaymentSummary";
 import { OperationsShell } from "@/components/OperationsShell";
 import { JobTimeCard } from "@/components/JobTimeCard";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +50,7 @@ import { geocodeStatusToReason, primaryServiceLocationStatus, reasonLabel, write
 import { loadPricingSettings } from "@/utils/pricingStorage";
 import { getRouteEstimateToFacility } from "@/utils/distanceRouting";
 import { buildBestRecommendation, recommendationInputFromJob } from "@/utils/recommendations";
-import type { Job, JobQuote, JobStatus, PaymentStatus } from "@/types/jobs";
+import type { Job, JobQuote, JobStatus } from "@/types/jobs";
 import { TicketPhotos } from "@/components/TicketPhotos";
 import type { JobDisposalEvent, JobIssue, JobIssueResolutionType, JobIssueStatus, JobItem, JobPhotoVisibility, JobStop } from "@/types/driver";
 import type { JobRouteEstimate } from "@/types/pricing";
@@ -57,7 +58,6 @@ import type { JobRouteEstimate } from "@/types/pricing";
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const percent = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 const jobStatuses: JobStatus[] = ["open", "scheduled", "on_my_way", "in_progress", "completed", "canceled"];
-const paymentStatuses: PaymentStatus[] = ["unpaid", "deposit_paid", "paid", "refunded"];
 
 function money(value: number | undefined) {
   return currency.format(Number.isFinite(value) ? Number(value) : 0);
@@ -441,7 +441,7 @@ export default function JobDetail() {
                   <JobStatusBadge status={job.status} />
                   {job.dayType && <Badge variant="outline">{job.dayType === "weekend" ? "Weekend rate" : "Weekday rate"}</Badge>}
                   {job.paymentTerms === "full_upfront" && <Badge variant="outline">Full payment at booking</Badge>}
-                  {isOwner && <PaymentStatusBadge status={job.paymentStatus} />}
+                  {isOwner && <PaymentStatusBadge jobId={job.id} status={job.paymentStatus} />}
                   {jobWarnings.map((warning) => (
                     <JobWarningBadge key={warning.code} warning={warning} />
                   ))}
@@ -953,34 +953,10 @@ export default function JobDetail() {
               </div>
             </CardContent>
           </Card>)}
-          {analytics && isOwner && (<Card>
-            <CardHeader>
-              <CardTitle>Payment</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Payment status</Label>
-                <Select value={job.paymentStatus} onValueChange={(value) => applyUpdates({ paymentStatus: value as PaymentStatus })}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {paymentStatuses.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {paymentStatusLabels[status]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {junk && (<Button variant="outline" className="w-full" asChild>
-                <a href={job.actuals?.dumpReceiptUrl || "#"} onClick={(event) => !job.actuals?.dumpReceiptUrl && event.preventDefault()}>
-                  <Receipt className="size-4" />
-                  Receipt
-                </a>
-              </Button>)}
-            </CardContent>
-          </Card>)}
+          {isOwner && <JobPaymentSummary jobId={job.id} />}
+          {analytics && isOwner && junk && <Button variant="outline" className="w-full" asChild>
+            <a href={job.actuals?.dumpReceiptUrl || "#"} onClick={(event) => !job.actuals?.dumpReceiptUrl && event.preventDefault()}><Receipt className="size-4" /> Receipt</a>
+          </Button>}
         </aside>
       </div>
     </OperationsShell>

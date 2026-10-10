@@ -513,3 +513,20 @@ company name and contact details. No Progressive logo is loaded by the invoice g
 The approved blue/green document layout remains shared; logos, payment instructions, and
 service terms are configurable settings. This uses the existing single-company settings
 store; per-tenant company records remain Build 2 in `HCP_EXIT_PLAN.md`.
+
+### Received customer payments (October 9, 2026 — local, rollout pending)
+
+See `docs/RECEIVED_PAYMENTS_SETUP.md`. Owners can record already-received Zelle,
+cash, check, external card and cleared bank payments against saved invoices,
+including draft invoices for job deposits. `/api/pay` action `record-received`
+needs server Supabase configuration but does not call Stripe. The service-only
+`record_received_invoice_payment` RPC rechecks owner session/company membership
+and atomically writes company-stamped payment history and invoice balances.
+Request UUIDs and company/method/reference uniqueness prevent duplicate entries;
+active Checkout links, stale balances and overpayments are rejected. Invoice
+and payment history guards retain records; notes stay editable. Linked invoice
+balances drive job summaries/badges rather than manually marking a job paid.
+The new migration `20261010024211_manual_invoice_payments.sql` is tested locally
+but NOT applied to production. No real customer payment has been entered.
+ACH collection, refunds/disputes and Progressive Connect remain later work;
+live collection is not activated by this feature. Push only on explicit request.

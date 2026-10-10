@@ -46,6 +46,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { RecordPaymentDialog } from "@/components/RecordPaymentDialog";
 import { InvoicePaymentPanel } from "@/components/InvoicePaymentPanel";
 import {
   deleteInvoice,
@@ -111,20 +112,35 @@ function newDraftInvoice(): InvoiceRecord {
   const nextNumber =
     Math.max(0, ...getInvoices().map(invoice => invoice.invoiceNumber)) + 1;
   const now = new Date().toISOString();
+  const jobId = new URLSearchParams(window.location.search).get("jobId");
+  const job = getJobs().find(row => row.id === jobId);
   return {
     id: crypto.randomUUID(),
     invoiceNumber: nextNumber,
-    jobId: "",
-    clientName: "",
-    clientEmail: "",
-    clientAddress: "",
+    jobId: job?.id ?? "",
+    clientName: job?.customerName ?? "",
+    clientEmail: job?.email ?? "",
+    clientAddress: job
+      ? [job.address, job.city, job.state, job.zip].filter(Boolean).join(", ")
+      : "",
     createdAt: now,
     dueDate: now,
     total: 0,
     amountDue: 0,
     status: "draft",
     notes: "",
-    items: [],
+    items:
+      job && job.quotedAmount > 0
+        ? [
+            {
+              id: crypto.randomUUID(),
+              name: job.jobLabel || job.serviceType.replaceAll("_", " "),
+              quantity: 1,
+              amount: job.quotedAmount,
+              taxable: false,
+            },
+          ]
+        : [],
   };
 }
 
@@ -550,6 +566,7 @@ function InvoiceDetails({
     );
   }
 
+  const paymentLocked = Boolean(invoice.paymentRecorded);
   const totals = invoiceTotals(invoice);
   const jobs = getJobs();
 
@@ -663,33 +680,33 @@ function InvoiceDetails({
         actions={
           <>
             <Select
+              disabled={paymentLocked}
               value={invoice.status}
               onValueChange={(status: InvoiceStatus) =>
-                updateInvoice({
-                  status,
-                  ...(status === "paid"
-                    ? { amountPaid: totals.total }
-                    : status === "draft"
-                      ? { amountPaid: 0 }
-                      : {}),
-                })
+                updateInvoice({ status })
               }
             >
               <SelectTrigger className="w-32">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {["draft", "sent", "partial", "overdue", "paid", "void"].map(
-                  status => (
-                    <SelectItem
-                      key={status}
-                      value={status}
-                      className="capitalize"
-                    >
-                      {status}
-                    </SelectItem>
-                  )
-                )}
+                {[
+                  "draft",
+                  "sent",
+                  "overdue",
+                  "void",
+                  ...(["paid", "partial"].includes(invoice.status)
+                    ? [invoice.status]
+                    : []),
+                ].map(status => (
+                  <SelectItem
+                    key={status}
+                    value={status}
+                    className="capitalize"
+                  >
+                    {status}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Button
@@ -740,6 +757,7 @@ function InvoiceDetails({
                 )}
                 <DropdownMenuItem
                   variant="destructive"
+                  disabled={paymentLocked}
                   onClick={() =>
                     void deleteInvoice(invoice.id)
                       .then(() => {
@@ -770,6 +788,7 @@ function InvoiceDetails({
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold">Invoice #</h1>
               <Input
+                disabled={paymentLocked}
                 value={invoice.invoiceNumber}
                 readOnly
                 className="h-10 w-24 rounded-lg"
@@ -789,6 +808,7 @@ function InvoiceDetails({
               <div className="text-sm font-medium text-[#8a9180]">Client:</div>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 <Input
+                  disabled={paymentLocked}
                   aria-label="Client name"
                   value={invoice.clientName}
                   onChange={event =>
@@ -797,6 +817,7 @@ function InvoiceDetails({
                   placeholder="Client name"
                 />
                 <Input
+                  disabled={paymentLocked}
                   aria-label="Client email"
                   type="email"
                   value={invoice.clientEmail ?? ""}
@@ -806,6 +827,7 @@ function InvoiceDetails({
                   placeholder="Email"
                 />
                 <Input
+                  disabled={paymentLocked}
                   aria-label="Client address"
                   className="md:col-span-2"
                   value={invoice.clientAddress ?? ""}
@@ -838,6 +860,7 @@ function InvoiceDetails({
                   JOB
                 </label>
                 <Select
+                  disabled={paymentLocked}
                   value={invoice.jobId || "none"}
                   onValueChange={value => {
                     const job = jobs.find(row => row.id === value);
@@ -909,6 +932,7 @@ function InvoiceDetails({
                 action={
                   <Button
                     variant="outline"
+                    disabled={paymentLocked}
                     onClick={() =>
                       updateInvoice({
                         items: [
@@ -944,6 +968,7 @@ function InvoiceDetails({
                     <TableRow key={item.id}>
                       <TableCell>
                         <Input
+                          disabled={paymentLocked}
                           aria-label="Item description"
                           value={item.name}
                           onChange={event =>
@@ -953,6 +978,7 @@ function InvoiceDetails({
                         />
                         <label className="mt-2 flex items-center gap-2 text-xs">
                           <Checkbox
+                            disabled={paymentLocked}
                             checked={item.taxable ?? false}
                             onCheckedChange={checked =>
                               updateItem(item.id, { taxable: checked === true })
@@ -963,6 +989,7 @@ function InvoiceDetails({
                       </TableCell>
                       <TableCell>
                         <Input
+                          disabled={paymentLocked}
                           aria-label="Quantity"
                           type="number"
                           min="0.01"
@@ -978,6 +1005,7 @@ function InvoiceDetails({
                       </TableCell>
                       <TableCell>
                         <Input
+                          disabled={paymentLocked}
                           aria-label="Unit price"
                           type="number"
                           min="0"
@@ -998,6 +1026,7 @@ function InvoiceDetails({
                         <Button
                           variant="ghost"
                           size="icon"
+                          disabled={paymentLocked}
                           aria-label="Remove item"
                           onClick={() =>
                             updateInvoice({
@@ -1018,22 +1047,25 @@ function InvoiceDetails({
 
             <Panel>
               <SectionHeader icon={CreditCard} title="Payment recorded" />
-              <FieldLabel>Amount already paid</FieldLabel>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={
-                  invoice.amountPaid ??
-                  (invoice.status === "paid" ? invoice.total : 0)
-                }
-                onChange={event =>
-                  updateInvoice({ amountPaid: Number(event.target.value) })
-                }
-              />
+              <p className="mb-3 text-2xl font-semibold">
+                {money.format(totals.amountPaid)}
+              </p>
+              {paymentLocked && (
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Recorded payments lock invoice details. Notes remain editable;
+                  payment corrections require reconciliation.
+                </p>
+              )}
+              {isOwner() && (
+                <RecordPaymentDialog
+                  invoices={[invoice]}
+                  invoice={invoice}
+                  disabled={isNew || saving}
+                />
+              )}
               <p className="mt-2 text-xs text-muted-foreground">
-                Enter payments received outside this invoice. Confirmed card
-                payments update this amount automatically.
+                Save the invoice first. Record each payment received so its
+                method, date and reference are retained.
               </p>
             </Panel>
 
@@ -1060,6 +1092,7 @@ function InvoiceDetails({
                 <div className="flex items-center justify-between gap-3 border-b border-border py-3">
                   <span>Discount</span>
                   <Input
+                    disabled={paymentLocked}
                     aria-label="Discount amount"
                     type="number"
                     min="0"
@@ -1074,6 +1107,7 @@ function InvoiceDetails({
                 <div className="flex items-center justify-between gap-3 border-b border-border py-3">
                   <span>Tax rate (%)</span>
                   <Input
+                    disabled={paymentLocked}
                     aria-label="Tax rate percent"
                     type="number"
                     min="0"
@@ -1106,6 +1140,7 @@ function InvoiceDetails({
               <FieldLabel>Due Date</FieldLabel>
               <div className="relative">
                 <Input
+                  disabled={paymentLocked}
                   type="date"
                   value={invoice.dueDate.slice(0, 10)}
                   onChange={event =>

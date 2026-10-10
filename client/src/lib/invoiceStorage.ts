@@ -129,3 +129,9 @@ window.addEventListener("business-cache-reset", () => {
   invoices = [];
   notify();
 });
+
+/** Accept only an invoice returned by the authorized payment service. */
+export function cacheReceivedInvoice(invoice: InvoiceRecord) {
+  invoices = [invoice, ...invoices.filter(row => row.id !== invoice.id)];
+  notify();
+}

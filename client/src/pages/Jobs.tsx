@@ -19,6 +19,7 @@ import {
   PaymentStatusBadge,
   jobStatusLabels,
 } from "@/components/JobBadges";
+import { getInvoices } from "@/lib/invoiceStorage";
 import { facilityCode, materialCode } from "@/lib/jobCodes";
 import { isJunkService, normalizeServiceType, serviceTypeLabel, serviceTypeLabels } from "@/lib/jobShape";
 import { employeeNameById } from "@/lib/employeeStorage";
@@ -122,6 +123,12 @@ function StatCard({
 
 export default function Jobs() {
   const [, navigate] = useLocation();
+  const [invoices, setInvoices] = useState(getInvoices);
+  useEffect(() => {
+    const refresh = () => setInvoices(getInvoices());
+    window.addEventListener("invoices-updated", refresh);
+    return () => window.removeEventListener("invoices-updated", refresh);
+  }, []);
   const [jobs, setJobs] = useState<Job[]>(() => getJobs());
   const [settings, setSettings] = useState(() => loadPricingSettings());
   const [query, setQuery] = useState("");
@@ -188,9 +195,12 @@ export default function Jobs() {
       in_progress: jobs.filter(job => job.status === "in_progress").length,
       completed: jobs.filter(job => job.status === "completed").length,
       canceled: jobs.filter(job => job.status === "canceled").length,
-      unpaid: jobs.filter(job => job.paymentStatus === "unpaid").length,
+      unpaid: jobs.filter(job => {
+        const linked = invoices.filter(row => row.jobId === job.id && row.status !== "void");
+        return linked.length ? linked.every(row => (row.amountPaid ?? (row.status === "paid" ? row.total : 0)) === 0) && linked.some(row => row.total > 0) : job.paymentStatus === "unpaid";
+      }).length,
     }),
-    [jobs]
+    [jobs, invoices]
   );
 
   const removeJob = (event: React.MouseEvent, jobId: string) => {
@@ -478,7 +488,7 @@ export default function Jobs() {
                         <JobStatusBadge status={job.status} />
                       </TableCell>
                       {isOwner && <TableCell>
-                        <PaymentStatusBadge status={job.paymentStatus} />
+                        <PaymentStatusBadge jobId={job.id} status={job.paymentStatus} />
                       </TableCell>}
                       <TableCell>
                         <JobWarningSummary warnings={warnings} />

@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { getInvoices } from "@/lib/invoiceStorage";
 import { AlertTriangle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -65,10 +67,20 @@ export function JobStatusBadge({ status }: { status: JobStatus }) {
   );
 }
 
-export function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
+export function PaymentStatusBadge({ status, jobId }: { status: PaymentStatus; jobId?: string }) {
+  const [invoices, setInvoices] = useState(getInvoices);
+  useEffect(() => {
+    const refresh = () => setInvoices(getInvoices());
+    window.addEventListener("invoices-updated", refresh);
+    return () => window.removeEventListener("invoices-updated", refresh);
+  }, []);
+  const linked = jobId ? invoices.filter(row => row.jobId === jobId && row.status !== "void") : [];
+  const received = linked.reduce((sum, row) => sum + (row.amountPaid ?? (row.status === "paid" ? row.total : 0)), 0);
+  const remaining = linked.reduce((sum, row) => sum + Math.max(0, row.total - (row.amountPaid ?? (row.status === "paid" ? row.total : 0))), 0);
+  const displayStatus = linked.length ? remaining < 0.005 ? "paid" : received > 0 ? "deposit_paid" : "unpaid" : status;
   return (
-    <Badge variant="outline" className={paymentTone[status]}>
-      {paymentStatusLabels[status]}
+    <Badge variant="outline" className={paymentTone[displayStatus]}>
+      {linked.length && displayStatus === "deposit_paid" ? "Partially paid" : paymentStatusLabels[displayStatus]}
     </Badge>
   );
 }

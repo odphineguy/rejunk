@@ -2,10 +2,28 @@
 
 // server/payments/service.ts
 import Stripe from "stripe";
+
+// server/payments/received.ts
+import { z } from "zod";
+var money = z.number().finite().min(0).max(999999.99).refine((value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6);
+var receivedPaymentInput = z.object({
+  requestId: z.string().uuid(),
+  invoiceId: z.string().trim().min(1).max(200),
+  method: z.enum(["Zelle", "Cash", "Check", "Offline Credit Card", "ACH"]),
+  amount: money.refine((value) => value > 0),
+  expectedPaid: money,
+  receivedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
+    const parsed = /* @__PURE__ */ new Date(value + "T12:00:00Z");
+    return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  }),
+  reference: z.string().trim().min(1).max(200)
+});
+
+// server/payments/service.ts
 import { createClient } from "@supabase/supabase-js";
 
 // server/payments/core.ts
-import { z } from "zod";
+import { z as z2 } from "zod";
 
 // shared/invoiceTotals.ts
 function invoiceTotals(invoice) {
@@ -46,27 +64,27 @@ var PaymentError = class extends Error {
     this.status = status;
   }
 };
-var invoiceSchema = z.object({
-  id: z.string().min(1),
-  invoiceNumber: z.number().int().positive(),
-  clientName: z.string().min(1),
-  clientEmail: z.string().optional(),
-  jobId: z.string(),
-  status: z.enum(["draft", "sent", "partial", "overdue", "paid", "void"]),
-  total: z.number().finite().nonnegative(),
-  amountPaid: z.number().finite().nonnegative().optional(),
-  discount: z.number().finite().nonnegative().optional(),
-  taxRate: z.number().finite().min(0).max(100).optional(),
-  dueDate: z.string(),
-  createdAt: z.string(),
-  amountDue: z.number().finite().nonnegative(),
-  items: z.array(
-    z.object({
-      id: z.string(),
-      name: z.string().min(1),
-      quantity: z.number().finite().positive(),
-      amount: z.number().finite().nonnegative(),
-      taxable: z.boolean().optional()
+var invoiceSchema = z2.object({
+  id: z2.string().min(1),
+  invoiceNumber: z2.number().int().positive(),
+  clientName: z2.string().min(1),
+  clientEmail: z2.string().optional(),
+  jobId: z2.string(),
+  status: z2.enum(["draft", "sent", "partial", "overdue", "paid", "void"]),
+  total: z2.number().finite().nonnegative(),
+  amountPaid: z2.number().finite().nonnegative().optional(),
+  discount: z2.number().finite().nonnegative().optional(),
+  taxRate: z2.number().finite().min(0).max(100).optional(),
+  dueDate: z2.string(),
+  createdAt: z2.string(),
+  amountDue: z2.number().finite().nonnegative(),
+  items: z2.array(
+    z2.object({
+      id: z2.string(),
+      name: z2.string().min(1),
+      quantity: z2.number().finite().positive(),
+      amount: z2.number().finite().nonnegative(),
+      taxable: z2.boolean().optional()
     })
   ).min(1).max(200)
 });
@@ -203,7 +221,52 @@ async function settle(db, session, attempt, eventId) {
     })
   );
 }
+function paymentDatabase() {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key)
+    throw new PaymentError(503, "Payment storage needs server configuration.");
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+async function recordReceivedPayment(body) {
+  const input = receivedPaymentInput.safeParse(body);
+  if (!input.success)
+    throw new PaymentError(
+      400,
+      "Choose an invoice, valid amount, received date, method and reference."
+    );
+  const db = paymentDatabase();
+  const company = await ownerCompany(db, body.token);
+  const { data, error } = await db.rpc("record_received_invoice_payment", {
+    owner_token: body.token,
+    target_company: company.id,
+    request_id: input.data.requestId,
+    target_invoice: input.data.invoiceId,
+    received_method: input.data.method,
+    amount_cents: Math.round(input.data.amount * 100),
+    received_date: input.data.receivedDate,
+    payment_reference: input.data.reference,
+    expected_paid_cents: Math.round(input.data.expectedPaid * 100)
+  });
+  if (error) {
+    const messages = {
+      RJP01: "Sign in again with a current company owner account.",
+      RJP02: "Invoice not found for this company.",
+      RJP03: "This payment was already recorded, or its reference is already in use. Check Payments before trying again.",
+      RJP04: "Invoice balance changed. Refresh and check payments already received before recording another.",
+      RJP05: "Cancel any active payment link before recording a payment received elsewhere.",
+      RJP06: "The amount exceeds the saved remaining balance, or this invoice is not available for payment.",
+      RJP07: "Payment details are invalid. Check the amount, date, method and reference."
+    };
+    throw new PaymentError(
+      error.code === "RJP01" ? 403 : messages[error.code] ? 409 : 503,
+      messages[error.code] || "Could not save payment. Retry with the same details; do not create a second entry."
+    );
+  }
+  return data;
+}
 async function invoicePayment(body) {
+  if (body.action === "record-received") return recordReceivedPayment(body);
   const { stripe, db, live, origin } = paymentConfig();
   const company = await ownerCompany(db, body.token);
   if (body.action === "status") {

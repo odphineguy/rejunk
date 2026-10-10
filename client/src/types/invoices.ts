@@ -26,6 +26,8 @@ export interface InvoiceRecord {
   total: number;
   amountDue: number;
   amountPaid?: number;
+  /** Set by the server once a durable received-payment record exists. */
+  paymentRecorded?: boolean;
   taxRate?: number;
   taxName?: string;
   discount?: number;
