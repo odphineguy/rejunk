@@ -563,7 +563,8 @@ window (8–10am / 12–2pm Arizona) → confirm. Menu + prices + stairs rule: `
 (`server/booking/availability.ts`, tested) counts `jobs` + `hcp_appointments` per truck/van half-day.
 A booking writes a client (matched by phone/email), a `jobs` ticket (`source = website`,
 `quote.source = booking`, BOX-01 on truck moves, empty crew → Dispatch Center) and a draft
-`app_invoices` row (status `sent`), then sends the customer to a Stripe Checkout for the $50 deposit
+`app_invoices` row (status `sent`), then sends the customer to a Stripe Checkout for the $50 deposit + 3% card fee ($51.50; the fee is
+added to the invoice as its own line, `CARD_FEE_RATE` in the catalog)
 (`server/booking/deposit.ts`, same reserve/attach/settle ledger + `/api/stripe-webhook` as invoice
 payment links; collecting account = `STRIPE_SECRET_KEY`'s, Abe Media today). Live keys mark the invoice
 partial + write `app_payments`; sandbox keys touch only the private ledger. Without Stripe settings the

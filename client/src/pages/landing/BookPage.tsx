@@ -3,6 +3,8 @@ import { Link, useSearch } from "wouter";
 
 import {
   BOOKING_DEPOSIT,
+  BOOKING_DEPOSIT_CARD_FEE,
+  BOOKING_DEPOSIT_CARD_TOTAL,
   BOOKING_GROUPS,
   BOOKING_REFUND_HOURS,
   BOOKING_SERVICES,
@@ -246,7 +248,7 @@ export default function BookPage() {
             {!paid && (
               <div className="mt-8 flex flex-col items-center gap-4">
                 <PrimaryButton onClick={() => void payDepositAgain()} disabled={payingAgain}>
-                  {payingAgain ? "Opening…" : `Pay $${BOOKING_DEPOSIT} deposit`}
+                  {payingAgain ? "Opening…" : `Pay $${BOOKING_DEPOSIT_CARD_TOTAL.toFixed(2)} deposit`}
                 </PrimaryButton>
                 <ErrorLine text={error} />
               </div>
@@ -635,14 +637,14 @@ export default function BookPage() {
                   <p className="font-bold">${BOOKING_DEPOSIT} deposit holds your spot</p>
                   <p className="mt-1">
                     {cardDeposit
-                      ? `Deposit payment only — next you'll pay $${BOOKING_DEPOSIT} by card on our secure payment page. The rest is due after the job.`
+                      ? `Deposit payment only — next you'll pay $${BOOKING_DEPOSIT} plus a 3% card processing fee ($${BOOKING_DEPOSIT_CARD_FEE.toFixed(2)}), $${BOOKING_DEPOSIT_CARD_TOTAL.toFixed(2)} total, on our secure payment page. The rest is due after the job.`
                       : `We'll contact you shortly to collect a $${BOOKING_DEPOSIT} deposit.`}{" "}
                     It comes off your final bill, and it's fully refundable if you cancel at least {BOOKING_REFUND_HOURS} hours before your appointment.
                   </p>
                 </div>
                 <ErrorLine text={error} />
                 <PrimaryButton onClick={() => void submit()} disabled={submitting}>
-                  {submitting ? "Booking…" : cardDeposit ? `Book & pay $${BOOKING_DEPOSIT} deposit` : "Book my appointment"}
+                  {submitting ? "Booking…" : cardDeposit ? `Book & pay $${BOOKING_DEPOSIT_CARD_TOTAL.toFixed(2)} deposit` : "Book my appointment"}
                 </PrimaryButton>
               </div>
             </>

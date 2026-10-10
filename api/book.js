@@ -192,6 +192,9 @@ function dayTypeOf(value) {
 
 // shared/bookingCatalog.ts
 var BOOKING_DEPOSIT = 50;
+var CARD_FEE_RATE = 0.03;
+var BOOKING_DEPOSIT_CARD_FEE = Math.round(BOOKING_DEPOSIT * CARD_FEE_RATE * 100) / 100;
+var BOOKING_DEPOSIT_CARD_TOTAL = BOOKING_DEPOSIT + BOOKING_DEPOSIT_CARD_FEE;
 var BOOKING_REFUND_HOURS = 24;
 var BOOKING_DAYS_AHEAD = 45;
 var R = MOVING_RATES;
@@ -618,6 +621,7 @@ async function stripeAccount(stripe) {
 }
 
 // server/booking/deposit.ts
+var FEE_ITEM_ID = "card-fee-booking-deposit";
 function cardDepositConfigured() {
   try {
     paymentConfig();
@@ -642,13 +646,29 @@ async function depositCheckout(input) {
     if (session2.status === "expired")
       await db.from("invoice_checkout_attempts").update({ state: "expired" }).eq("id", last.id).eq("state", "open");
   }
-  const invoiceRow = await single(
+  let invoiceRow = await single(
     db.from("app_invoices").select("data").eq("id", input.invoiceId).eq("tenant_id", input.companyId).maybeSingle()
   );
   if (!invoiceRow) throw new PaymentError(404, "Booking invoice not found.");
-  const data = invoiceRow.data;
+  let data = invoiceRow.data;
   if ((data.amountPaid ?? 0) >= BOOKING_DEPOSIT) return { paid: true };
-  const cents = Math.min(BOOKING_DEPOSIT * 100, Math.round((data.amountDue ?? 0) * 100));
+  if (!(data.items ?? []).some((item) => item.id === FEE_ITEM_ID)) {
+    const fee = BOOKING_DEPOSIT_CARD_FEE;
+    data = {
+      ...data,
+      items: [
+        ...data.items ?? [],
+        { id: FEE_ITEM_ID, name: `Card processing fee (${CARD_FEE_RATE * 100}% of $${BOOKING_DEPOSIT} deposit)`, quantity: 1, amount: fee }
+      ],
+      total: round2((data.total ?? 0) + fee),
+      amountDue: round2((data.amountDue ?? 0) + fee)
+    };
+    await single(
+      db.from("app_invoices").update({ data, updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", input.invoiceId).eq("tenant_id", input.companyId)
+    );
+    invoiceRow = { data };
+  }
+  const cents = Math.min(Math.round((BOOKING_DEPOSIT + BOOKING_DEPOSIT_CARD_FEE) * 100), Math.round((data.amountDue ?? 0) * 100));
   if (cents < 50) return { paid: true };
   const attempt = await single(
     db.rpc("reserve_invoice_checkout", {
@@ -675,7 +695,7 @@ async function depositCheckout(input) {
             unit_amount: attempt.amount_cents,
             product_data: {
               name: "Booking deposit \u2014 Progressive Transportation Services",
-              description: `${input.serviceName}. Credited to your final bill; refundable if you cancel at least 24 hours ahead.`
+              description: `$${BOOKING_DEPOSIT} deposit + $${BOOKING_DEPOSIT_CARD_FEE.toFixed(2)} card processing fee (${CARD_FEE_RATE * 100}%). ${input.serviceName}. The $${BOOKING_DEPOSIT} comes off your final bill; refundable if you cancel at least 24 hours ahead.`
             }
           }
         }
@@ -693,6 +713,7 @@ async function depositCheckout(input) {
   await single(db.rpc("attach_invoice_checkout", { attempt_id: attempt.id, session_id: session.id }));
   return { url: session.url };
 }
+var round2 = (n) => Math.round(n * 100) / 100;
 async function single(query) {
   const { data, error } = await query;
   if (error) throw new PaymentError(503, error.message || "Payment records could not be saved.");

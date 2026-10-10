@@ -41,6 +41,12 @@ export interface BookingService {
 }
 
 export const BOOKING_DEPOSIT = 50;
+/** Card processing fee on card payments (Abe, Oct 9: 3% until Stripe's real cost is known). */
+export const CARD_FEE_RATE = 0.03;
+/** $1.50 — the fee on the deposit, in dollars. */
+export const BOOKING_DEPOSIT_CARD_FEE = Math.round(BOOKING_DEPOSIT * CARD_FEE_RATE * 100) / 100;
+/** What the customer pays by card for the deposit: $51.50. */
+export const BOOKING_DEPOSIT_CARD_TOTAL = BOOKING_DEPOSIT + BOOKING_DEPOSIT_CARD_FEE;
 export const BOOKING_REFUND_HOURS = 24;
 export const BOOKING_DAYS_AHEAD = 45;
 

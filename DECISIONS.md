@@ -27,7 +27,8 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
   (`MOVING_RATES.chargeStairs` is still false for the Estimate Builder / pipeline — not changed yet).
 - Deposit by card (Abe, same evening: "Just make it work. I don't care how"): after booking, the customer
   pays $50 on Stripe Checkout through the existing invoice-checkout ledger and webhook, collected by the
-  Abe Media Stripe account until Progressive has its own. No 3% surcharge added to the deposit. If
+  Abe Media Stripe account until Progressive has its own. 3% card fee (Abe, Oct 9, matching HCP and
+  competitors) — $51.50 charged; the $1.50 is its own invoice line so $50 goes toward the job. If
   Stripe isn't configured, the office collects it by hand. Sol was paused to avoid collisions.
 - Alerts: email to LEAD_TO + customer confirmation email (Resend); owner text sent straight from the
   endpoint through Twilio when `TWILIO_*` + `BOOKING_ALERT_PHONES` are set (not via the pipeline).

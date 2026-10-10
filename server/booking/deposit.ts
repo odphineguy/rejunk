@@ -8,7 +8,14 @@
  * Collecting account: whatever STRIPE_SECRET_KEY points at (Abe Media today).
  */
 
-import { BOOKING_DEPOSIT } from "../../shared/bookingCatalog";
+import {
+  BOOKING_DEPOSIT,
+  BOOKING_DEPOSIT_CARD_FEE,
+  CARD_FEE_RATE,
+} from "../../shared/bookingCatalog";
+
+/** Stable id of the fee line, so a retried checkout never adds it twice. */
+const FEE_ITEM_ID = "card-fee-booking-deposit";
 import { PaymentError, type CheckoutAttempt } from "../payments/core";
 import { paymentConfig, stripeAccount } from "../payments/service";
 
@@ -56,13 +63,33 @@ export async function depositCheckout(input: {
       await db.from("invoice_checkout_attempts").update({ state: "expired" }).eq("id", last.id).eq("state", "open");
   }
 
-  const invoiceRow = await single(
+  let invoiceRow = await single(
     db.from("app_invoices").select("data").eq("id", input.invoiceId).eq("tenant_id", input.companyId).maybeSingle()
   );
   if (!invoiceRow) throw new PaymentError(404, "Booking invoice not found.");
-  const data = invoiceRow.data as { amountPaid?: number; amountDue?: number; invoiceNumber?: number };
+  let data = invoiceRow.data as InvoiceData;
   if ((data.amountPaid ?? 0) >= BOOKING_DEPOSIT) return { paid: true };
-  const cents = Math.min(BOOKING_DEPOSIT * 100, Math.round((data.amountDue ?? 0) * 100));
+
+  // 3% card fee on the deposit goes on the invoice as its own line, so the
+  // $51.50 charge pays $50 toward the job plus the $1.50 fee (settle adds the
+  // full charge to amountPaid). Added once, before any checkout freezes it.
+  if (!(data.items ?? []).some(item => item.id === FEE_ITEM_ID)) {
+    const fee = BOOKING_DEPOSIT_CARD_FEE;
+    data = {
+      ...data,
+      items: [
+        ...(data.items ?? []),
+        { id: FEE_ITEM_ID, name: `Card processing fee (${CARD_FEE_RATE * 100}% of $${BOOKING_DEPOSIT} deposit)`, quantity: 1, amount: fee },
+      ],
+      total: round2((data.total ?? 0) + fee),
+      amountDue: round2((data.amountDue ?? 0) + fee),
+    };
+    await single(
+      db.from("app_invoices").update({ data, updated_at: new Date().toISOString() }).eq("id", input.invoiceId).eq("tenant_id", input.companyId)
+    );
+    invoiceRow = { data };
+  }
+  const cents = Math.min(Math.round((BOOKING_DEPOSIT + BOOKING_DEPOSIT_CARD_FEE) * 100), Math.round((data.amountDue ?? 0) * 100));
   if (cents < 50) return { paid: true };
 
   const attempt = (await single(
@@ -90,7 +117,7 @@ export async function depositCheckout(input: {
             unit_amount: attempt.amount_cents,
             product_data: {
               name: "Booking deposit — Progressive Transportation Services",
-              description: `${input.serviceName}. Credited to your final bill; refundable if you cancel at least 24 hours ahead.`,
+              description: `$${BOOKING_DEPOSIT} deposit + $${BOOKING_DEPOSIT_CARD_FEE.toFixed(2)} card processing fee (${CARD_FEE_RATE * 100}%). ${input.serviceName}. The $${BOOKING_DEPOSIT} comes off your final bill; refundable if you cancel at least 24 hours ahead.`,
             },
           },
         },
@@ -108,6 +135,17 @@ export async function depositCheckout(input: {
   await single(db.rpc("attach_invoice_checkout", { attempt_id: attempt.id, session_id: session.id }));
   return { url: session.url };
 }
+
+interface InvoiceData {
+  amountPaid?: number;
+  amountDue?: number;
+  total?: number;
+  invoiceNumber?: number;
+  items?: { id: string; name: string; quantity: number; amount: number }[];
+  [key: string]: unknown;
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 async function single<T = any>(query: PromiseLike<{ data: T; error: any }>): Promise<T> {
   const { data, error } = await query;
