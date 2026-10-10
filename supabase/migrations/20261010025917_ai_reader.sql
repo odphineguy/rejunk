@@ -24,7 +24,7 @@
 -- Also: bind_business_identity refuses AI passes, so an AI pass can never
 -- become a full office login, even holding a valid staff token.
 --
--- Undo: supabase/undo/20261010030000_ai_reader_undo.sql
+-- Undo: supabase/undo/20261010025917_ai_reader_undo.sql
 begin;
 
 create function app_private.ai_reader()

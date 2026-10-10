@@ -1,4 +1,4 @@
--- Undo 20261010030000_ai_reader: AI passes lose their read-only way in
+-- Undo 20261010025917_ai_reader: AI passes lose their read-only way in
 -- (back to seeing nothing), and bind_business_identity returns to its
 -- 20261009061816 body.
 begin;

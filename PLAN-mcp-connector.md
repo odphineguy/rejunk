@@ -160,6 +160,14 @@ rows; isolation test 347/0. Remaining: push + Site URL switch.
 - A pass from Phase 2 works and returns only Progressive rows.
 - `pnpm check` fails if someone adds the admin key to `mcp/`.
 
+**Progress (2026-10-09):** step 1 LIVE — migration 20261010025917_ai_reader (+ undo). The AI rule is
+narrow: no table rule changed; an AI pass reads only through `mcp_*` functions (just `mcp_whoami` so
+far) via `app_private.ai_reader()`, which needs the pass's session to belong to that same approved
+app (`auth.sessions.oauth_client_id`), a live approval, and exactly one owner/office company.
+`bind_business_identity` refuses AI passes. Isolation test now gets a real AI pass per company:
+403 pass / 0 fail. Also fixed: Site URL lacked `https://`, so approvals went to a broken address.
+Next: step 2 = `mcp/` handler + `api/mcp.js` + import guard + Inspector test.
+
 ## Phase 4 — Read tools
 **Goal:** the AI can look things up safely.
 
@@ -251,6 +259,16 @@ MCP Apps widgets (schedule, estimate builder) and a Rejunk skills plugin.
   themselves, the owner included. Fix later: a "Sign out all devices" button on My Profile
   (delete the person's staff_sessions server-side; unlocks drop with them). Also consider doing it
   automatically on PIN change. Until then, Claude can do it from the database on request.
+- **AI passes don't say which server they're for (found 2026-10-09).** Supabase passes always carry
+  `aud: "authenticated"`, even when the AI asks for `resource=https://rejunk.vercel.app/api/mcp`, and
+  Supabase deletes the approval record holding `resource` once the pass is issued. So we can't check a
+  pass was meant for our MCP server. Today's guard instead: the pass's session must belong to the exact
+  app the person approved, and only our approve page (exact claude.ai / chatgpt.com / localhost list)
+  can approve. Revisit with a Custom Access Token Hook that stamps our URL as `aud` on OAuth passes
+  only — after testing that the database still accepts that pass.
+- **People in two companies can't use AI apps yet (follow-up, 2026-10-09).** `ai_reader()` refuses
+  anyone with 2+ owner/office companies rather than guess. Before that happens for a real person: add
+  a company picker on the approve page, store the choice per approval, and read it in `ai_reader()`.
 - **Drivers see too much.** `get_driver_today` sends the customer's phone number and the
   office's internal notes to the driver app.
 - **"I called dispatch" likely fails.** `driver_confirm_dispatch_called` still uses the old
