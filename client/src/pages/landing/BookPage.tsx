@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 
 import {
   BOOKING_DEPOSIT,
@@ -84,6 +84,15 @@ export default function BookPage() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ jobNumber: string; arrival: string } | null>(null);
+  const [cardDeposit, setCardDeposit] = useState(false);
+  const search = useSearch();
+  const returned = useMemo(() => {
+    const params = new URLSearchParams(search);
+    const deposit = params.get("deposit");
+    const ref = params.get("ref") ?? "";
+    return deposit === "paid" || deposit === "cancelled" ? { deposit, ref } : null;
+  }, [search]);
+  const [payingAgain, setPayingAgain] = useState(false);
 
   useEffect(() => {
     callApi({ action: "options" })
@@ -93,6 +102,7 @@ export default function BookPage() {
           return;
         }
         setServiceIds(Array.isArray(json.serviceIds) ? (json.serviceIds as string[]) : []);
+        setCardDeposit(json.cardDeposit === true);
       })
       .catch(() => setClosed(true));
   }, []);
@@ -187,6 +197,10 @@ export default function BookPage() {
         }
         return;
       }
+      if (typeof json.checkoutUrl === "string" && json.checkoutUrl) {
+        window.location.assign(json.checkoutUrl);
+        return;
+      }
       setResult({ jobNumber: String(json.jobNumber ?? ""), arrival: String(json.arrival ?? "") });
       go("done");
     } catch {
@@ -195,6 +209,60 @@ export default function BookPage() {
       setSubmitting(false);
     }
   };
+
+  const payDepositAgain = async () => {
+    if (!returned?.ref) return;
+    setPayingAgain(true);
+    setError("");
+    try {
+      const { ok, json } = await callApi({ action: "deposit", ref: returned.ref });
+      if (ok && typeof json.checkoutUrl === "string") return window.location.assign(json.checkoutUrl);
+      if (ok && json.paid) return setError("Your deposit is already paid — you're all set.");
+      setError(String(json.error ?? `We couldn't open the payment page. Please call ${PHONE_DISPLAY}.`));
+    } catch {
+      setError(`We couldn't open the payment page. Please call ${PHONE_DISPLAY}.`);
+    } finally {
+      setPayingAgain(false);
+    }
+  };
+
+  if (returned) {
+    const paid = returned.deposit === "paid";
+    return (
+      <SiteLayout>
+        <section className="px-5 py-16 md:px-8">
+          <div className="mx-auto max-w-xl text-center">
+            <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: P.pine }}>
+              {paid ? "Booking confirmed" : "Booking saved"}
+            </p>
+            <h1 className="font-display mt-3 text-4xl font-bold tracking-tight" style={{ color: P.pine }}>
+              {paid ? "You're booked — deposit received!" : "Your deposit isn't paid yet"}
+            </h1>
+            <p className="mt-4 text-base" style={{ color: P.inkSoft }}>
+              {paid
+                ? `Thanks! Your $${BOOKING_DEPOSIT} deposit comes off your final bill. Your confirmation email has all the details.`
+                : `We saved your booking, but the $${BOOKING_DEPOSIT} deposit that holds your spot didn't go through.`}
+            </p>
+            {!paid && (
+              <div className="mt-8 flex flex-col items-center gap-4">
+                <PrimaryButton onClick={() => void payDepositAgain()} disabled={payingAgain}>
+                  {payingAgain ? "Opening…" : `Pay $${BOOKING_DEPOSIT} deposit`}
+                </PrimaryButton>
+                <ErrorLine text={error} />
+              </div>
+            )}
+            <p className="mt-8 text-base" style={{ color: P.inkSoft }}>
+              Questions or changes? Call or text{" "}
+              <a href={PHONE_HREF} className="font-bold underline" style={{ color: P.pine }}>
+                {PHONE_DISPLAY}
+              </a>
+              .
+            </p>
+          </div>
+        </section>
+      </SiteLayout>
+    );
+  }
 
   const stepIndex = STEPS.indexOf(step);
   const crumbs = [group ? BOOKING_GROUPS.find(g => g.id === group)?.label : null, service?.name].filter(Boolean);
@@ -566,12 +634,15 @@ export default function BookPage() {
                 <div className="rounded-2xl p-5 text-sm leading-6" style={{ background: P.limeSoft, color: P.ink }}>
                   <p className="font-bold">${BOOKING_DEPOSIT} deposit holds your spot</p>
                   <p className="mt-1">
-                    No card needed right now. We'll contact you shortly to collect a ${BOOKING_DEPOSIT} deposit. It comes off your final bill, and it's fully refundable if you cancel at least {BOOKING_REFUND_HOURS} hours before your appointment. Up to 3% surcharge on credit card payments.
+                    {cardDeposit
+                      ? `Deposit payment only — next you'll pay $${BOOKING_DEPOSIT} by card on our secure payment page. The rest is due after the job.`
+                      : `We'll contact you shortly to collect a $${BOOKING_DEPOSIT} deposit.`}{" "}
+                    It comes off your final bill, and it's fully refundable if you cancel at least {BOOKING_REFUND_HOURS} hours before your appointment.
                   </p>
                 </div>
                 <ErrorLine text={error} />
                 <PrimaryButton onClick={() => void submit()} disabled={submitting}>
-                  {submitting ? "Booking…" : "Book my appointment"}
+                  {submitting ? "Booking…" : cardDeposit ? `Book & pay $${BOOKING_DEPOSIT} deposit` : "Book my appointment"}
                 </PrimaryButton>
               </div>
             </>

@@ -120,7 +120,7 @@ async function ownerCompany(db: SupabaseClient, token: unknown) {
   return company;
 }
 
-async function stripeAccount(stripe: Stripe) {
+export async function stripeAccount(stripe: Stripe) {
   const account = await stripe.accounts.retrieve(null);
   if (
     process.env.STRIPE_ACCOUNT_ID &&

@@ -5,16 +5,19 @@
  *  - `options`       → is booking on, which services, deposit amount
  *  - `availability`  → open arrival windows for one service, next 45 days
  *  - `book`          → re-checks the window, then writes the client, the
- *                      ticket (status scheduled) and a draft invoice, and
- *                      alerts the office (email + text) and the customer.
+ *                      ticket (status scheduled) and an invoice, alerts the
+ *                      office (email + text) and the customer, and returns a
+ *                      Stripe Checkout URL for the $50 deposit
+ *  - `deposit`       → re-opens the deposit checkout for a booking (`ref`)
  *
  * Runs with the service-role key; the public page never touches tables. The
  * site's company comes from SITE_COMPANY_SLUG only, never from the request.
  * Shared by the Vite dev middleware and the generated Vercel function
  * api/book.js (scripts/security/build-booking-api.mjs) — one source.
  *
- * v1 takes no card: the $50 deposit is collected by the office and recorded
- * with "Record payment received" against the draft invoice this creates.
+ * Deposit: server/booking/deposit.ts (Stripe, same ledger + webhook as invoice
+ * payment links). Without Stripe settings the booking still completes and the
+ * office collects the deposit with "Record payment received".
  */
 import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -43,6 +46,7 @@ import {
   type AvailabilityRules,
   type Occupancy,
 } from "./availability";
+import { cardDepositConfigured, depositCheckout } from "./deposit";
 
 const BRAND = "Progressive Transportation Services";
 const PHONE_DISPLAY = "(480) 351-0291";
@@ -172,6 +176,7 @@ async function options(ctx: Context): Promise<BookingResult> {
       enabled: ctx.settings.enabled,
       serviceIds: bookable(ctx).map(service => service.id),
       deposit: BOOKING_DEPOSIT,
+      cardDeposit: cardDepositConfigured(),
       refundHours: BOOKING_REFUND_HOURS,
       phone: PHONE_DISPLAY,
     },
@@ -386,7 +391,8 @@ async function createInvoice(
       total: price.total,
       amountDue: price.total,
       amountPaid: 0,
-      status: "draft",
+      // "sent" so the deposit card checkout can attach to it (drafts can't be collected).
+      status: "sent",
       notes,
       items: price.lines.map(line => ({ id: randomUUID(), name: line.name, quantity: line.quantity, amount: line.amount })),
     };
@@ -498,7 +504,7 @@ async function book(ctx: Context, body: Record<string, unknown>): Promise<Bookin
     internalNotes: [
       `Booked online ${new Date(nowMs).toLocaleString("en-US", { timeZone: "America/Phoenix" })}. Arrival ${window.label}.`,
       `Price shown to the customer: ${price.summary}`,
-      `$${BOOKING_DEPOSIT} deposit NOT collected yet — collect it and record it on the invoice.`,
+      `$${BOOKING_DEPOSIT} deposit: customer is sent to pay by card when card payments are on; if the invoice shows nothing paid, collect it and record it.`,
       input.smsConsent ? "Customer opted in to texts." : "Customer did NOT opt in to texts — call or email.",
     ].join("\n"),
     booking: {
@@ -549,13 +555,55 @@ async function book(ctx: Context, body: Record<string, unknown>): Promise<Bookin
       .eq("id", jobId);
   }
 
-  const summary = { input, price, arrival, jobId, jobNumber, invoiceNumber: invoice?.number ?? null };
+  // Card deposit: send the customer to Stripe for $50. Any failure here keeps
+  // the booking — the office collects the deposit instead.
+  let checkoutUrl: string | null = null;
+  if (invoice && cardDepositConfigured()) {
+    try {
+      const deposit = await depositCheckout({
+        invoiceId: invoice.id,
+        companyId: ctx.companyId,
+        jobId,
+        serviceName: service.name,
+        customerEmail: input.email,
+      });
+      if ("url" in deposit) checkoutUrl = deposit.url;
+    } catch (error) {
+      console.error("[book] deposit checkout failed:", error instanceof Error ? error.message : error);
+    }
+  }
+
+  const summary = { input, price, arrival, jobId, jobNumber, invoiceNumber: invoice?.number ?? null, cardDeposit: Boolean(checkoutUrl) };
   await Promise.allSettled([sendOfficeEmail(summary), sendOfficeText(summary), sendCustomerEmail(summary)]);
 
   return {
     status: 200,
-    body: { ok: true, jobNumber, arrival, priceSummary: price.summary, total: price.total, deposit: BOOKING_DEPOSIT },
+    body: { ok: true, ref: jobId, jobNumber, arrival, priceSummary: price.summary, total: price.total, deposit: BOOKING_DEPOSIT, checkoutUrl },
   };
+}
+
+/** Re-open (or recreate) the $50 deposit checkout for a booking the customer just made. */
+async function depositLink(ctx: Context, body: Record<string, unknown>): Promise<BookingResult> {
+  const ref = str(body.ref, 64);
+  if (!/^[0-9a-f-]{36}$/.test(ref)) return { status: 400, body: { error: "Booking not found." } };
+  const { data: job } = await ctx.sb
+    .from("jobs")
+    .select("id, status, data")
+    .eq("id", ref)
+    .eq("tenant_id", ctx.companyId)
+    .eq("source", "website")
+    .maybeSingle();
+  const data = (job?.data ?? {}) as Record<string, unknown>;
+  if (!job || typeof data.invoiceId !== "string") return { status: 404, body: { error: "Booking not found." } };
+  if (!cardDepositConfigured()) return { status: 503, body: { error: `Card payments are unavailable. Please call ${PHONE_DISPLAY}.` } };
+  const result = await depositCheckout({
+    invoiceId: data.invoiceId,
+    companyId: ctx.companyId,
+    jobId: job.id as string,
+    serviceName: String((data.quote as { tier?: string } | undefined)?.tier ?? "Your booking"),
+    customerEmail: typeof data.email === "string" ? data.email : undefined,
+  });
+  return { status: 200, body: "url" in result ? { checkoutUrl: result.url } : { paid: true } };
 }
 
 // ── Alerts ──────────────────────────────────────────────────────────────────
@@ -567,6 +615,8 @@ interface Summary {
   jobId: string;
   jobNumber: string;
   invoiceNumber: number | null;
+  /** Customer was sent to Stripe to pay the deposit by card. */
+  cardDeposit: boolean;
 }
 
 function escapeHtml(value: string): string {
@@ -624,7 +674,11 @@ async function sendOfficeEmail(s: Summary) {
 <p style="margin:0;font-size:15px"><a href="tel:${escapeHtml(input.phone)}" style="color:#155e3f;font-weight:600">${escapeHtml(input.phone)}</a></p>
 <p style="margin:6px 0 0;font-size:14px"><a href="mailto:${escapeHtml(input.email)}" style="color:#155e3f">${escapeHtml(input.email)}</a></p></div>
 <table style="width:100%;border-collapse:collapse;font-size:14px">${detailRows(s)}</table>
-<p style="margin:16px 0 0;font-size:14px;font-weight:600;color:#9a6a00">$${BOOKING_DEPOSIT} deposit not collected yet${s.invoiceNumber ? ` — record it on invoice #${s.invoiceNumber}` : ""}.</p>
+<p style="margin:16px 0 0;font-size:14px;font-weight:600;color:#9a6a00">${
+    s.cardDeposit
+      ? `Customer was sent to pay the $${BOOKING_DEPOSIT} deposit by card — it shows on invoice #${s.invoiceNumber} once paid. If it doesn't, collect it.`
+      : `$${BOOKING_DEPOSIT} deposit not collected yet${s.invoiceNumber ? ` — record it on invoice #${s.invoiceNumber}` : ""}.`
+  }</p>
 <p style="margin:8px 0 0;font-size:13px;color:#5b6357">${input.smsConsent ? "✓ Opted in to texts" : "Did not opt in to texts — call or email"} · Crew and vehicle: assign in Dispatch Center.</p>
 <p style="margin:16px 0 0"><a href="${appUrl(`/jobs/${s.jobId}`)}" style="color:#155e3f;font-weight:700">Open the ticket →</a></p>`
   );
@@ -647,7 +701,11 @@ async function sendCustomerEmail(s: Summary) {
 <table style="width:100%;border-collapse:collapse;font-size:14px">${detailRows(s)}</table>
 <div style="background:#f0f4ec;border-radius:10px;padding:16px;margin:16px 0 0;font-size:14px;color:#1c1c1c">
 <p style="margin:0 0 6px;font-weight:700">Your $${BOOKING_DEPOSIT} deposit</p>
-<p style="margin:0">We'll contact you shortly to collect a $${BOOKING_DEPOSIT} deposit that holds your appointment. It comes off your final bill, and it's fully refundable if you cancel at least ${BOOKING_REFUND_HOURS} hours before your appointment. Up to 3% surcharge on credit card payments.</p></div>
+<p style="margin:0">${
+    s.cardDeposit
+      ? `Your $${BOOKING_DEPOSIT} deposit holds your appointment. If you didn't finish paying it, call or text us and we'll help.`
+      : `We'll contact you shortly to collect a $${BOOKING_DEPOSIT} deposit that holds your appointment.`
+  } It comes off your final bill, and it's fully refundable if you cancel at least ${BOOKING_REFUND_HOURS} hours before your appointment.</p></div>
 <p style="margin:16px 0 0;font-size:14px;color:#374151">Need to change something? Call or text us at <a href="tel:+14803510291" style="color:#155e3f;font-weight:600">${PHONE_DISPLAY}</a>. Booking ${escapeHtml(s.jobNumber)}.</p>`
   );
   const { error } = await new Resend(apiKey).emails.send({
@@ -677,7 +735,7 @@ async function sendOfficeText(s: Summary) {
     s.arrival,
     `${input.addresses[0].city}${input.addresses[1] ? ` → ${input.addresses[1].city}` : ""}`,
     s.price.summary,
-    `Collect $${BOOKING_DEPOSIT} deposit.`,
+    s.cardDeposit ? `Sent to pay $${BOOKING_DEPOSIT} deposit by card.` : `Collect $${BOOKING_DEPOSIT} deposit.`,
   ].join("\n");
   await Promise.allSettled(
     to.map(async phone => {
@@ -710,6 +768,7 @@ export async function handleBooking(rawBody: unknown, ip: string): Promise<Booki
   if (!ctx.settings.enabled) return { status: 403, body: { error: `Online booking is off right now. Please call ${PHONE_DISPLAY}.` } };
   if (action === "availability") return availability(ctx, body);
   if (action === "book") return book(ctx, body);
+  if (action === "deposit") return depositLink(ctx, body);
   return { status: 400, body: { error: "Unknown action." } };
 }
 

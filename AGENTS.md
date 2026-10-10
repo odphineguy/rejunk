@@ -563,8 +563,11 @@ window (8–10am / 12–2pm Arizona) → confirm. Menu + prices + stairs rule: `
 (`server/booking/availability.ts`, tested) counts `jobs` + `hcp_appointments` per truck/van half-day.
 A booking writes a client (matched by phone/email), a `jobs` ticket (`source = website`,
 `quote.source = booking`, BOX-01 on truck moves, empty crew → Dispatch Center) and a draft
-`app_invoices` row; the $50 deposit is collected by the office and recorded with Record payment
-received (no card online yet). Alerts: Resend email to `LEAD_TO`, confirmation email to the customer,
+`app_invoices` row (status `sent`), then sends the customer to a Stripe Checkout for the $50 deposit
+(`server/booking/deposit.ts`, same reserve/attach/settle ledger + `/api/stripe-webhook` as invoice
+payment links; collecting account = `STRIPE_SECRET_KEY`'s, Abe Media today). Live keys mark the invoice
+partial + write `app_payments`; sandbox keys touch only the private ledger. Without Stripe settings the
+booking still completes and the office records the deposit by hand. Alerts: Resend email to `LEAD_TO`, confirmation email to the customer,
 and an owner text via Twilio when `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` /
 `BOOKING_ALERT_PHONES` are set on Vercel. Settings → Online Booking controls on/off, same-day, lead
 time and which services show. The site's "Book online" buttons still go to HCP (`bookingUrl()`).

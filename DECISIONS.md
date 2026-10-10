@@ -25,8 +25,10 @@ curated decisions in, not everything in. Each entry = Decision / Rejected / Cons
   uses the truck crew. The window is re-checked at submit and again after the insert (race backout).
 - Stairs: $75 per extra flight per address on flat moves, $75 per location for pianos, priced on /book only
   (`MOVING_RATES.chargeStairs` is still false for the Estimate Builder / pipeline — not changed yet).
-- No card in v1: the $50 deposit is collected by the office and recorded with "Record payment received"
-  on the draft invoice each booking creates.
+- Deposit by card (Abe, same evening: "Just make it work. I don't care how"): after booking, the customer
+  pays $50 on Stripe Checkout through the existing invoice-checkout ledger and webhook, collected by the
+  Abe Media Stripe account until Progressive has its own. No 3% surcharge added to the deposit. If
+  Stripe isn't configured, the office collects it by hand. Sol was paused to avoid collisions.
 - Alerts: email to LEAD_TO + customer confirmation email (Resend); owner text sent straight from the
   endpoint through Twilio when `TWILIO_*` + `BOOKING_ALERT_PHONES` are set (not via the pipeline).
 

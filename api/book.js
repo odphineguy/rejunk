@@ -2,7 +2,7 @@
 
 // server/booking/handler.ts
 import { randomUUID } from "node:crypto";
-import { createClient } from "@supabase/supabase-js";
+import { createClient as createClient2 } from "@supabase/supabase-js";
 import { Resend } from "resend";
 
 // client/src/data/movingRates.ts
@@ -515,6 +515,193 @@ function leadHoursFrom(value) {
   }
 }
 
+// server/payments/core.ts
+import { z } from "zod";
+var PaymentError = class extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+};
+var invoiceSchema = z.object({
+  id: z.string().min(1),
+  invoiceNumber: z.number().int().positive(),
+  clientName: z.string().min(1),
+  clientEmail: z.string().optional(),
+  jobId: z.string(),
+  status: z.enum(["draft", "sent", "partial", "overdue", "paid", "void"]),
+  total: z.number().finite().nonnegative(),
+  amountPaid: z.number().finite().nonnegative().optional(),
+  discount: z.number().finite().nonnegative().optional(),
+  taxRate: z.number().finite().min(0).max(100).optional(),
+  dueDate: z.string(),
+  createdAt: z.string(),
+  amountDue: z.number().finite().nonnegative(),
+  items: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string().min(1),
+      quantity: z.number().finite().positive(),
+      amount: z.number().finite().nonnegative(),
+      taxable: z.boolean().optional()
+    })
+  ).min(1).max(200)
+});
+
+// server/payments/service.ts
+import Stripe from "stripe";
+
+// server/payments/received.ts
+import { z as z2 } from "zod";
+var money = z2.number().finite().min(0).max(999999.99).refine((value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6);
+var receivedPaymentInput = z2.object({
+  requestId: z2.string().uuid(),
+  invoiceId: z2.string().trim().min(1).max(200),
+  method: z2.enum(["Zelle", "Cash", "Check", "Offline Credit Card", "ACH"]),
+  amount: money.refine((value) => value > 0),
+  expectedPaid: money,
+  receivedDate: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
+    const parsed = /* @__PURE__ */ new Date(value + "T12:00:00Z");
+    return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  }),
+  reference: z2.string().trim().min(1).max(200)
+});
+
+// server/payments/service.ts
+import { createClient } from "@supabase/supabase-js";
+function paymentConfig() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const dbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const origin = process.env.PAYMENT_BASE_URL || process.env.APP_BASE_URL;
+  if (!key || !url || !dbKey || !origin)
+    throw new PaymentError(
+      503,
+      "Card payments need server configuration. Contact the owner."
+    );
+  const live = /^(sk|rk)_live_/.test(key);
+  if (!/^(sk|rk)_(test|live)_/.test(key) || live && process.env.STRIPE_LIVE_ENABLED !== "true")
+    throw new PaymentError(
+      503,
+      "Live card payments are not enabled. Use the sandbox first."
+    );
+  const base = new URL(origin);
+  if (base.protocol !== "https:" && !(base.protocol === "http:" && ["localhost", "127.0.0.1"].includes(base.hostname)))
+    throw new PaymentError(503, "Payment return URL must use HTTPS.");
+  if (base.username || base.password || base.search || base.hash || base.pathname !== "/")
+    throw new PaymentError(503, "Payment return URL must be a site origin.");
+  if (live && !process.env.STRIPE_ACCOUNT_ID)
+    throw new PaymentError(
+      503,
+      "Verify the collecting Stripe account before going live."
+    );
+  return {
+    stripe: new Stripe(key, { maxNetworkRetries: 2, timeout: 15e3 }),
+    db: createClient(url, dbKey, { auth: { persistSession: false } }),
+    live,
+    origin: base.origin
+  };
+}
+async function stripeAccount(stripe) {
+  const account = await stripe.accounts.retrieve(null);
+  if (process.env.STRIPE_ACCOUNT_ID && account.id !== process.env.STRIPE_ACCOUNT_ID)
+    throw new PaymentError(
+      503,
+      "Stripe key belongs to a different collecting account."
+    );
+  if (/^(sk|rk)_live_/.test(process.env.STRIPE_SECRET_KEY || "") && !account.charges_enabled)
+    throw new PaymentError(
+      503,
+      "The collecting Stripe account is not ready to accept payments."
+    );
+  return account.id;
+}
+
+// server/booking/deposit.ts
+function cardDepositConfigured() {
+  try {
+    paymentConfig();
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function depositCheckout(input) {
+  const { stripe, db, live, origin } = paymentConfig();
+  const accountId = await stripeAccount(stripe);
+  const ref = encodeURIComponent(input.jobId);
+  const previous = await rows(
+    db.from("invoice_checkout_attempts").select("*").eq("invoice_id", input.invoiceId).eq("company_id", input.companyId).eq("livemode", live).in("state", ["creating", "open", "paid"]).order("created_at", { ascending: false }).limit(1)
+  );
+  const last = previous[0];
+  if (last?.state === "paid") return { paid: true };
+  if (last?.stripe_session_id) {
+    const session2 = await stripe.checkout.sessions.retrieve(last.stripe_session_id);
+    if (session2.payment_status === "paid") return { paid: true };
+    if (session2.status === "open" && session2.url) return { url: session2.url };
+    if (session2.status === "expired")
+      await db.from("invoice_checkout_attempts").update({ state: "expired" }).eq("id", last.id).eq("state", "open");
+  }
+  const invoiceRow = await single(
+    db.from("app_invoices").select("data").eq("id", input.invoiceId).eq("tenant_id", input.companyId).maybeSingle()
+  );
+  if (!invoiceRow) throw new PaymentError(404, "Booking invoice not found.");
+  const data = invoiceRow.data;
+  if ((data.amountPaid ?? 0) >= BOOKING_DEPOSIT) return { paid: true };
+  const cents = Math.min(BOOKING_DEPOSIT * 100, Math.round((data.amountDue ?? 0) * 100));
+  if (cents < 50) return { paid: true };
+  const attempt = await single(
+    db.rpc("reserve_invoice_checkout", {
+      target_invoice: input.invoiceId,
+      target_company: input.companyId,
+      collecting_account: accountId,
+      is_live: live,
+      expected_data: invoiceRow.data,
+      amount: cents
+    })
+  );
+  const metadata = { attempt_id: attempt.id, invoice_id: input.invoiceId, company_id: input.companyId };
+  const session = await stripe.checkout.sessions.create(
+    {
+      mode: "payment",
+      allowed_payment_method_types: ["card"],
+      client_reference_id: attempt.id,
+      ...input.customerEmail ? { customer_email: input.customerEmail } : {},
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: "usd",
+            unit_amount: attempt.amount_cents,
+            product_data: {
+              name: "Booking deposit \u2014 Progressive Transportation Services",
+              description: `${input.serviceName}. Credited to your final bill; refundable if you cancel at least 24 hours ahead.`
+            }
+          }
+        }
+      ],
+      metadata,
+      payment_intent_data: { metadata },
+      success_url: `${origin}/book?deposit=paid&ref=${ref}`,
+      cancel_url: `${origin}/book?deposit=cancelled&ref=${ref}`,
+      expires_at: Math.floor(Date.parse(attempt.expires_at) / 1e3)
+    },
+    { idempotencyKey: `booking-deposit:${attempt.id}` }
+  );
+  if (session.livemode !== live || !session.url)
+    throw new PaymentError(503, "Stripe returned an unexpected checkout environment.");
+  await single(db.rpc("attach_invoice_checkout", { attempt_id: attempt.id, session_id: session.id }));
+  return { url: session.url };
+}
+async function single(query) {
+  const { data, error } = await query;
+  if (error) throw new PaymentError(503, error.message || "Payment records could not be saved.");
+  return data;
+}
+async function rows(query) {
+  return await single(query) ?? [];
+}
+
 // server/booking/handler.ts
 var BRAND = "Progressive Transportation Services";
 var PHONE_DISPLAY = "(480) 351-0291";
@@ -537,7 +724,7 @@ async function loadContext() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const slug = (process.env.SITE_COMPANY_SLUG ?? "").trim();
   if (!url || !key || !slug) return unavailable();
-  const sb = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const sb = createClient2(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: company } = await sb.from("companies").select("id").eq("slug", slug).maybeSingle();
   if (!company) return unavailable();
   const { data: row } = await sb.from("app_settings").select("value").eq("tenant_id", company.id).eq("key", "online-booking").maybeSingle();
@@ -595,6 +782,7 @@ async function options(ctx) {
       enabled: ctx.settings.enabled,
       serviceIds: bookable(ctx).map((service) => service.id),
       deposit: BOOKING_DEPOSIT,
+      cardDeposit: cardDepositConfigured(),
       refundHours: BOOKING_REFUND_HOURS,
       phone: PHONE_DISPLAY
     }
@@ -681,10 +869,10 @@ function stairsText(a) {
   return `${stairs}${a.elevator ? " \xB7 elevator" : ""}`;
 }
 async function upsertClient(ctx, input, logText, nowIso) {
-  const { data: rows } = await ctx.sb.from("clients").select("id, phone, email").eq("tenant_id", ctx.companyId).limit(1e4);
+  const { data: rows2 } = await ctx.sb.from("clients").select("id, phone, email").eq("tenant_id", ctx.companyId).limit(1e4);
   const phone = digits(input.phone);
   const email = input.email.toLowerCase();
-  const match = (rows ?? []).find((r) => phone && digits(r.phone) === phone) ?? (rows ?? []).find((r) => email && (r.email ?? "").toLowerCase() === email);
+  const match = (rows2 ?? []).find((r) => phone && digits(r.phone) === phone) ?? (rows2 ?? []).find((r) => email && (r.email ?? "").toLowerCase() === email);
   const logEntry = { id: randomUUID(), createdAt: nowIso, author: "Online booking", text: logText };
   if (match) {
     const { data: full } = await ctx.sb.from("clients").select("data").eq("id", match.id).maybeSingle();
@@ -754,7 +942,8 @@ async function createInvoice(ctx, input, jobId, price, nowIso) {
       total: price.total,
       amountDue: price.total,
       amountPaid: 0,
-      status: "draft",
+      // "sent" so the deposit card checkout can attach to it (drafts can't be collected).
+      status: "sent",
       notes,
       items: price.lines.map((line) => ({ id: randomUUID(), name: line.name, quantity: line.quantity, amount: line.amount }))
     };
@@ -857,7 +1046,7 @@ async function book(ctx, body) {
     internalNotes: [
       `Booked online ${new Date(nowMs).toLocaleString("en-US", { timeZone: "America/Phoenix" })}. Arrival ${window.label}.`,
       `Price shown to the customer: ${price.summary}`,
-      `$${BOOKING_DEPOSIT} deposit NOT collected yet \u2014 collect it and record it on the invoice.`,
+      `$${BOOKING_DEPOSIT} deposit: customer is sent to pay by card when card payments are on; if the invoice shows nothing paid, collect it and record it.`,
       input.smsConsent ? "Customer opted in to texts." : "Customer did NOT opt in to texts \u2014 call or email."
     ].join("\n"),
     booking: {
@@ -895,12 +1084,43 @@ async function book(ctx, body) {
   if (invoice) {
     await ctx.sb.from("jobs").update({ data: { ...data, invoiceId: invoice.id } }).eq("id", jobId);
   }
-  const summary = { input, price, arrival, jobId, jobNumber, invoiceNumber: invoice?.number ?? null };
+  let checkoutUrl = null;
+  if (invoice && cardDepositConfigured()) {
+    try {
+      const deposit = await depositCheckout({
+        invoiceId: invoice.id,
+        companyId: ctx.companyId,
+        jobId,
+        serviceName: service.name,
+        customerEmail: input.email
+      });
+      if ("url" in deposit) checkoutUrl = deposit.url;
+    } catch (error) {
+      console.error("[book] deposit checkout failed:", error instanceof Error ? error.message : error);
+    }
+  }
+  const summary = { input, price, arrival, jobId, jobNumber, invoiceNumber: invoice?.number ?? null, cardDeposit: Boolean(checkoutUrl) };
   await Promise.allSettled([sendOfficeEmail(summary), sendOfficeText(summary), sendCustomerEmail(summary)]);
   return {
     status: 200,
-    body: { ok: true, jobNumber, arrival, priceSummary: price.summary, total: price.total, deposit: BOOKING_DEPOSIT }
+    body: { ok: true, ref: jobId, jobNumber, arrival, priceSummary: price.summary, total: price.total, deposit: BOOKING_DEPOSIT, checkoutUrl }
   };
+}
+async function depositLink(ctx, body) {
+  const ref = str(body.ref, 64);
+  if (!/^[0-9a-f-]{36}$/.test(ref)) return { status: 400, body: { error: "Booking not found." } };
+  const { data: job } = await ctx.sb.from("jobs").select("id, status, data").eq("id", ref).eq("tenant_id", ctx.companyId).eq("source", "website").maybeSingle();
+  const data = job?.data ?? {};
+  if (!job || typeof data.invoiceId !== "string") return { status: 404, body: { error: "Booking not found." } };
+  if (!cardDepositConfigured()) return { status: 503, body: { error: `Card payments are unavailable. Please call ${PHONE_DISPLAY}.` } };
+  const result = await depositCheckout({
+    invoiceId: data.invoiceId,
+    companyId: ctx.companyId,
+    jobId: job.id,
+    serviceName: String(data.quote?.tier ?? "Your booking"),
+    customerEmail: typeof data.email === "string" ? data.email : void 0
+  });
+  return { status: 200, body: "url" in result ? { checkoutUrl: result.url } : { paid: true } };
 }
 function escapeHtml(value) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -917,7 +1137,7 @@ function appUrl(path) {
 function detailRows(s) {
   const { input, price } = s;
   const names = input.service.twoAddresses ? ["Loading", "Unloading"] : ["Address"];
-  const rows = [
+  const rows2 = [
     ["Service", input.service.name],
     ["Arrival", s.arrival],
     ...input.addresses.map((a, i) => [
@@ -927,8 +1147,8 @@ function detailRows(s) {
     ["Price", price.summary],
     ...price.lines.map((l) => ["", `${l.name}${l.quantity > 1 ? ` \xD7 ${l.quantity}` : ""}: $${l.amount * l.quantity}`])
   ];
-  if (input.notes) rows.push(["Notes", input.notes]);
-  return rows.map(
+  if (input.notes) rows2.push(["Notes", input.notes]);
+  return rows2.map(
     ([k, v]) => `<tr><td style="padding:6px 12px 6px 0;font-weight:600;vertical-align:top;white-space:nowrap">${escapeHtml(k)}</td><td style="padding:6px 0;color:#374151">${escapeHtml(v)}</td></tr>`
   ).join("");
 }
@@ -949,7 +1169,7 @@ async function sendOfficeEmail(s) {
 <p style="margin:0;font-size:15px"><a href="tel:${escapeHtml(input.phone)}" style="color:#155e3f;font-weight:600">${escapeHtml(input.phone)}</a></p>
 <p style="margin:6px 0 0;font-size:14px"><a href="mailto:${escapeHtml(input.email)}" style="color:#155e3f">${escapeHtml(input.email)}</a></p></div>
 <table style="width:100%;border-collapse:collapse;font-size:14px">${detailRows(s)}</table>
-<p style="margin:16px 0 0;font-size:14px;font-weight:600;color:#9a6a00">$${BOOKING_DEPOSIT} deposit not collected yet${s.invoiceNumber ? ` \u2014 record it on invoice #${s.invoiceNumber}` : ""}.</p>
+<p style="margin:16px 0 0;font-size:14px;font-weight:600;color:#9a6a00">${s.cardDeposit ? `Customer was sent to pay the $${BOOKING_DEPOSIT} deposit by card \u2014 it shows on invoice #${s.invoiceNumber} once paid. If it doesn't, collect it.` : `$${BOOKING_DEPOSIT} deposit not collected yet${s.invoiceNumber ? ` \u2014 record it on invoice #${s.invoiceNumber}` : ""}.`}</p>
 <p style="margin:8px 0 0;font-size:13px;color:#5b6357">${input.smsConsent ? "\u2713 Opted in to texts" : "Did not opt in to texts \u2014 call or email"} \xB7 Crew and vehicle: assign in Dispatch Center.</p>
 <p style="margin:16px 0 0"><a href="${appUrl(`/jobs/${s.jobId}`)}" style="color:#155e3f;font-weight:700">Open the ticket \u2192</a></p>`
   );
@@ -971,7 +1191,7 @@ async function sendCustomerEmail(s) {
 <table style="width:100%;border-collapse:collapse;font-size:14px">${detailRows(s)}</table>
 <div style="background:#f0f4ec;border-radius:10px;padding:16px;margin:16px 0 0;font-size:14px;color:#1c1c1c">
 <p style="margin:0 0 6px;font-weight:700">Your $${BOOKING_DEPOSIT} deposit</p>
-<p style="margin:0">We'll contact you shortly to collect a $${BOOKING_DEPOSIT} deposit that holds your appointment. It comes off your final bill, and it's fully refundable if you cancel at least ${BOOKING_REFUND_HOURS} hours before your appointment. Up to 3% surcharge on credit card payments.</p></div>
+<p style="margin:0">${s.cardDeposit ? `Your $${BOOKING_DEPOSIT} deposit holds your appointment. If you didn't finish paying it, call or text us and we'll help.` : `We'll contact you shortly to collect a $${BOOKING_DEPOSIT} deposit that holds your appointment.`} It comes off your final bill, and it's fully refundable if you cancel at least ${BOOKING_REFUND_HOURS} hours before your appointment.</p></div>
 <p style="margin:16px 0 0;font-size:14px;color:#374151">Need to change something? Call or text us at <a href="tel:+14803510291" style="color:#155e3f;font-weight:600">${PHONE_DISPLAY}</a>. Booking ${escapeHtml(s.jobNumber)}.</p>`
   );
   const { error } = await new Resend(apiKey).emails.send({
@@ -996,7 +1216,7 @@ async function sendOfficeText(s) {
     s.arrival,
     `${input.addresses[0].city}${input.addresses[1] ? ` \u2192 ${input.addresses[1].city}` : ""}`,
     s.price.summary,
-    `Collect $${BOOKING_DEPOSIT} deposit.`
+    s.cardDeposit ? `Sent to pay $${BOOKING_DEPOSIT} deposit by card.` : `Collect $${BOOKING_DEPOSIT} deposit.`
   ].join("\n");
   await Promise.allSettled(
     to.map(async (phone) => {
@@ -1026,6 +1246,7 @@ async function handleBooking(rawBody, ip) {
   if (!ctx.settings.enabled) return { status: 403, body: { error: `Online booking is off right now. Please call ${PHONE_DISPLAY}.` } };
   if (action === "availability") return availability(ctx, body);
   if (action === "book") return book(ctx, body);
+  if (action === "deposit") return depositLink(ctx, body);
   return { status: 400, body: { error: "Unknown action." } };
 }
 function clientIp(req) {
