@@ -514,7 +514,7 @@ The approved blue/green document layout remains shared; logos, payment instructi
 service terms are configurable settings. This uses the existing single-company settings
 store; per-tenant company records remain Build 2 in `HCP_EXIT_PLAN.md`.
 
-### Received customer payments (October 9, 2026 — local, rollout pending)
+### Received customer payments (October 9, 2026 — database applied; deployment authorized)
 
 See `docs/RECEIVED_PAYMENTS_SETUP.md`. Owners can record already-received Zelle,
 cash, check, external card and cleared bank payments against saved invoices,
@@ -526,7 +526,7 @@ Request UUIDs and company/method/reference uniqueness prevent duplicate entries;
 active Checkout links, stale balances and overpayments are rejected. Invoice
 and payment history guards retain records; notes stay editable. Linked invoice
 balances drive job summaries/badges rather than manually marking a job paid.
-The new migration `20261010024211_manual_invoice_payments.sql` is tested locally
-but NOT applied to production. No real customer payment has been entered.
+The new migration `20261010024211_manual_invoice_payments.sql` was applied to rejunk-prod via the authenticated SQL editor, with migration
+history recorded. Production rollback-only compatibility checks passed. No real customer payment has been entered.
 ACH collection, refunds/disputes and Progressive Connect remain later work;
 live collection is not activated by this feature. Push only on explicit request.

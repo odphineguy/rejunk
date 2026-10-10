@@ -2,7 +2,7 @@
 
 Prepared locally from the October 8 payment handoff. This feature records money
 already received; it does not charge a card, debit a bank account, or transfer
-money. Production migration and deployment are pending.
+money. Production migration 20261010024211 is applied; deployment is authorized with this release.
 
 ## Use
 
@@ -70,3 +70,13 @@ cover retained legacy amounts, partial/final balance updates, retry idempotency,
 reference duplicates, tenant/owner/session isolation, stale balances, overpayment,
 active Checkout conflicts, future dates, immutable history and editable notes.
 Desktop/390px UI checks use isolated sample data with all payment calls mocked.
+
+## Production verification — October 9, 2026
+
+Applied only the received-payment migration through the authenticated production
+SQL editor because both MCP database connections lacked project access. Recorded
+the exact migration version and SQL in schema_migrations in the same transaction.
+Rollback-only live tests verified owner recording, retained balances, idempotent
+retries, overpayment/company/invalid-owner rejection and no browser/AI-role access
+to the ledger or recording RPC. Temporary invoice/payment fixtures were rolled back.
+Claude's mcp_whoami rule remains present. No actual customer payment was recorded.
